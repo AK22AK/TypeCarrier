@@ -1,35 +1,31 @@
-# Open Source and Official Builds
+# 开源与官方版本策略
 
-TypeCarrier uses an open-core-free model for source code: the code is public and
-can be studied, modified, and self-built under the Apache License 2.0.
+TypeCarrier 的源码采用开放策略：代码公开，任何人都可以在 Apache License 2.0 下学习、修改和自行构建。
 
-Official builds may still be paid on app stores. A small one-time purchase for
-the iOS, macOS, or future Android app is a distribution and support choice, not
-a restriction on reading or building the source code.
+官方构建仍然可以在应用商店中收费。iOS、macOS 或未来 Android 版本的一次性购买，是发行和维护策略，不限制用户阅读源码或自行构建。
 
-## Policy
+## 策略
 
-- Source code is open under Apache License 2.0.
-- Users may self-build the app from source.
-- Official store builds may be paid.
-- Official signing certificates, provisioning profiles, App Store Connect keys,
-  and release metadata are not stored in this repository.
-- Forks should use their own app name, bundle identifiers, icons, and store
-  listings unless explicit permission is granted.
-- Android should follow the same model if it is added later: source available,
-  official store build may be paid.
+- 源码使用 Apache License 2.0 开源。
+- 用户可以自行从源码构建 app。
+- 官方商店版本可以收费。
+- 官方签名证书、provisioning profile、App Store Connect key 和发布元数据不存放在公开仓库。
+- Fork 面向用户分发时，应使用自己的 app 名称、bundle id、图标和商店素材，除非获得明确授权。
+- 如果未来增加 Android，也采用同一模型：源码开放，官方商店构建可以收费。
 
-## Why This Model
+## 为什么采用这个模型
 
-The value of the official build is convenience, trusted signing, store updates,
-and support for continued development. The value of the open repository is
-transparency, auditability, learning, and community contribution.
+官方构建的价值是方便下载、可信签名、商店更新和持续维护支持。
 
-## What Not To Commit
+公开仓库的价值是透明、可审计、便于学习，以及接受社区贡献。
 
-- Apple Developer Team IDs for official releases.
-- Provisioning profiles or certificates.
-- App Store Connect API keys.
-- Private release notes or unreleased store metadata.
-- Personal Xcode user state files.
-- Local signing override files such as `Configs/Signing.local.xcconfig`.
+这两个目标不冲突。
+
+## 不应提交的内容
+
+- 官方发布使用的 Apple Developer Team ID。
+- Provisioning profile 或证书。
+- App Store Connect API key。
+- 私有发布说明或未公开商店元数据。
+- 个人 Xcode 用户状态文件。
+- 本地签名覆盖文件，例如 `Configs/Signing.local.xcconfig`。

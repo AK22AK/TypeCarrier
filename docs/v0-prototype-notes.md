@@ -1,53 +1,53 @@
-# v0 Prototype Notes
+# v0 原型说明
 
-## Current Status
+## 当前状态
 
-The first native TypeCarrier prototype is wired end to end:
+第一版原生 TypeCarrier 原型已经打通端到端流程：
 
-- `TypeCarrieriOS` provides the iPhone text input and send surface.
-- `TypeCarrierMac` runs as a menu bar receiver with a debug window.
-- `TypeCarrierCore` shares payload, envelope, connection state, and Multipeer transport code.
+- `TypeCarrieriOS` 提供 iPhone 文本输入和发送界面。
+- `TypeCarrierMac` 作为菜单栏接收端运行，并带有 Debug Window。
+- `TypeCarrierCore` 共享 payload、envelope、连接状态和 Multipeer 传输逻辑。
 
-Manual testing confirmed the core workflow:
+手动测试已确认核心工作流：
 
-> iPhone input -> local Multipeer send -> Mac receive -> paste into current cursor.
+> iPhone 输入 -> 本地 Multipeer 发送 -> Mac 接收 -> 粘贴到当前光标。
 
-## Local Development
+## 本地开发
 
-Generate the Xcode project from the root:
+在仓库根目录生成 Xcode 工程：
 
 ```sh
 xcodegen generate
 ```
 
-Open `TypeCarrier.xcodeproj` in Xcode. The main schemes are:
+用 Xcode 打开 `TypeCarrier.xcodeproj`。主要 scheme：
 
 - `TypeCarrieriOS`
 - `TypeCarrierMac`
 - `TypeCarrierCore`
 
-Run the Mac menu bar app from the command line:
+从命令行运行 Mac 菜单栏 app：
 
 ```sh
 ./script/build_and_run.sh
 ```
 
-Use `./script/build_and_run.sh --verify` to build, launch, and confirm the app process exists.
+使用 `./script/build_and_run.sh --verify` 可以构建、启动并确认 app 进程存在。
 
-## First Manual Test Path
+## 首次手动测试路径
 
-1. Start `TypeCarrierMac` on the Mac.
-2. Open its menu bar item and choose `Request Accessibility`.
-3. Enable Accessibility permission for the Mac app.
-4. Connect the Mac to the iPhone hotspot.
-5. Run `TypeCarrieriOS` on the iPhone.
-6. Put the Mac cursor in a text field.
-7. Type or dictate text on iPhone, then tap Send.
+1. 在 Mac 上启动 `TypeCarrierMac`。
+2. 打开菜单栏项，选择 `Request Accessibility`。
+3. 在系统设置中为 Mac app 开启 Accessibility 权限。
+4. 让 Mac 连接 iPhone 热点。
+5. 在 iPhone 上运行 `TypeCarrieriOS`。
+6. 把 Mac 光标放到一个文本输入框。
+7. 在 iPhone 上输入或听写文本，然后点击 Send。
 
-## Known v0 Limits
+## v0 已知限制
 
-- Auto-connects to the first discovered Mac peer.
-- No pairing code or trusted device list yet.
-- No retry queue.
-- Clipboard restoration only handles plain string contents.
-- No receive-to-clipboard-only mode.
+- 自动连接第一个发现的 Mac peer。
+- 还没有配对码或可信设备列表。
+- 还没有重试队列。
+- 剪贴板恢复只处理纯字符串内容。
+- 还没有“只接收到剪贴板，不自动粘贴”模式。

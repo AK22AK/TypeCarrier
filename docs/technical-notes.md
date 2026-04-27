@@ -1,108 +1,107 @@
-# Technical Notes
+# 技术说明
 
-## Recommended MVP Architecture
+## MVP 推荐架构
 
-TypeCarrier should start as two native apps:
+TypeCarrier 从两个原生 app 开始：
 
-- iOS app: SwiftUI text input surface.
-- macOS app: menu bar receiver using SwiftUI/AppKit integration.
+- iOS app：SwiftUI 文本输入界面。
+- macOS app：菜单栏接收端，使用 SwiftUI + 必要的 AppKit 集成。
 
-The first transport should be local Apple-device communication. The most likely option is `MultipeerConnectivity`, because it is designed for nearby Apple devices and can work over Wi-Fi, peer-to-peer Wi-Fi, and Bluetooth.
+第一版传输应优先使用 Apple 设备之间的本地通信。最合适的起点是 `MultipeerConnectivity`，因为它面向附近 Apple 设备，可以通过 Wi-Fi、peer-to-peer Wi-Fi 和蓝牙工作。
 
-## Data Flow
+## 数据流
 
-1. iOS app has an editable text buffer.
-2. User dictates or types using any iOS keyboard.
-3. User taps send.
-4. iOS app sends a small text payload to the paired Mac.
-5. Mac app receives the payload.
-6. Mac app temporarily writes the text to `NSPasteboard`.
-7. Mac app simulates `Command + V` into the currently focused app.
-8. Mac app optionally restores the previous clipboard contents.
-9. iOS app shows success and clears the input buffer.
+1. iOS app 持有一个可编辑文本缓冲区。
+2. 用户用任意 iOS 键盘输入或听写。
+3. 用户点击发送。
+4. iOS app 把小文本 payload 发送给已连接的 Mac。
+5. Mac app 接收 payload。
+6. Mac app 临时把文本写入 `NSPasteboard`。
+7. Mac app 模拟 `Command + V`，粘贴到当前聚焦 app。
+8. Mac app 尽量恢复原剪贴板内容。
+9. iOS app 显示成功并清空输入区。
 
-## macOS Permissions
+## macOS 权限
 
-Automatic paste into the current focused input likely requires Accessibility permission, because the Mac app needs to synthesize keyboard events.
+自动粘贴到当前聚焦输入框通常需要 Accessibility 权限，因为 Mac app 需要合成键盘事件。
 
-Expected permission:
+预期权限：
 
-- Accessibility permission for posting keyboard events.
+- Accessibility：用于发送键盘事件。
 
-Possible APIs:
+可能使用的 API：
 
-- `NSPasteboard` for clipboard write and restore.
-- `CGEvent` / `CGEventPost` for simulating `Command + V`.
+- `NSPasteboard`：写入和恢复剪贴板。
+- `CGEvent` / `CGEventPost`：模拟 `Command + V`。
 
-## Pairing
+## 配对
 
-Candidate pairing methods:
+候选配对方式：
 
-- QR code shown on Mac and scanned by iPhone.
-- Nearby browser with manual device selection.
-- Manual code entry as fallback.
+- Mac 显示二维码，iPhone 扫码。
+- 附近设备浏览 + 手动选择。
+- 手动输入配对码作为 fallback。
 
-For the first prototype, nearby discovery may be enough. QR pairing is better before sharing with others.
+第一版原型可以只做附近发现。分享给更多用户前，二维码或配对码会更稳妥。
 
-## Transport Options
+## 传输选项
 
-### Local Network / Nearby First
+### 本地网络 / Nearby First
 
-Pros:
+优点：
 
-- No server.
-- No account.
-- Better privacy.
-- Lower cost.
-- Fits the likely usage context.
+- 不需要服务器。
+- 不需要账号。
+- 隐私更好。
+- 成本更低。
+- 符合主要使用场景。
 
-Cons:
+缺点：
 
-- Can fail on restricted Wi-Fi networks.
-- Requires local network permissions.
-- Device discovery can be less predictable in corporate or public networks.
+- 受限 Wi-Fi 网络可能失败。
+- 需要本地网络权限。
+- 企业或公共网络中的设备发现可能不稳定。
 
-### Internet Relay Later
+### 后续互联网中转
 
-Options:
+候选方案：
 
-- CloudKit.
-- WebSocket relay.
-- Firebase/Supabase/Pusher-style realtime service.
+- CloudKit。
+- WebSocket relay。
+- Firebase / Supabase / Pusher 这类实时服务。
 
-Pros:
+优点：
 
-- Works when devices are not nearby or on the same network.
-- Easier to provide persistent pairing across networks.
+- 设备不在同一网络或不在附近时仍可工作。
+- 更容易提供跨网络的持久配对。
 
-Cons:
+缺点：
 
-- Requires authentication or pairing security.
-- Requires more operational complexity.
-- Introduces privacy and data handling questions.
-- Not necessary for the first self-use prototype.
+- 需要认证或更强配对安全。
+- 运维复杂度更高。
+- 引入隐私和数据处理问题。
+- 对第一版自用原型不是必要条件。
 
-## Risks
+## 风险
 
-- Some Mac fields may reject paste or keyboard event injection.
-- Secure input fields and password fields should not be targeted.
-- Clipboard restore may fail for rich clipboard contents or owner-provided pasteboard data.
-- Multipeer discovery may be unreliable on some networks.
-- iOS cannot programmatically control Doubao keyboard dictation; the user must use it normally inside the text field.
+- 某些 Mac 输入框可能拒绝粘贴或键盘事件注入。
+- 安全输入框和密码框不应作为目标。
+- 富文本或 owner-provided pasteboard data 可能无法完整恢复。
+- Multipeer 在某些网络下发现不稳定。
+- iOS 无法程序化控制第三方输入法听写，用户需要在文本框里正常使用输入法。
 
-## Security and Privacy
+## 安全与隐私
 
-For MVP:
+MVP 阶段：
 
-- Keep transfer local.
-- Send plain text only between paired devices.
-- Avoid cloud storage.
-- Avoid retaining history by default.
+- 保持本地传输。
+- 只在已连接设备之间发送纯文本。
+- 不做云存储。
+- 默认不保留历史。
 
-Before productization:
+产品化前：
 
-- Add pairing trust.
-- Add basic encryption expectations around the transport.
-- Consider opt-in history only.
-- Make clipboard handling explicit in onboarding.
-
+- 增加配对信任机制。
+- 明确传输层加密预期。
+- 历史记录只做 opt-in。
+- 在 onboarding 中解释剪贴板处理方式。

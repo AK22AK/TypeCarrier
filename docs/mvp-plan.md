@@ -1,63 +1,62 @@
-# MVP Plan
+# MVP 计划
 
-## MVP Definition
+## MVP 定义
 
-The MVP is successful when:
+当下面几件事成立时，MVP 就算成功：
 
-1. The iPhone app accepts text from any keyboard.
-2. The iPhone app can send the current text to the Mac app.
-3. The Mac app receives the text while running in the menu bar.
-4. The Mac app inserts the text into the currently focused input field.
-5. The flow works repeatedly with low friction.
+1. iPhone app 能接收任意键盘输入的文本。
+2. iPhone app 能把当前文本发送给 Mac app。
+3. Mac app 作为菜单栏应用运行并接收文本。
+4. Mac app 能把文本插入当前聚焦输入框。
+5. 这个流程可以低摩擦地反复使用。
 
-## Phase 1: Local Prototype
+## 阶段 1：本地原型
 
-Build the smallest working end-to-end loop.
+构建最小可用的端到端闭环。
 
-- Create iOS SwiftUI app with a large text editor and send button.
-- Create macOS menu bar app.
-- Establish local device discovery and connection.
-- Send plain text payloads from iOS to Mac.
-- On Mac, write payload to clipboard and simulate paste.
-- Show simple connection and send status.
+- 创建 iOS SwiftUI app，包含大文本编辑器和发送按钮。
+- 创建 macOS 菜单栏 app。
+- 建立本地设备发现和连接。
+- 从 iOS 向 Mac 发送纯文本 payload。
+- Mac 端写入剪贴板并模拟粘贴。
+- 显示简单连接状态和发送状态。
 
-## Phase 2: Usability Hardening
+## 阶段 2：可用性加固
 
-Make it reliable enough for daily self-use.
+让它足够可靠，能支撑日常自用。
 
-- Add first-run permission guidance for macOS Accessibility.
-- Add reconnect behavior.
-- Add send failure retry.
-- Preserve and restore previous clipboard where practical.
-- Add a "paste manually instead" fallback mode.
-- Add configurable behavior after send: clear text, keep text, or select all.
+- 增加 macOS Accessibility 首次授权引导。
+- 增加重连行为。
+- 增加发送失败重试。
+- 尽量保存并恢复原剪贴板。
+- 增加“仅复制到剪贴板，手动粘贴”的 fallback。
+- 增加发送后的行为配置：清空文本、保留文本或全选文本。
 
-## Phase 3: Productization Candidates
+## 阶段 3：产品化候选项
 
-Only consider these after the core loop feels good.
+只有当核心闭环足够顺手后，再考虑这些能力：
 
-- QR pairing.
-- Paired device list.
-- Lightweight send history.
-- Local encryption review.
-- Optional internet relay.
-- Android/Windows exploration.
-- iOS widgets or Shortcuts actions.
+- 二维码配对。
+- 已配对设备列表。
+- 轻量发送历史。
+- 本地加密和传输安全审查。
+- 可选互联网中转。
+- Android / Windows 探索。
+- iOS 小组件或 Shortcuts action。
 
-## Deliberately Deferred
+## 明确推迟
 
-- AI transcription.
-- AI rewriting.
-- File transfer.
-- Clipboard manager UI.
-- Team use.
-- Cloud accounts.
+- AI 转写。
+- AI 改写。
+- 文件传输。
+- 剪贴板管理器 UI。
+- 团队协作。
+- 云账号。
 
-## Open Questions
+## 开放问题
 
-- Should send always auto-paste, or should the Mac app support a "receive to clipboard only" mode?
-- Should the iOS text buffer clear automatically after successful paste?
-- Should the app restore the previous Mac clipboard by default?
-- How visible should the macOS menu bar UI be during normal use?
-- Should there be a keyboard shortcut on iOS hardware keyboards to send?
-
+- 发送后是否总是自动粘贴，还是 Mac app 也要支持“只接收到剪贴板”模式？
+- iOS 文本区是否应在成功粘贴后自动清空？
+- Mac 剪贴板是否默认恢复？
+- 正常使用时 macOS 菜单栏 UI 应该多可见？
+- iOS 外接键盘是否需要快捷键发送？

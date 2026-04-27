@@ -1,13 +1,7 @@
-# Branding
+# 品牌策略
 
-The TypeCarrier source code is open source under the Apache License 2.0.
+TypeCarrier 源码使用 Apache License 2.0 开源。
 
-The project name, app icon, store listing assets, screenshots, and official
-release identity are not automatically licensed for third-party app store
-distribution. You may use the name "TypeCarrier" when referring to this upstream
-project, but forks that are distributed to end users should use their own app
-name, bundle identifiers, icons, and store listing assets unless explicit
-permission is granted.
+项目名称、app 图标、商店素材、截图和官方发布身份，不会自动授权给第三方用于应用商店分发。你可以在介绍上游项目时使用 `TypeCarrier` 这个名字，但如果 fork 后面向最终用户分发，应使用自己的应用名称、bundle id、图标和商店素材，除非获得明确授权。
 
-This keeps the source code reusable while making the official iOS, macOS, and
-future Android builds recognizable to users.
+这样可以在保持源码可复用的同时，让用户清楚识别官方 iOS、macOS 以及未来 Android 构建。

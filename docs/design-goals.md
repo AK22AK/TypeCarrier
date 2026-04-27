@@ -1,41 +1,40 @@
-# Design Goals
+# 设计目标
 
-## Primary Goal
+## 首要目标
 
-Make the following workflow feel immediate:
+让下面这个流程足够即时：
 
-> iPhone text input -> send -> Mac current cursor receives the text.
+> iPhone 输入文字 -> 发送 -> Mac 当前光标收到文本。
 
-The product should reduce the current manual flow from several gestures to one tap.
+产品要把原本需要多次手势和跨设备切换的流程，压缩成一次发送。
 
-## User Experience Goals
+## 用户体验目标
 
-- The iPhone app should open directly into a large editable text area.
-- The send action should be obvious and reachable.
-- After a successful send, the iPhone text field can clear automatically.
-- The Mac app should live quietly in the menu bar.
-- The Mac app should not require the user to switch windows.
-- The received text should be inserted into the currently focused Mac input field.
-- Connection state should be understandable: connected, searching, failed, sent.
-- The tool should support repeated short bursts of text without ceremony.
+- iPhone app 打开后直接进入大文本输入区。
+- 发送按钮清晰、容易触达。
+- 发送成功后，iPhone 输入框可以自动清空。
+- Mac app 安静地常驻菜单栏。
+- Mac app 不要求用户切换窗口。
+- 收到的文本应插入到 Mac 当前聚焦的输入框。
+- 连接状态要容易理解：已连接、搜索中、失败、已发送。
+- 工具应支持连续发送多段短文本，不制造额外流程。
 
-## Non-Goals for the First Version
+## 第一版非目标
 
-- No built-in speech recognition.
-- No AI rewriting or formatting.
-- No clipboard history manager.
-- No file, image, or link transfer.
-- No account system.
-- No internet relay.
-- No Windows or Android support.
-- No multi-user collaboration.
-- No complex device fleet management.
+- 不内置语音识别。
+- 不做 AI 改写或格式化。
+- 不做剪贴板历史管理器。
+- 不传文件、图片或链接。
+- 不做账号系统。
+- 不做互联网中转。
+- 不做 Windows 或 Android。
+- 不做多人协作。
+- 不做复杂设备管理。
 
-## Product Principles
+## 产品原则
 
-- Local first: prefer nearby device communication without a server.
-- Fast path first: optimize the one-tap send and paste path before adding features.
-- Minimal interface: avoid turning this into a general productivity dashboard.
-- Predictable behavior: the user should know where the text went and whether it arrived.
-- Respect the Mac clipboard: if the paste implementation temporarily replaces clipboard contents, preserve and restore the previous clipboard where practical.
-
+- Local first：优先使用附近设备通信，不依赖服务器。
+- Fast path first：先把“一次发送并粘贴”的核心路径打磨好。
+- Minimal interface：避免把工具做成泛生产力面板。
+- Predictable behavior：用户要知道文本去了哪里、是否送达。
+- Respect clipboard：如果自动粘贴需要临时替换剪贴板，尽量保存并恢复原有剪贴板内容。

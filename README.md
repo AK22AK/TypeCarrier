@@ -71,12 +71,12 @@ TypeCarrier 源码使用 Apache License 2.0 开源，用户可以自行从源码
 
 ## 文档
 
-- [Idea](docs/idea.md)
-- [Design Goals](docs/design-goals.md)
-- [Competitive Analysis](docs/competitive-analysis.md)
-- [Technical Notes](docs/technical-notes.md)
-- [MVP Plan](docs/mvp-plan.md)
-- [Open Source Policy](docs/open-source-policy.md)
-- [Distribution](docs/distribution.md)
-- [GitHub History Remediation](docs/github-history-remediation.md)
-- [Branding](BRANDING.md)
+- [项目想法](docs/idea.md)
+- [设计目标](docs/design-goals.md)
+- [竞品分析](docs/competitive-analysis.md)
+- [技术说明](docs/technical-notes.md)
+- [MVP 计划](docs/mvp-plan.md)
+- [开源与官方版本策略](docs/open-source-policy.md)
+- [发行说明](docs/distribution.md)
+- [GitHub 历史补救](docs/github-history-remediation.md)
+- [品牌策略](BRANDING.md)

@@ -1,108 +1,107 @@
-# Competitive Analysis
+# 竞品分析
 
-## Summary
+## 总结
 
-TypeCarrier should be compared primarily with cross-device text and clipboard tools, not with dictation tools.
+TypeCarrier 主要应和跨设备文本/剪贴板工具比较，而不是和语音识别工具比较。
 
-The core difference is:
+核心差异是：
 
-> Competitors usually sync, store, or transfer text. TypeCarrier should insert text directly at the current Mac cursor.
+> 竞品通常同步、保存或转移文本；TypeCarrier 要把文本直接插入 Mac 当前光标。
 
 ## Apple Universal Clipboard
 
-Universal Clipboard already lets a user copy on iPhone and paste on Mac.
+Apple 的通用剪贴板已经支持在 iPhone 上复制、在 Mac 上粘贴。
 
-Strengths:
+优势：
 
-- Built into Apple platforms.
-- No extra app.
-- Works for many data types.
+- 系统内置。
+- 不需要额外 app。
+- 支持多种数据类型。
 
-Weaknesses relative to TypeCarrier:
+相对 TypeCarrier 的弱点：
 
-- The user still has to select and copy on iPhone.
-- The user still has to paste on Mac.
-- Sync timing can feel opaque.
-- It is a system clipboard feature, not a focused text input workflow.
+- 用户仍然要在 iPhone 上选择并复制。
+- 用户仍然要回到 Mac 手动粘贴。
+- 同步时机有时不够可感知。
+- 它是系统剪贴板能力，不是专注的文本输入工作流。
 
-TypeCarrier should beat Universal Clipboard by removing the manual copy and Mac-side paste steps.
+TypeCarrier 应通过去掉“手机复制”和“Mac 粘贴”两个动作来胜出。
 
 ## ClipSync / Macty
 
-ClipSync is the closest known competitor in the Apple ecosystem. It is an iOS companion for Macty, a macOS menu bar toolkit. Its public positioning focuses on sending and receiving clipboard text between Mac and iPhone through QR pairing and local Wi-Fi or Bluetooth, without an account or internet requirement.
+ClipSync 是 Apple 生态中比较接近的竞品。它是 Macty 的 iOS 伴侣，Macty 是一个 macOS 菜单栏工具箱。其公开定位主要是通过二维码配对、本地 Wi-Fi 或蓝牙，在 Mac 和 iPhone 之间发送和接收剪贴板文本，不需要账号或互联网。
 
-Similarities:
+相似点：
 
-- iPhone and Mac pair.
-- Text moves between devices.
-- Local-first transfer is possible.
-- No account is a natural fit.
+- iPhone 和 Mac 配对。
+- 文本在设备间传输。
+- 可以 local-first。
+- 不需要账号是自然选择。
 
-Differences:
+差异：
 
-- ClipSync appears positioned as clipboard sharing/syncing.
-- TypeCarrier should be positioned as phone-to-Mac text input.
-- TypeCarrier's key result is automatic insertion at the current Mac cursor.
-- TypeCarrier's iPhone UI should be optimized for drafting and dictating text, not browsing clipboard history.
+- ClipSync 更像剪贴板分享/同步。
+- TypeCarrier 应定位为“手机到 Mac 的文本输入”。
+- TypeCarrier 的关键结果是自动插入 Mac 当前光标。
+- TypeCarrier 的 iPhone UI 应为草稿输入和听写优化，而不是浏览剪贴板历史。
 
-Strategic implication:
+策略含义：
 
-If TypeCarrier only sends text to the Mac clipboard, differentiation is weak. The MVP must prioritize automatic paste into the focused Mac app.
+如果 TypeCarrier 只是把文本发到 Mac 剪贴板，差异化会很弱。MVP 必须优先做好自动粘贴到当前输入焦点。
 
-## Clipboard Managers
+## 剪贴板管理器
 
-Examples: Paste, PasteNow, CloudClip.
+例子：Paste、PasteNow、CloudClip。
 
-These tools focus on clipboard history, organization, search, and cross-device reuse.
+这类工具关注剪贴板历史、组织、搜索和跨设备复用。
 
-Strengths:
+优势：
 
-- Mature clipboard workflows.
-- History and search.
-- Useful beyond iPhone-to-Mac sending.
+- 剪贴板工作流成熟。
+- 有历史和搜索。
+- 使用范围不局限于 iPhone 到 Mac。
 
-Weaknesses relative to TypeCarrier:
+相对 TypeCarrier 的弱点：
 
-- They are not optimized for immediate phone-to-cursor input.
-- They often start from copied content rather than an active text drafting surface.
-- They may require the user to choose an item and paste manually.
+- 不为“手机输入后立刻进入 Mac 光标”优化。
+- 通常从已复制内容开始，而不是一个主动输入界面。
+- 用户可能仍要选择条目并手动粘贴。
 
-TypeCarrier should not compete on clipboard history.
+TypeCarrier 不应在剪贴板历史上竞争。
 
 ## LocalSend / AirDroid / KDE Connect
 
-These are general transfer or device-connection tools.
+这些是通用传输或设备连接工具。
 
-Strengths:
+优势：
 
-- Cross-platform support.
-- Can send text and files.
-- Useful for many device workflows.
+- 跨平台支持。
+- 能发送文本和文件。
+- 覆盖很多设备工作流。
 
-Weaknesses relative to TypeCarrier:
+相对 TypeCarrier 的弱点：
 
-- They are broader than necessary.
-- Sending text usually lands in a receiving app, notification, or clipboard.
-- They are not designed around "insert into the current Mac cursor" as the main action.
+- 功能范围比 TypeCarrier 宽得多。
+- 文本通常落在接收 app、通知或剪贴板里。
+- 它们不是围绕“插入当前 Mac 光标”这个主动作设计的。
 
-TypeCarrier should stay narrower and faster.
+TypeCarrier 应保持更窄、更快。
 
-## Chat-to-Self Workflows
+## 给自己发消息的工作流
 
-Examples: WeChat File Transfer, iMessage to self, Telegram Saved Messages, Slack DM to self.
+例子：微信文件传输助手、iMessage 发给自己、Telegram Saved Messages、Slack 私信自己。
 
-Strengths:
+优势：
 
-- Already installed.
-- Reliable internet delivery.
-- Familiar to users.
+- 用户已经安装。
+- 互联网传输可靠。
+- 使用习惯成熟。
 
-Weaknesses relative to TypeCarrier:
+相对 TypeCarrier 的弱点：
 
-- Text lands in a chat app, not the target Mac input.
-- The user must copy and paste again.
-- Privacy and data residency depend on the messaging service.
-- It interrupts the current Mac context.
+- 文本落在聊天 app，而不是目标 Mac 输入框。
+- 用户还要再次复制粘贴。
+- 隐私和数据驻留取决于聊天服务。
+- 会打断当前 Mac 上下文。
 
-TypeCarrier should win by avoiding context switching.
-
+TypeCarrier 应通过避免上下文切换取胜。
