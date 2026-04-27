@@ -69,9 +69,9 @@ struct ComposerView: View {
                 Button {
                     store.send()
                 } label: {
-                    Label("Send", systemImage: "paperplane.fill")
+                    Label(store.sendButtonText, systemImage: sendButtonSystemImage)
                         .font(.headline)
-                        .frame(minWidth: 104)
+                        .frame(minWidth: 104, minHeight: footerControlHeight)
                 }
                 .buttonStyle(.glassProminent)
                 .disabled(!store.canSend)
@@ -79,31 +79,65 @@ struct ComposerView: View {
         }
     }
 
+    @ViewBuilder
     private var statusChip: some View {
+        if store.canRestartConnection {
+            Button {
+                store.restartConnection()
+            } label: {
+                statusChipContent(showsRetryIcon: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Retry connection")
+        } else {
+            statusChipContent(showsRetryIcon: false)
+        }
+    }
+
+    private func statusChipContent(showsRetryIcon: Bool) -> some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-            Text(store.sendState.displayText)
+            if showsRetryIcon {
+                Image(systemName: "arrow.clockwise")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14, height: 14)
+            } else {
+                Circle()
+                    .fill(connectionStatusColor)
+                    .frame(width: 8, height: 8)
+            }
+
+            Text(store.connectionStatusText)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: footerControlHeight, alignment: .leading)
         .glassEffect(.regular, in: .capsule)
     }
 
-    private var statusColor: Color {
-        switch store.sendState {
-        case .idle:
-            store.connectionState.isConnected ? .green : .secondary
-        case .sending:
-            .orange
-        case .sent:
+    private var footerControlHeight: CGFloat {
+        52
+    }
+
+    private var connectionStatusColor: Color {
+        switch store.connectionStatus {
+        case .connected:
             .green
-        case .failed:
-            .red
+        case .connecting:
+            .orange
+        case .searching, .disconnected:
+            .secondary
+        }
+    }
+
+    private var sendButtonSystemImage: String {
+        switch store.sendState {
+        case .sent:
+            "checkmark"
+        default:
+            "paperplane.fill"
         }
     }
 }

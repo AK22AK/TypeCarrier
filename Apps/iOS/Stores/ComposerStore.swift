@@ -10,17 +10,24 @@ final class ComposerStore: ObservableObject {
         case sending
         case sent
         case failed(String)
+    }
+
+    enum ConnectionStatus: Equatable {
+        case disconnected
+        case searching
+        case connecting
+        case connected
 
         var displayText: String {
             switch self {
-            case .idle:
-                "Ready"
-            case .sending:
-                "Sending"
-            case .sent:
-                "Sent"
-            case .failed(let message):
-                message
+            case .disconnected:
+                "Disconnected"
+            case .searching:
+                "Searching"
+            case .connecting:
+                "Connecting"
+            case .connected:
+                "Connected"
             }
         }
     }
@@ -48,6 +55,38 @@ final class ComposerStore: ObservableObject {
         CarrierPayload.canSend(text) && connectionState.isConnected && sendState != .sending
     }
 
+    var canRestartConnection: Bool {
+        connectionStatus == .disconnected && sendState != .sending
+    }
+
+    var connectionStatus: ConnectionStatus {
+        switch connectionState {
+        case .connected:
+            .connected
+        case .connecting:
+            .connecting
+        case .searching:
+            .searching
+        default:
+            .disconnected
+        }
+    }
+
+    var connectionStatusText: String {
+        connectionStatus.displayText
+    }
+
+    var sendButtonText: String {
+        switch sendState {
+        case .sending:
+            "Sending"
+        case .sent:
+            "Sent"
+        default:
+            "Send"
+        }
+    }
+
     func start() {
         guard !hasStarted else {
             return
@@ -57,6 +96,13 @@ final class ComposerStore: ObservableObject {
         carrierService.start { [weak self] envelope, _ in
             self?.handle(envelope)
         }
+    }
+
+    func restartConnection() {
+        carrierService.stop()
+        hasStarted = false
+        sendState = .idle
+        start()
     }
 
     func send() {

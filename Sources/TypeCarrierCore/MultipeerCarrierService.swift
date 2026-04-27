@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 @preconcurrency import MultipeerConnectivity
+import os
 
 extension MCPeerID: @unchecked @retroactive Sendable {}
 extension MCSessionState: @unchecked @retroactive Sendable {}
@@ -21,15 +22,28 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     private let role: Role
     private let peerID: MCPeerID
+    private let searchTimeout: Duration
+    private let connectionTimeout: Duration
     private nonisolated(unsafe) let session: MCSession
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
+    private var searchTimeoutTask: Task<Void, Never>?
+    private var connectionTimeoutTask: Task<Void, Never>?
     private var knownPeerIDs: [String: MCPeerID] = [:]
     private var invitedPeerIDs: Set<String> = []
+    private var connectingPeerName: String?
     private var envelopeHandler: ((CarrierEnvelope, MCPeerID) -> Void)?
+    private let logger = Logger(subsystem: "ak22ak.typecarrier", category: "MultipeerCarrierService")
 
-    public init(role: Role, displayName: String? = nil) {
+    public init(
+        role: Role,
+        displayName: String? = nil,
+        searchTimeout: Duration = .seconds(30),
+        connectionTimeout: Duration = .seconds(15)
+    ) {
         self.role = role
+        self.searchTimeout = searchTimeout
+        self.connectionTimeout = connectionTimeout
         peerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
         session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         super.init()
@@ -38,6 +52,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     public func start(onEnvelope: ((CarrierEnvelope, MCPeerID) -> Void)? = nil) {
         envelopeHandler = onEnvelope
+        logger.info("Starting service role=\(self.roleName, privacy: .public)")
 
         switch role {
         case .sender:
@@ -48,13 +63,17 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     }
 
     public func stop() {
+        logger.info("Stopping service role=\(self.roleName, privacy: .public)")
         browser?.stopBrowsingForPeers()
         advertiser?.stopAdvertisingPeer()
         session.disconnect()
+        cancelSearchTimeout()
+        cancelConnectionTimeout()
         connectionState = .idle
         discoveredPeers = []
         knownPeerIDs = [:]
         invitedPeerIDs = []
+        connectingPeerName = nil
     }
 
     public func sendText(_ text: String) throws {
@@ -80,6 +99,8 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.browser = browser
         connectionState = .searching
         browser.startBrowsingForPeers()
+        scheduleSearchTimeout()
+        logger.info("Started browsing for peers")
     }
 
     private func startAdvertising() {
@@ -88,6 +109,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.advertiser = advertiser
         connectionState = .advertising
         advertiser.startAdvertisingPeer()
+        logger.info("Started advertising peer")
     }
 
     private func rememberAndInvite(_ peerID: MCPeerID) {
@@ -99,25 +121,47 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
 
         guard !invitedPeerIDs.contains(key), session.connectedPeers.isEmpty else {
+            logger.debug("Skipping invite peer=\(key, privacy: .public) alreadyInvited=\(self.invitedPeerIDs.contains(key), privacy: .public) connectedCount=\(self.session.connectedPeers.count, privacy: .public)")
             return
         }
 
         invitedPeerIDs.insert(key)
+        cancelSearchTimeout()
+        connectingPeerName = key
         connectionState = .connecting(peerID.displayName)
+        scheduleConnectionTimeout(for: key)
         browser?.invitePeer(peerID, to: session, withContext: nil, timeout: 15)
+        logger.info("Invited peer=\(key, privacy: .public)")
     }
 
     private func handleSessionState(_ state: MCSessionState, peerID: MCPeerID) {
+        logger.info("Session state peer=\(peerID.displayName, privacy: .public) state=\(self.sessionStateName(state), privacy: .public)")
+
         switch state {
         case .connected:
+            knownPeerIDs[peerID.displayName] = peerID
+            cancelSearchTimeout()
+            cancelConnectionTimeout()
+            connectingPeerName = nil
             connectionState = .connected(peerID.displayName)
         case .connecting:
+            knownPeerIDs[peerID.displayName] = peerID
+            cancelSearchTimeout()
+            connectingPeerName = peerID.displayName
+            scheduleConnectionTimeout(for: peerID.displayName)
             connectionState = .connecting(peerID.displayName)
         case .notConnected:
+            let previousState = connectionState
+            invitedPeerIDs.remove(peerID.displayName)
+            cancelConnectionTimeout()
+            connectingPeerName = nil
+
             if case .receiver = role {
                 connectionState = .advertising
-            } else {
-                connectionState = .searching
+            } else if case .connected = previousState {
+                returnToSearchingAfterConnectionAttempt()
+            } else if case .connecting = previousState {
+                returnToSearchingAfterConnectionAttempt()
             }
         @unknown default:
             connectionState = .failed("Unknown connection state")
@@ -140,8 +184,114 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     }
 
     private func fail(_ message: String) {
+        logger.error("Service failed message=\(message, privacy: .public)")
+        cancelSearchTimeout()
+        cancelConnectionTimeout()
         lastErrorMessage = message
         connectionState = .failed(message)
+    }
+
+    private func scheduleSearchTimeout() {
+        cancelSearchTimeout()
+
+        searchTimeoutTask = Task { @MainActor [weak self, searchTimeout] in
+            do {
+                try await Task.sleep(for: searchTimeout)
+            } catch {
+                return
+            }
+
+            self?.handleSearchTimeout()
+        }
+    }
+
+    private func cancelSearchTimeout() {
+        searchTimeoutTask?.cancel()
+        searchTimeoutTask = nil
+    }
+
+    private func scheduleConnectionTimeout(for peerName: String) {
+        cancelConnectionTimeout()
+
+        connectionTimeoutTask = Task { @MainActor [weak self, connectionTimeout] in
+            do {
+                try await Task.sleep(for: connectionTimeout)
+            } catch {
+                return
+            }
+
+            self?.handleConnectionTimeout(for: peerName)
+        }
+    }
+
+    private func cancelConnectionTimeout() {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
+    }
+
+    private func handleSearchTimeout() {
+        guard case .sender = role, case .searching = connectionState, session.connectedPeers.isEmpty else {
+            return
+        }
+
+        logger.info("Search timed out after \(String(describing: self.searchTimeout), privacy: .public)")
+        stopBrowsingAndDisconnect()
+    }
+
+    private func handleConnectionTimeout(for peerName: String) {
+        guard case .sender = role,
+              case .connecting(let currentPeerName) = connectionState,
+              currentPeerName == peerName,
+              session.connectedPeers.isEmpty else {
+            return
+        }
+
+        logger.info("Connection timed out peer=\(peerName, privacy: .public) after \(String(describing: self.connectionTimeout), privacy: .public)")
+        invitedPeerIDs.remove(peerName)
+        connectingPeerName = nil
+        returnToSearchingAfterConnectionAttempt()
+    }
+
+    private func returnToSearchingAfterConnectionAttempt() {
+        cancelConnectionTimeout()
+        connectionState = .searching
+        scheduleSearchTimeout()
+    }
+
+    private func stopBrowsingAndDisconnect() {
+        cancelSearchTimeout()
+        cancelConnectionTimeout()
+        browser?.stopBrowsingForPeers()
+        connectionState = .idle
+    }
+
+#if DEBUG
+    func startSearchingForTesting() {
+        connectionState = .searching
+        scheduleSearchTimeout()
+    }
+#endif
+
+    private var roleName: String {
+        switch role {
+        case .sender:
+            "sender"
+        case .receiver:
+            "receiver"
+        }
+    }
+
+    private func sessionStateName(_ state: MCSessionState) -> String {
+        switch state {
+        case .notConnected:
+            "notConnected"
+        case .connecting:
+            "connecting"
+        case .connected:
+            "connected"
+        @unknown default:
+            "unknown"
+        }
     }
 }
 
@@ -166,13 +316,16 @@ extension MultipeerCarrierService: MCNearbyServiceBrowserDelegate {
         withDiscoveryInfo info: [String: String]?
     ) {
         Task { @MainActor [weak self] in
+            self?.logger.info("Found peer=\(peerID.displayName, privacy: .public)")
             self?.rememberAndInvite(peerID)
         }
     }
 
     nonisolated public func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         Task { @MainActor [weak self] in
+            self?.logger.info("Lost peer=\(peerID.displayName, privacy: .public)")
             self?.knownPeerIDs[peerID.displayName] = nil
+            self?.invitedPeerIDs.remove(peerID.displayName)
             self?.discoveredPeers.removeAll { $0.id == peerID.displayName }
         }
     }
