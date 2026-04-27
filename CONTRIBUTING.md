@@ -3,6 +3,13 @@
 TypeCarrier is early-stage prototype software. Small, focused changes are easier
 to review than broad rewrites.
 
+## Workflow
+
+Use pull requests for feature work, behavior changes, release configuration,
+permissions, transport logic, and paste behavior. Keep `master` buildable.
+
+Small documentation fixes may be committed directly by maintainers.
+
 Before opening a pull request:
 
 - Run `xcodegen generate`.
