@@ -21,7 +21,21 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Check Xcode compatibility
+        id: xcode
+        run: |
+          xcodebuild -version
+          version="$(xcodebuild -version | awk '/Xcode/ { print $2 }')"
+          major="${version%%.*}"
+          if [ "${major:-0}" -ge 26 ]; then
+            echo "supports_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "supports_build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping Xcode builds because this runner has Xcode $version. TypeCarrier currently targets iOS 26.0 and macOS 26.0."
+          fi
+
       - name: Test core package
+        if: steps.xcode.outputs.supports_build == 'true'
         run: |
           xcodebuild \
             -project TypeCarrier.xcodeproj \
@@ -30,6 +44,7 @@ jobs:
             test
 
       - name: Build macOS app
+        if: steps.xcode.outputs.supports_build == 'true'
         run: |
           xcodebuild \
             -project TypeCarrier.xcodeproj \
@@ -39,6 +54,7 @@ jobs:
             build
 
       - name: Build iOS app
+        if: steps.xcode.outputs.supports_build == 'true'
         run: |
           xcodebuild \
             -project TypeCarrier.xcodeproj \
