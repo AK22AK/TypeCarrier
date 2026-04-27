@@ -101,6 +101,7 @@
 		61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
 		6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteInjector.swift; sourceTree = "<group>"; };
 		74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
+		7D2121659173D2CFC7EBA563 /* TypeCarrier.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = TypeCarrier.xcconfig; sourceTree = "<group>"; };
 		829CC626F7A3C4147A40D809 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		847B0360AAB5F8E0004D0D1F /* TypeCarrierMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TypeCarrierMac.entitlements; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -194,6 +195,7 @@
 		65A808A2334267B5E2C7A868 = {
 			isa = PBXGroup;
 			children = (
+				F42282CBE810A5937C2C80B7 /* Configs */,
 				AA1CD55E31E5853642CD655C /* iOS */,
 				9C48A1D3D60FC6B83A7EE596 /* macOS */,
 				77AA3151611E4D023656AA61 /* TypeCarrierCore */,
@@ -272,6 +274,14 @@
 				61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */,
 			);
 			path = Stores;
+			sourceTree = "<group>";
+		};
+		F42282CBE810A5937C2C80B7 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				7D2121659173D2CFC7EBA563 /* TypeCarrier.xcconfig */,
+			);
+			path = Configs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -364,16 +374,20 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					2C748C482D0561D771FE36D3 = {
-						DevelopmentTeam = REDACTED_TEAM_ID;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
 					};
 					7EB2A94AFA2688B515E3F9BB = {
-						DevelopmentTeam = REDACTED_TEAM_ID;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
 					};
 					E07FA0E75311F1B14DD3EF2E = {
-						DevelopmentTeam = REDACTED_TEAM_ID;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
 					};
 					E5EAA629DB2AB43458BA6FDC = {
-						DevelopmentTeam = REDACTED_TEAM_ID;
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -477,7 +491,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac";
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -497,7 +511,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.core;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).core";
 				SDKROOT = auto;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -520,7 +534,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).ios";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -528,6 +542,7 @@
 		};
 		8CB30628618270A65DC1D954 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D2121659173D2CFC7EBA563 /* TypeCarrier.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -562,7 +577,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = REDACTED_TEAM_ID;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -598,7 +612,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -614,7 +628,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).ios";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -631,7 +645,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.core.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).core.tests";
 				SDKROOT = macosx;
 				TEST_HOST = "";
 			};
@@ -652,7 +666,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.core;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).core";
 				SDKROOT = auto;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
@@ -675,7 +689,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = org.typecarrier.core.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).core.tests";
 				SDKROOT = macosx;
 				TEST_HOST = "";
 			};
@@ -683,6 +697,7 @@
 		};
 		D7FD494E121653F4C114F58D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D2121659173D2CFC7EBA563 /* TypeCarrier.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -717,7 +732,6 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = REDACTED_TEAM_ID;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

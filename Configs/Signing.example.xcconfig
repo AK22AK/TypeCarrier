@@ -1,0 +1,5 @@
+// Copy this file to Configs/Signing.local.xcconfig for local device builds
+// or official release archives. Do not commit the local file.
+
+TYPECARRIER_BUNDLE_PREFIX = com.example.typecarrier
+DEVELOPMENT_TEAM = ABCDE12345

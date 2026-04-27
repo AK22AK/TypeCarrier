@@ -3,7 +3,7 @@ set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="TypeCarrierMac"
-BUNDLE_ID="org.typecarrier.mac"
+BUNDLE_ID="${TYPECARRIER_LOG_SUBSYSTEM:-org.typecarrier.mac}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/.build/DerivedData"
 APP_BUNDLE="$DERIVED_DATA/Build/Products/Debug/$APP_NAME.app"

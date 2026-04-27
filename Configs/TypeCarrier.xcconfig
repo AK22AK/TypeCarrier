@@ -1,0 +1,8 @@
+TYPECARRIER_BUNDLE_PREFIX = org.typecarrier
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+
+// Local signing overrides belong in Configs/Signing.local.xcconfig.
+// That file is intentionally gitignored because it may contain a personal
+// Apple Developer Team ID and official bundle identifier prefix.
+#include? "Signing.local.xcconfig"
