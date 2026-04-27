@@ -3,4 +3,5 @@ DerivedData/
 *.xcuserdata/
 *.xcuserdatad/
 .DS_Store
+.codex/
 Configs/Signing.local.xcconfig
