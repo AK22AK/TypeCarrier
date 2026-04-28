@@ -84,4 +84,57 @@ final class MultipeerCarrierServiceTests: XCTestCase {
 
         XCTAssertEqual(service.connectionState, .idle)
     }
+
+    func testSenderDiagnosticsRecordDiscoveryInvitationAndTimeout() async throws {
+        let service = MultipeerCarrierService(
+            role: .sender,
+            displayName: "iPhone",
+            searchTimeout: .milliseconds(80),
+            connectionTimeout: .milliseconds(20)
+        )
+        let peerID = MCPeerID(displayName: "MacBook Pro")
+        let browser = MCNearbyServiceBrowser(
+            peer: MCPeerID(displayName: "Test Browser"),
+            serviceType: MultipeerCarrierService.serviceType
+        )
+
+        service.browser(browser, foundPeer: peerID, withDiscoveryInfo: nil)
+        await Task.yield()
+
+        XCTAssertEqual(service.diagnostics.discoveredPeers, ["MacBook Pro"])
+        XCTAssertEqual(service.diagnostics.invitedPeers, ["MacBook Pro"])
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.foundPeer" && $0.peerName == "MacBook Pro" })
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.invitePeer" && $0.peerName == "MacBook Pro" })
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "connection.timeout" && $0.peerName == "MacBook Pro" })
+        XCTAssertEqual(service.diagnostics.connectionState, .searching)
+    }
+
+    func testReceiverDiagnosticsRecordAcceptedInvitation() async {
+        let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
+        let peerID = MCPeerID(displayName: "iPhone")
+        let advertiser = MCNearbyServiceAdvertiser(
+            peer: MCPeerID(displayName: "Test Advertiser"),
+            discoveryInfo: nil,
+            serviceType: MultipeerCarrierService.serviceType
+        )
+        var accepted = false
+        var sessionWasProvided = false
+
+        service.advertiser(
+            advertiser,
+            didReceiveInvitationFromPeer: peerID,
+            withContext: nil
+        ) { shouldAccept, session in
+            accepted = shouldAccept
+            sessionWasProvided = session != nil
+        }
+        await Task.yield()
+
+        XCTAssertTrue(accepted)
+        XCTAssertTrue(sessionWasProvided)
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.accepted" && $0.peerName == "iPhone" })
+    }
 }

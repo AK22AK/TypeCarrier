@@ -3,6 +3,7 @@ import TypeCarrierCore
 
 struct ComposerView: View {
     @StateObject private var store = ComposerStore()
+    @State private var showsDiagnostics = false
 
     var body: some View {
         ZStack {
@@ -19,6 +20,9 @@ struct ComposerView: View {
         }
         .task {
             store.start()
+        }
+        .sheet(isPresented: $showsDiagnostics) {
+            ConnectionDiagnosticsSheet(store: store)
         }
     }
 
@@ -39,6 +43,16 @@ struct ComposerView: View {
             }
 
             Spacer()
+
+            Button {
+                showsDiagnostics = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.title3.weight(.medium))
+                    .frame(width: 42, height: 42)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel("Connection diagnostics")
         }
     }
 
@@ -142,6 +156,83 @@ struct ComposerView: View {
     }
 }
 
+private struct ConnectionDiagnosticsSheet: View {
+    @ObservedObject var store: ComposerStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Session") {
+                    diagnosticRow("Role", store.diagnostics.role)
+                    diagnosticRow("Local Peer", store.diagnostics.localPeerName)
+                    diagnosticRow("Service", store.diagnostics.serviceType)
+                    diagnosticRow("State", store.diagnostics.connectionState.displayText)
+                    diagnosticRow("Discovered", store.diagnostics.discoveredPeersText)
+                    diagnosticRow("Invited", store.diagnostics.invitedPeersText)
+                    diagnosticRow("Connected", store.diagnostics.connectedPeersText)
+
+                    if let error = store.diagnostics.lastErrorMessage {
+                        diagnosticRow("Last Error", error)
+                    }
+                }
+
+                Section("Recent Events") {
+                    ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
+                        DiagnosticEventRow(event: event)
+                    }
+                }
+            }
+            .navigationTitle("Diagnostics")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func diagnosticRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 16)
+            Text(value)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+    }
+}
+
+private struct DiagnosticEventRow: View {
+    let event: CarrierDiagnosticEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(event.name)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(event.timestamp, style: .time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(event.message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let peerName = event.peerName {
+                Text(peerName)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+}
 #Preview {
     ComposerView()
 }
