@@ -25,6 +25,15 @@ public enum ConnectionState: Equatable, Sendable {
         }
     }
 
+    public var peerName: String? {
+        switch self {
+        case .connecting(let peerName), .connected(let peerName):
+            peerName
+        default:
+            nil
+        }
+    }
+
     public var isConnected: Bool {
         if case .connected = self {
             return true
