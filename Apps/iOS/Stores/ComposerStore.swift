@@ -76,6 +76,10 @@ final class ComposerStore: ObservableObject {
         connectionStatus.displayText
     }
 
+    var headerStatusText: String {
+        connectionState.peerName ?? connectionState.displayText
+    }
+
     var sendButtonText: String {
         switch sendState {
         case .sending:

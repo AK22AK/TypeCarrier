@@ -32,7 +32,7 @@ struct ComposerView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("TypeCarrier")
                     .font(.title2.weight(.semibold))
-                Text(store.connectionState.displayText)
+                Text(store.headerStatusText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -100,11 +100,10 @@ struct ComposerView: View {
                 Image(systemName: "arrow.clockwise")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 18, height: 18)
             } else {
-                Circle()
-                    .fill(connectionStatusColor)
-                    .frame(width: 8, height: 8)
+                ConnectionStatusIndicator(status: store.connectionStatus)
+                    .id(store.connectionStatus)
             }
 
             Text(store.connectionStatusText)
@@ -121,17 +120,6 @@ struct ComposerView: View {
         52
     }
 
-    private var connectionStatusColor: Color {
-        switch store.connectionStatus {
-        case .connected:
-            .green
-        case .connecting:
-            .orange
-        case .searching, .disconnected:
-            .secondary
-        }
-    }
-
     private var sendButtonSystemImage: String {
         switch store.sendState {
         case .sent:
@@ -139,6 +127,61 @@ struct ComposerView: View {
         default:
             "paperplane.fill"
         }
+    }
+}
+
+private struct ConnectionStatusIndicator: View {
+    let status: ComposerStore.ConnectionStatus
+    @State private var isBreathing = false
+
+    var body: some View {
+        ZStack {
+            switch status {
+            case .searching:
+                Circle()
+                    .stroke(Color.blue.opacity(isBreathing ? 0.18 : 0.45), lineWidth: 1.6)
+                    .frame(width: isBreathing ? 18 : 10, height: isBreathing ? 18 : 10)
+                Circle()
+                    .fill(Color.blue.opacity(0.8))
+                    .frame(width: 6, height: 6)
+            case .connecting:
+                Circle()
+                    .fill(Color.orange.opacity(isBreathing ? 0.18 : 0.4))
+                    .frame(width: isBreathing ? 18 : 11, height: isBreathing ? 18 : 11)
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 8, height: 8)
+            case .connected:
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.green)
+            case .disconnected:
+                Circle()
+                    .fill(Color.secondary)
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
+        .animation(statusAnimation, value: isBreathing)
+        .onAppear {
+            isBreathing = status.isBreathing
+        }
+    }
+
+    private var statusAnimation: Animation? {
+        guard status.isBreathing else {
+            return nil
+        }
+
+        return .easeInOut(duration: status == .searching ? 1.35 : 0.95)
+            .repeatForever(autoreverses: true)
+    }
+}
+
+private extension ComposerStore.ConnectionStatus {
+    var isBreathing: Bool {
+        self == .searching || self == .connecting
     }
 }
 

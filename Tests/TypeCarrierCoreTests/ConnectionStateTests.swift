@@ -17,4 +17,11 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertTrue(ConnectionState.failed("Denied").isFailed)
         XCTAssertFalse(ConnectionState.advertising.isFailed)
     }
+
+    func testPeerNameIsAvailableOnlyAfterFindingADevice() {
+        XCTAssertNil(ConnectionState.idle.peerName)
+        XCTAssertNil(ConnectionState.searching.peerName)
+        XCTAssertEqual(ConnectionState.connecting("MacBook Pro").peerName, "MacBook Pro")
+        XCTAssertEqual(ConnectionState.connected("MacBook Pro").peerName, "MacBook Pro")
+    }
 }
