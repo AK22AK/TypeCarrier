@@ -51,6 +51,10 @@ final class ComposerStore: ObservableObject {
         carrierService.connectionState
     }
 
+    var diagnostics: CarrierDiagnostics {
+        carrierService.diagnostics
+    }
+
     var canSend: Bool {
         CarrierPayload.canSend(text) && connectionState.isConnected && sendState != .sending
     }
