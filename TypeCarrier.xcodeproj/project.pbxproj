@@ -13,6 +13,7 @@
 		2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */; };
 		25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */; };
 		26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */; };
+		30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */; };
 		33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */; };
 		3414B67D3309CDB6439A6D96 /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBC5EDEAA504D926640A76F /* ComposerView.swift */; };
@@ -29,6 +30,7 @@
 		83944AC0357B36329DC743F4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
+		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
 		BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */; };
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
 		C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */; };
@@ -102,6 +104,7 @@
 		0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierService.swift; sourceTree = "<group>"; };
 		08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionChecker.swift; sourceTree = "<group>"; };
 		0CBC5EDEAA504D926640A76F /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
+		1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistoryTests.swift; sourceTree = "<group>"; };
 		18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierServiceTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
@@ -130,6 +133,7 @@
 		F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelope.swift; sourceTree = "<group>"; };
 		FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
 		FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCarrierStore.swift; sourceTree = "<group>"; };
+		FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -167,6 +171,7 @@
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
 				23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */,
+				1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */,
 			);
 			name = TypeCarrierCoreTests;
 			path = Tests/TypeCarrierCoreTests;
@@ -232,6 +237,7 @@
 				F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */,
 				9BA8751B3877B14B54FCE73C /* ConnectionState.swift */,
 				0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */,
+				FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */,
 			);
 			name = TypeCarrierCore;
 			path = Sources/TypeCarrierCore;
@@ -462,6 +468,7 @@
 				969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */,
 				074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */,
 				70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */,
+				B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -473,6 +480,7 @@
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,
 				472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */,
+				30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

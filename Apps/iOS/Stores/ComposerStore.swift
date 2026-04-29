@@ -32,7 +32,15 @@ final class ComposerStore: ObservableObject {
         }
     }
 
-    @Published var text = ""
+    @Published var text = "" {
+        didSet {
+            guard shouldRecordTextChange else {
+                return
+            }
+
+            textHistory.recordChange(from: oldValue, to: text)
+        }
+    }
     @Published private(set) var sendState: SendState = .idle
     @Published private(set) var records: [CarrierRecord] = []
 
@@ -41,6 +49,8 @@ final class ComposerStore: ObservableObject {
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
     private var hasStarted = false
+    private var textHistory = TextEditHistory()
+    private var shouldRecordTextChange = true
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
@@ -121,6 +131,18 @@ final class ComposerStore: ObservableObject {
         CarrierPayload.canSend(text)
     }
 
+    var canUndo: Bool {
+        textHistory.canUndo
+    }
+
+    var canRedo: Bool {
+        textHistory.canRedo
+    }
+
+    var hasEditorText: Bool {
+        !text.isEmpty
+    }
+
     func start() {
         guard !hasStarted else {
             return
@@ -182,7 +204,7 @@ final class ComposerStore: ObservableObject {
                 status: .sent,
                 detail: "Sent to Mac"
             )
-            text = ""
+            replaceEditorText("", resetsHistory: true)
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
@@ -196,7 +218,7 @@ final class ComposerStore: ObservableObject {
     }
 
     func send(record: CarrierRecord) {
-        text = record.text
+        replaceEditorText(record.text, resetsHistory: true)
         send()
     }
 
@@ -231,7 +253,43 @@ final class ComposerStore: ObservableObject {
     }
 
     func loadIntoEditor(_ record: CarrierRecord) {
-        text = record.text
+        replaceEditorText(record.text, resetsHistory: true)
+        sendState = .idle
+    }
+
+    func copyText() {
+        guard hasEditorText else {
+            return
+        }
+
+        UIPasteboard.general.string = text
+    }
+
+    func clearText() {
+        guard hasEditorText else {
+            return
+        }
+
+        textHistory.recordChange(from: text, to: "")
+        replaceEditorText("")
+        sendState = .idle
+    }
+
+    func undoTextChange() {
+        guard let previous = textHistory.undo(current: text) else {
+            return
+        }
+
+        replaceEditorText(previous)
+        sendState = .idle
+    }
+
+    func redoTextChange() {
+        guard let next = textHistory.redo(current: text) else {
+            return
+        }
+
+        replaceEditorText(next)
         sendState = .idle
     }
 
@@ -316,5 +374,15 @@ final class ComposerStore: ObservableObject {
 
     private func syncRecords() {
         records = recordStore?.records ?? []
+    }
+
+    private func replaceEditorText(_ newText: String, resetsHistory: Bool = false) {
+        shouldRecordTextChange = false
+        text = newText
+        shouldRecordTextChange = true
+
+        if resetsHistory {
+            textHistory.reset()
+        }
     }
 }
