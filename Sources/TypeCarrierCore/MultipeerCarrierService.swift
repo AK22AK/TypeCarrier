@@ -288,10 +288,6 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             lastReceivedEnvelope = envelope
             envelopeHandler?(envelope, peerID)
             recordDiagnosticEvent("session.receive", message: "Received \(envelope.kind.rawValue)", peerName: peerID.displayName)
-
-            if envelope.kind == .text, let payloadID = envelope.payload?.id {
-                try? send(.ack(payloadID))
-            }
         } catch {
             lastErrorMessage = error.localizedDescription
             recordDiagnosticEvent("session.decodeFailed", message: error.localizedDescription, peerName: peerID.displayName)

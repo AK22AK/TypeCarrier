@@ -28,6 +28,23 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertNil(decoded.payload)
     }
 
+    func testReceiptEnvelopeRoundTripsPasteResult() throws {
+        let payloadID = UUID(uuidString: "8E6D5DB2-6DAB-4F17-A0C7-4986F929992E")!
+        let receipt = CarrierDeliveryReceipt(
+            payloadID: payloadID,
+            receivedAt: Date(timeIntervalSince1970: 1_777_888_999),
+            pasteStatus: .failed,
+            detail: "Accessibility permission required"
+        )
+        let envelope = CarrierEnvelope.receipt(receipt)
+
+        let decoded = try CarrierCodec.decode(try CarrierCodec.encode(envelope))
+
+        XCTAssertEqual(decoded.kind, .receipt)
+        XCTAssertEqual(decoded.receipt, receipt)
+        XCTAssertNil(decoded.payload)
+    }
+
     func testBlankTextIsRejectedBeforeSending() {
         XCTAssertFalse(CarrierPayload.canSend(""))
         XCTAssertFalse(CarrierPayload.canSend(" \n\t "))
