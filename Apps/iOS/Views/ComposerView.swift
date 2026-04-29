@@ -128,6 +128,9 @@ struct ComposerView: View {
 
     private var editor: some View {
         ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .glassEffect(.regular, in: .rect(cornerRadius: 30))
+
             TextField("Type or dictate here", text: $store.text, axis: .vertical)
                 .font(.system(.body, design: .rounded))
                 .lineLimit(1...10)
@@ -138,12 +141,14 @@ struct ComposerView: View {
                         store.send()
                     }
                 }
-                .padding(.bottom, editorAccessoryReservedHeight)
+                .padding(.bottom, showsEditorAccessoryBar ? editorAccessoryReservedHeight : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            editorAccessoryBar
-                .padding(.horizontal, 4)
-                .padding(.bottom, 2)
+            if showsEditorAccessoryBar {
+                editorAccessoryBar
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 2)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -151,48 +156,53 @@ struct ComposerView: View {
         .onTapGesture {
             focusEditor()
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 30))
     }
 
     private var editorAccessoryBar: some View {
-        HStack(spacing: 8) {
-            editorToolButton(
-                systemName: "arrow.uturn.backward",
-                accessibilityLabel: "Undo text edit",
-                isEnabled: store.canUndo
-            ) {
-                store.undoTextChange()
-            }
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if store.canUndo || store.canRedo {
+                    editorToolGroup {
+                        editorToolButton(
+                            systemName: "arrow.uturn.backward",
+                            accessibilityLabel: "Undo text edit",
+                            isEnabled: store.canUndo
+                        ) {
+                            store.undoTextChange()
+                        }
 
-            editorToolButton(
-                systemName: "arrow.uturn.forward",
-                accessibilityLabel: "Redo text edit",
-                isEnabled: store.canRedo
-            ) {
-                store.redoTextChange()
-            }
+                        editorToolButton(
+                            systemName: "arrow.uturn.forward",
+                            accessibilityLabel: "Redo text edit",
+                            isEnabled: store.canRedo
+                        ) {
+                            store.redoTextChange()
+                        }
+                    }
+                }
 
-            Spacer(minLength: 28)
+                if store.hasEditorText {
+                    editorStandaloneToolButton(
+                        systemName: "doc.on.doc",
+                        accessibilityLabel: "Copy text"
+                    ) {
+                        store.copyText()
+                    }
+                }
 
-            editorToolButton(
-                systemName: "doc.on.doc",
-                accessibilityLabel: "Copy text",
-                isEnabled: store.hasEditorText
-            ) {
-                store.copyText()
-            }
+                Spacer(minLength: 0)
 
-            editorToolButton(
-                systemName: "trash",
-                accessibilityLabel: "Clear text",
-                isEnabled: store.hasEditorText
-            ) {
-                store.clearText()
+                if store.hasEditorText {
+                    editorStandaloneToolButton(
+                        systemName: "trash",
+                        accessibilityLabel: "Clear text"
+                    ) {
+                        store.clearText()
+                    }
+                }
             }
         }
-        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, minHeight: editorAccessoryHeight)
-        .background(.regularMaterial, in: .capsule)
     }
 
     private func editorToolButton(
@@ -213,6 +223,35 @@ struct ComposerView: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func editorStandaloneToolButton(
+        systemName: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
+            focusEditor()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: editorAccessoryHeight, height: editorAccessoryHeight)
+                .glassEffect(.regular.interactive(), in: .circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func editorToolGroup<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(spacing: 2) {
+            content()
+        }
+        .padding(.horizontal, 8)
+        .frame(minHeight: editorAccessoryHeight)
+        .glassEffect(.regular.interactive(), in: .capsule)
     }
 
     private var footer: some View {
@@ -292,6 +331,10 @@ struct ComposerView: View {
 
     private var footerControlHeight: CGFloat {
         46
+    }
+
+    private var showsEditorAccessoryBar: Bool {
+        store.canUndo || store.canRedo || store.hasEditorText
     }
 
     private var pageTopPadding: CGFloat {
