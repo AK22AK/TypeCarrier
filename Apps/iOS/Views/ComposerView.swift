@@ -7,6 +7,7 @@ struct ComposerView: View {
     @FocusState private var isEditorFocused: Bool
     @State private var showsDiagnostics = false
     @State private var showsHistory = false
+    @State private var isHeaderCollapsed = false
 
     var body: some View {
         ZStack {
@@ -31,37 +32,68 @@ struct ComposerView: View {
         .sheet(isPresented: $showsHistory) {
             CarrierHistorySheet(store: store)
         }
+        .onChange(of: isEditorFocused) { _, isFocused in
+            if isFocused {
+                collapseHeaderForEditing()
+            } else {
+                restoreHeaderAfterEditing()
+            }
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Spacer()
-                headerActions
-            }
+        let progress = headerCollapseProgress
+        let headerHeight = interpolated(expanded: expandedHeaderHeight, compact: compactHeaderHeight, progress: progress)
 
-            HStack(alignment: .center, spacing: 12) {
+        return GeometryReader { proxy in
+            let titleX = interpolated(expanded: headerLogoSize + 12, compact: 0, progress: progress)
+            let titleY = interpolated(expanded: 56, compact: 7, progress: progress)
+            let titleWidth = max(
+                120,
+                proxy.size.width - titleX - (headerActionsGroupWidth + 12) * progress
+            )
+            let logoY = expandedHeaderHeight - headerLogoSize
+            let actionsY = interpolated(expanded: 0, compact: 3, progress: progress)
+
+            ZStack(alignment: .topLeading) {
                 Image(systemName: "text.cursor")
                     .font(.system(size: 27, weight: .semibold))
                     .frame(width: headerLogoSize, height: headerLogoSize)
                     .glassEffect(.regular.interactive(), in: .circle)
+                    .opacity(1 - progress)
+                    .scaleEffect(interpolated(expanded: 1, compact: 0.88, progress: progress))
+                    .offset(x: 0, y: logoY)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("TypeCarrier")
-                        .font(.system(size: 34, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
+                animatedHeaderTitle(progress: progress)
+                    .frame(width: titleWidth, alignment: .topLeading)
+                    .offset(x: titleX, y: titleY)
 
-                    Text(store.headerStatusText)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                .layoutPriority(1)
+                headerActions
+                    .frame(width: headerActionsGroupWidth, height: headerActionsGroupHeight)
+                    .offset(x: proxy.size.width - headerActionsGroupWidth, y: actionsY)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, minHeight: headerHeight, maxHeight: headerHeight, alignment: .topLeading)
+    }
+
+    private func animatedHeaderTitle(progress: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: interpolated(expanded: 2, compact: 1, progress: progress)) {
+            Text("TypeCarrier")
+                .font(.system(size: 34, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .scaleEffect(interpolated(expanded: 1, compact: 20 / 34, progress: progress), anchor: .topLeading)
+                .frame(height: interpolated(expanded: 40, compact: 24, progress: progress), alignment: .topLeading)
+
+            Text(store.headerStatusText)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .scaleEffect(interpolated(expanded: 1, compact: 13 / 17, progress: progress), anchor: .topLeading)
+                .frame(height: interpolated(expanded: 22, compact: 16, progress: progress), alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var headerActions: some View {
@@ -118,7 +150,7 @@ struct ComposerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .contentShape(.rect)
         .onTapGesture {
-            isEditorFocused = true
+            focusEditor()
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 30))
     }
@@ -172,7 +204,7 @@ struct ComposerView: View {
     ) -> some View {
         Button {
             action()
-            isEditorFocused = true
+            focusEditor()
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
@@ -261,6 +293,55 @@ struct ComposerView: View {
 
     private var footerControlHeight: CGFloat {
         46
+    }
+
+    private var expandedHeaderHeight: CGFloat {
+        104
+    }
+
+    private var compactHeaderHeight: CGFloat {
+        54
+    }
+
+    private var headerCollapseProgress: CGFloat {
+        isHeaderCollapsed ? 1 : 0
+    }
+
+    private var headerActionsGroupWidth: CGFloat {
+        headerActionWidth * 2 + 2 + 16
+    }
+
+    private var headerActionsGroupHeight: CGFloat {
+        headerActionHeight + 8
+    }
+
+    private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
+        expanded + (compact - expanded) * progress
+    }
+
+    private func focusEditor() {
+        guard !isEditorFocused else {
+            return
+        }
+
+        collapseHeaderForEditing()
+        isEditorFocused = true
+    }
+
+    private func collapseHeaderForEditing() {
+        guard !isHeaderCollapsed else {
+            return
+        }
+
+        isHeaderCollapsed = true
+    }
+
+    private func restoreHeaderAfterEditing() {
+        guard isHeaderCollapsed else {
+            return
+        }
+
+        isHeaderCollapsed = false
     }
 
     private var headerLogoSize: CGFloat {
