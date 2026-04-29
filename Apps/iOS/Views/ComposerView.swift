@@ -34,43 +34,65 @@ struct ComposerView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "text.cursor")
-                .font(.title2.weight(.semibold))
-                .frame(width: 44, height: 44)
-                .glassEffect(.regular.interactive(), in: .circle)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("TypeCarrier")
-                    .font(.title2.weight(.semibold))
-                Text(store.headerStatusText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Spacer()
+                headerActions
             }
 
-            Spacer()
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "text.cursor")
+                    .font(.system(size: 27, weight: .semibold))
+                    .frame(width: headerLogoSize, height: headerLogoSize)
+                    .glassEffect(.regular.interactive(), in: .circle)
 
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TypeCarrier")
+                        .font(.system(size: 34, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+
+                    Text(store.headerStatusText)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .layoutPriority(1)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .bottomLeading)
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 2) {
             Button {
                 showsHistory = true
             } label: {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.title3.weight(.medium))
-                    .frame(width: 42, height: 42)
+                    .font(.system(size: 22, weight: .medium))
+                    .frame(width: headerActionWidth, height: headerActionHeight)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
             .accessibilityLabel("History and drafts")
 
-            Button {
-                showsDiagnostics = true
+            Menu {
+                Button {
+                    showsDiagnostics = true
+                } label: {
+                    Label("Connection Diagnostics", systemImage: "info.circle")
+                }
             } label: {
-                Image(systemName: "info.circle")
-                    .font(.title3.weight(.medium))
-                    .frame(width: 42, height: 42)
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 22, weight: .medium))
+                    .frame(width: headerActionWidth, height: headerActionHeight)
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel("Connection diagnostics")
+            .buttonStyle(.plain)
+            .accessibilityLabel("More")
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
     }
 
     private var editor: some View {
@@ -173,6 +195,18 @@ struct ComposerView: View {
 
     private var footerControlHeight: CGFloat {
         46
+    }
+
+    private var headerLogoSize: CGFloat {
+        48
+    }
+
+    private var headerActionWidth: CGFloat {
+        46
+    }
+
+    private var headerActionHeight: CGFloat {
+        40
     }
 
 }
