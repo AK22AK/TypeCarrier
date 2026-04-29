@@ -96,7 +96,7 @@ struct ComposerView: View {
     }
 
     private var editor: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottom) {
             TextField("Type or dictate here", text: $store.text, axis: .vertical)
                 .font(.system(.body, design: .rounded))
                 .lineLimit(1...10)
@@ -107,10 +107,12 @@ struct ComposerView: View {
                         store.send()
                     }
                 }
-                .padding(.bottom, editorToolReservedHeight)
+                .padding(.bottom, editorAccessoryReservedHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            editorTextTools
+            editorAccessoryBar
+                .padding(.horizontal, 4)
+                .padding(.bottom, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -121,8 +123,8 @@ struct ComposerView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 30))
     }
 
-    private var editorTextTools: some View {
-        HStack(spacing: 2) {
+    private var editorAccessoryBar: some View {
+        HStack(spacing: 8) {
             editorToolButton(
                 systemName: "arrow.uturn.backward",
                 accessibilityLabel: "Undo text edit",
@@ -139,6 +141,8 @@ struct ComposerView: View {
                 store.redoTextChange()
             }
 
+            Spacer(minLength: 28)
+
             editorToolButton(
                 systemName: "doc.on.doc",
                 accessibilityLabel: "Copy text",
@@ -148,16 +152,16 @@ struct ComposerView: View {
             }
 
             editorToolButton(
-                systemName: "xmark",
+                systemName: "trash",
                 accessibilityLabel: "Clear text",
                 isEnabled: store.hasEditorText
             ) {
                 store.clearText()
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: editorAccessoryHeight)
+        .background(.regularMaterial, in: .capsule)
     }
 
     private func editorToolButton(
@@ -171,8 +175,8 @@ struct ComposerView: View {
             isEditorFocused = true
         } label: {
             Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.35))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.42))
                 .frame(width: editorToolButtonSize, height: editorToolButtonSize)
         }
         .buttonStyle(.plain)
@@ -271,11 +275,15 @@ struct ComposerView: View {
         40
     }
 
-    private var editorToolButtonSize: CGFloat {
-        30
+    private var editorAccessoryHeight: CGFloat {
+        40
     }
 
-    private var editorToolReservedHeight: CGFloat {
+    private var editorToolButtonSize: CGFloat {
+        34
+    }
+
+    private var editorAccessoryReservedHeight: CGFloat {
         48
     }
 
