@@ -29,6 +29,7 @@ struct PasteInjector {
         guard pasteboard.setString(text, forType: .string) else {
             return PasteInjectionResult(status: "Failed to write clipboard", succeeded: false)
         }
+        let pasteboardChangeCount = pasteboard.changeCount
 
         guard postCommandV() else {
             return PasteInjectionResult(status: "Failed to post Command-V", succeeded: false)
@@ -37,6 +38,9 @@ struct PasteInjector {
         if let previousString {
             DispatchQueue.main.asyncAfter(deadline: .now() + restoreDelay) {
                 let restoreBoard = NSPasteboard.general
+                guard restoreBoard.changeCount == pasteboardChangeCount else {
+                    return
+                }
                 restoreBoard.clearContents()
                 restoreBoard.setString(previousString, forType: .string)
             }

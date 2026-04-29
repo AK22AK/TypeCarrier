@@ -4,6 +4,7 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
         case text
         case ack
+        case receipt
         case error
     }
 
@@ -11,6 +12,7 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
     public let kind: Kind
     public let payload: CarrierPayload?
     public let ackID: UUID?
+    public let receipt: CarrierDeliveryReceipt?
     public let message: String?
 
     public init(
@@ -18,12 +20,14 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
         kind: Kind,
         payload: CarrierPayload? = nil,
         ackID: UUID? = nil,
+        receipt: CarrierDeliveryReceipt? = nil,
         message: String? = nil
     ) {
         self.version = version
         self.kind = kind
         self.payload = payload
         self.ackID = ackID
+        self.receipt = receipt
         self.message = message
     }
 
@@ -33,6 +37,10 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
 
     public static func ack(_ id: UUID) -> CarrierEnvelope {
         CarrierEnvelope(kind: .ack, ackID: id)
+    }
+
+    public static func receipt(_ receipt: CarrierDeliveryReceipt) -> CarrierEnvelope {
+        CarrierEnvelope(kind: .receipt, receipt: receipt)
     }
 
     public static func error(_ message: String) -> CarrierEnvelope {

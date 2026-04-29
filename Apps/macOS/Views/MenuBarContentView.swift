@@ -1,8 +1,11 @@
 import SwiftUI
 
 struct MenuBarContentView: View {
-    @ObservedObject var store: MacCarrierStore
-    @Environment(\.openWindow) private var openWindow
+    @ObservedObject var coordinator: MacAppCoordinator
+
+    private var store: MacCarrierStore {
+        coordinator.store
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -18,9 +21,10 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Open Debug Window") {
-                openWindow(id: "debug")
+            Button("Open TypeCarrier") {
+                coordinator.showMainWindow()
             }
+            .keyboardShortcut("t", modifiers: [.command, .option])
 
             Button("Test Paste") {
                 store.pasteTestText()
