@@ -20,7 +20,8 @@ struct ComposerView: View {
                 footer
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+            .padding(.top, pageTopPadding)
+            .padding(.bottom, 18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .task {
@@ -47,13 +48,13 @@ struct ComposerView: View {
 
         return GeometryReader { proxy in
             let titleX = interpolated(expanded: headerLogoSize + 12, compact: 0, progress: progress)
-            let titleY = interpolated(expanded: 56, compact: 7, progress: progress)
+            let titleY = interpolated(expanded: expandedHeaderContentY, compact: compactHeaderTitleY, progress: progress)
             let titleWidth = max(
                 120,
                 proxy.size.width - titleX - (headerActionsGroupWidth + 12) * progress
             )
-            let logoY = expandedHeaderHeight - headerLogoSize
-            let actionsY = interpolated(expanded: 0, compact: 3, progress: progress)
+            let logoY = expandedHeaderContentY
+            let actionsY = interpolated(expanded: expandedHeaderActionsY, compact: compactHeaderActionsY, progress: progress)
 
             ZStack(alignment: .topLeading) {
                 Image(systemName: "text.cursor")
@@ -79,19 +80,17 @@ struct ComposerView: View {
     private func animatedHeaderTitle(progress: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: interpolated(expanded: 2, compact: 1, progress: progress)) {
             Text("TypeCarrier")
-                .font(.system(size: 34, weight: .bold))
+                .font(.system(size: interpolated(expanded: 34, compact: 24, progress: progress), weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-                .scaleEffect(interpolated(expanded: 1, compact: 20 / 34, progress: progress), anchor: .topLeading)
-                .frame(height: interpolated(expanded: 40, compact: 24, progress: progress), alignment: .topLeading)
+                .frame(height: interpolated(expanded: 40, compact: 29, progress: progress), alignment: .topLeading)
 
             Text(store.headerStatusText)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-                .scaleEffect(interpolated(expanded: 1, compact: 13 / 17, progress: progress), anchor: .topLeading)
-                .frame(height: interpolated(expanded: 22, compact: 16, progress: progress), alignment: .topLeading)
+                .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
@@ -295,12 +294,32 @@ struct ComposerView: View {
         46
     }
 
+    private var pageTopPadding: CGFloat {
+        4
+    }
+
     private var expandedHeaderHeight: CGFloat {
-        104
+        114
     }
 
     private var compactHeaderHeight: CGFloat {
-        54
+        46
+    }
+
+    private var expandedHeaderContentY: CGFloat {
+        56
+    }
+
+    private var compactHeaderTitleY: CGFloat {
+        2
+    }
+
+    private var expandedHeaderActionsY: CGFloat {
+        -5
+    }
+
+    private var compactHeaderActionsY: CGFloat {
+        -3
     }
 
     private var headerCollapseProgress: CGFloat {
