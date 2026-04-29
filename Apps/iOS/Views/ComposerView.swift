@@ -181,24 +181,22 @@ struct ComposerView: View {
                     }
                 }
 
-                if store.hasEditorText {
-                    editorStandaloneToolButton(
-                        systemName: "doc.on.doc",
-                        accessibilityLabel: "Copy text"
-                    ) {
-                        store.copyText()
-                    }
+                editorStandaloneToolButton(
+                    systemName: "doc.on.doc",
+                    accessibilityLabel: "Copy text",
+                    isVisible: store.hasEditorText
+                ) {
+                    store.copyText()
                 }
 
                 Spacer(minLength: 0)
 
-                if store.hasEditorText {
-                    editorStandaloneToolButton(
-                        systemName: "trash",
-                        accessibilityLabel: "Clear text"
-                    ) {
-                        store.clearText()
-                    }
+                editorStandaloneToolButton(
+                    systemName: "trash",
+                    accessibilityLabel: "Clear text",
+                    isVisible: store.hasEditorText
+                ) {
+                    store.clearText()
                 }
             }
         }
@@ -228,6 +226,7 @@ struct ComposerView: View {
     private func editorStandaloneToolButton(
         systemName: String,
         accessibilityLabel: String,
+        isVisible: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button {
@@ -240,6 +239,9 @@ struct ComposerView: View {
                 .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
+        .disabled(!isVisible)
+        .opacity(isVisible ? 1 : 0)
+        .accessibilityHidden(!isVisible)
         .accessibilityLabel(accessibilityLabel)
     }
 
