@@ -49,12 +49,15 @@ targets:
       properties:
         CFBundleDisplayName: TypeCarrier
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
         NSLocalNetworkUsageDescription: TypeCarrier uses the local network to send text to your nearby Mac.
         NSBonjourServices:
           - _typecarrier._tcp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).ios
+        TARGETED_DEVICE_FAMILY: 1
   TypeCarrierMac:
     type: application
     platform: macOS
