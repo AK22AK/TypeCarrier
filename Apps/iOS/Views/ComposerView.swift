@@ -128,9 +128,6 @@ struct ComposerView: View {
 
     private var editor: some View {
         ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .glassEffect(.regular, in: .rect(cornerRadius: 30))
-
             TextField("Type or dictate here", text: $store.text, axis: .vertical)
                 .font(.system(.body, design: .rounded))
                 .lineLimit(1...10)
@@ -156,6 +153,7 @@ struct ComposerView: View {
         .onTapGesture {
             focusEditor()
         }
+        .glassEffect(.regular, in: .rect(cornerRadius: 30))
     }
 
     private var editorAccessoryBar: some View {
