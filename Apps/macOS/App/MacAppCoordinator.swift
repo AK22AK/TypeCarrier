@@ -7,6 +7,7 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
     private let hotKeyMonitor = GlobalHotKeyMonitor()
     private var mainWindow: NSWindow?
+    private var workspaceObservers: [NSObjectProtocol] = []
 
     override init() {
         super.init()
@@ -14,6 +15,7 @@ final class MacAppCoordinator: NSObject, ObservableObject {
         hotKeyMonitor.register { [weak self] in
             self?.showMainWindow()
         }
+        observeWorkspaceWake()
     }
 
     func showMainWindow() {
@@ -34,6 +36,26 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
         NSApp.activate(ignoringOtherApps: true)
         mainWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func observeWorkspaceWake() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+        let wakeNotifications: [NSNotification.Name] = [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification,
+        ]
+
+        workspaceObservers = wakeNotifications.map { name in
+            notificationCenter.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.store.restart()
+                }
+            }
+        }
     }
 }
 

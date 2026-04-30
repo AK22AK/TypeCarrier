@@ -506,6 +506,10 @@ private struct ConnectionDiagnosticsSheet: View {
                     if let error = store.diagnostics.lastErrorMessage {
                         diagnosticRow("Last Error", error)
                     }
+
+                    if let logURL = store.connectionDiagnosticLogFileURL {
+                        diagnosticRow("Log File", logURL.lastPathComponent)
+                    }
                 }
 
                 Section("Recent Events") {
@@ -516,6 +520,14 @@ private struct ConnectionDiagnosticsSheet: View {
             }
             .navigationTitle("Diagnostics")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if let logURL = store.connectionDiagnosticLogFileURL {
+                        ShareLink(item: logURL) {
+                            Label("Export Log", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()

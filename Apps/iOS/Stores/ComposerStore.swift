@@ -45,16 +45,30 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
 
     let carrierService: MultipeerCarrierService
+    let connectionDiagnosticLogFileURL: URL?
     private let recordStore: CarrierRecordStore?
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
     private var hasStarted = false
+    private let backgroundDisconnectGraceSeconds: TimeInterval
+    private let resumeRecoverySearchTimeout: Duration = .seconds(25)
+    private var backgroundStopTask: Task<Void, Never>?
+    private var foregroundRecovery: ForegroundConnectionRecovery
     private var textHistory = TextEditHistory()
     private var shouldRecordTextChange = true
     private var cancellables: Set<AnyCancellable> = []
 
-    init() {
-        carrierService = MultipeerCarrierService(role: .sender, displayName: UIDevice.current.name)
+    init(backgroundDisconnectGraceSeconds: TimeInterval = 12) {
+        self.backgroundDisconnectGraceSeconds = backgroundDisconnectGraceSeconds
+        foregroundRecovery = ForegroundConnectionRecovery(
+            backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
+        )
+        connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-connection-events.jsonl")
+        carrierService = MultipeerCarrierService(
+            role: .sender,
+            displayName: UIDevice.current.name,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "ios-records.json")
@@ -68,6 +82,38 @@ final class ComposerStore: ObservableObject {
 
         carrierService.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        carrierService.$connectionState
+            .sink { [weak self] state in
+                Task { @MainActor [weak self] in
+                    self?.handleConnectionStateChanged(state)
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleAppDidBecomeActive()
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleAppDidEnterBackground()
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleAppWillTerminate()
+                }
+            }
             .store(in: &cancellables)
     }
 
@@ -91,7 +137,7 @@ final class ComposerStore: ObservableObject {
         switch connectionState {
         case .connected:
             .connected
-        case .connecting:
+        case .connecting, .reconnecting:
             .connecting
         case .searching:
             .searching
@@ -105,7 +151,14 @@ final class ComposerStore: ObservableObject {
     }
 
     var headerStatusText: String {
-        connectionState.peerName ?? connectionState.displayText
+        switch connectionState {
+        case .connecting(let peerName), .reconnecting(let peerName), .connected(let peerName):
+            peerName
+        case .searching:
+            connectionState.displayText
+        default:
+            connectionStatus.displayText
+        }
     }
 
     var sendButtonText: String {
@@ -155,10 +208,142 @@ final class ComposerStore: ObservableObject {
     }
 
     func restartConnection() {
+        cancelBackgroundStop()
         carrierService.stop()
         hasStarted = false
         sendState = .idle
         start()
+    }
+
+    func refreshConnectionAfterAppBecameActive() {
+        guard hasStarted, sendState != .sending, !connectionState.isConnected else {
+            return
+        }
+
+        carrierService.stop()
+        hasStarted = false
+        start()
+    }
+
+    private func handleAppDidEnterBackground() {
+        cancelBackgroundStop()
+        foregroundRecovery.didEnterBackground(at: Date())
+
+        guard hasStarted, sendState != .sending else {
+            return
+        }
+
+        carrierService.recordDiagnosticMarker(
+            "app.backgroundGraceStarted",
+            message: "Will disconnect after \(backgroundDisconnectGraceSeconds) seconds in background."
+        )
+
+        let graceSeconds = backgroundDisconnectGraceSeconds
+        backgroundStopTask = Task { @MainActor [weak self] in
+            let nanoseconds = UInt64(max(0, graceSeconds) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            self?.disconnectAfterBackgroundGrace()
+        }
+    }
+
+    private func handleAppDidBecomeActive() {
+        cancelBackgroundStop()
+
+        let action = foregroundRecovery.didBecomeActive(
+            at: Date(),
+            hasStarted: hasStarted,
+            isSending: sendState == .sending,
+            isConnected: connectionState.isConnected
+        )
+        switch action {
+        case .none:
+            return
+        case .resumeFastPath(let message):
+            carrierService.recordDiagnosticMarker(
+                "app.resumeFastPath",
+                message: message
+            )
+            return
+        case .resumeFreshConnect(let restartsExistingService, let message):
+            carrierService.recordDiagnosticMarker(
+                "app.resumeFreshConnect",
+                message: message
+            )
+            startResumeRecovery(restartsExistingService: restartsExistingService)
+            return
+        }
+    }
+
+    private func handleConnectionStateChanged(_ state: ConnectionState) {
+        guard sendState != .sending else {
+            return
+        }
+
+        let action = foregroundRecovery.didChangeConnectionState(
+            isConnected: state.isConnected,
+            isIdleOrFailed: state == .idle || state.isFailed,
+            displayText: state.displayText
+        )
+        switch action {
+        case .none:
+            return
+        case .resumeFreshRetry(let message):
+            carrierService.recordDiagnosticMarker(
+                "app.resumeFreshRetry",
+                message: message
+            )
+            startResumeRecovery(restartsExistingService: true, keepsRetryBudget: true)
+        }
+    }
+
+    private func startResumeRecovery(restartsExistingService: Bool, keepsRetryBudget: Bool = false) {
+        foregroundRecovery.beginResumeRecovery(
+            restartsExistingService: restartsExistingService,
+            keepsRetryBudget: keepsRetryBudget
+        )
+        if restartsExistingService, hasStarted {
+            carrierService.stop()
+            hasStarted = false
+        }
+
+        sendState = .idle
+        start()
+        carrierService.extendCurrentSearchTimeoutForResumeRecovery(to: resumeRecoverySearchTimeout)
+    }
+
+    private func handleAppWillTerminate() {
+        cancelBackgroundStop()
+        foregroundRecovery.didTerminate()
+
+        guard hasStarted else {
+            return
+        }
+
+        carrierService.recordDiagnosticMarker(
+            "app.willTerminateDisconnect",
+            message: "Disconnecting before app termination."
+        )
+        carrierService.stop()
+        hasStarted = false
+    }
+
+    private func disconnectAfterBackgroundGrace() {
+        guard hasStarted, foregroundRecovery.isInBackground, sendState != .sending else {
+            return
+        }
+
+        carrierService.stop()
+        hasStarted = false
+        foregroundRecovery.didDisconnectAfterBackgroundGrace()
+        carrierService.recordDiagnosticMarker(
+            "app.backgroundDisconnected",
+            message: "Disconnected after \(backgroundDisconnectGraceSeconds) seconds in background."
+        )
+    }
+
+    private func cancelBackgroundStop() {
+        backgroundStopTask?.cancel()
+        backgroundStopTask = nil
     }
 
     func send() {

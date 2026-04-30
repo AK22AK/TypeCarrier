@@ -7,6 +7,7 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertEqual(ConnectionState.searching.displayText, "Searching")
         XCTAssertEqual(ConnectionState.advertising.displayText, "Advertising")
         XCTAssertEqual(ConnectionState.connecting("MacBook Pro").displayText, "Connecting to MacBook Pro")
+        XCTAssertEqual(ConnectionState.reconnecting("MacBook Pro").displayText, "Reconnecting to MacBook Pro")
         XCTAssertEqual(ConnectionState.connected("MacBook Pro").displayText, "Connected to MacBook Pro")
         XCTAssertEqual(ConnectionState.failed("No peer").displayText, "No peer")
     }
@@ -22,6 +23,7 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertNil(ConnectionState.idle.peerName)
         XCTAssertNil(ConnectionState.searching.peerName)
         XCTAssertEqual(ConnectionState.connecting("MacBook Pro").peerName, "MacBook Pro")
+        XCTAssertEqual(ConnectionState.reconnecting("MacBook Pro").peerName, "MacBook Pro")
         XCTAssertEqual(ConnectionState.connected("MacBook Pro").peerName, "MacBook Pro")
     }
 }
