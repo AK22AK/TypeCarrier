@@ -54,7 +54,7 @@ struct ComposerView: View {
                 proxy.size.width - titleX - (headerActionsGroupWidth + 12) * progress
             )
             let logoY = expandedHeaderContentY
-            let actionsY = interpolated(expanded: expandedHeaderActionsY, compact: compactHeaderActionsY, progress: progress)
+            let actionsY = expandedHeaderActionsY
 
             ZStack(alignment: .topLeading) {
                 Image(systemName: "text.cursor")
@@ -360,10 +360,6 @@ struct ComposerView: View {
 
     private var expandedHeaderActionsY: CGFloat {
         -5
-    }
-
-    private var compactHeaderActionsY: CGFloat {
-        -3
     }
 
     private var headerCollapseProgress: CGFloat {
