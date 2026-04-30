@@ -9,10 +9,12 @@
 /* Begin PBXBuildFile section */
 		03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */; };
 		074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BA8751B3877B14B54FCE73C /* ConnectionState.swift */; };
+		1591F23A5EE50FF3C61DC362 /* CarrierDiagnosticLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */; };
 		2280932E9B287A87DEE156CE /* TypeCarrierMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */; };
 		2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */; };
 		25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */; };
 		26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */; };
+		2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */; };
 		30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */; };
 		33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */; };
 		3414B67D3309CDB6439A6D96 /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -22,6 +24,7 @@
 		4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */; };
 		505D4CAB42A8B9CA3F1DB3E4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */; };
+		61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */; };
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
 		6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */; };
@@ -109,6 +112,7 @@
 		23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierServiceTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
 		3FDE61EFC232581E0D43F11A /* TypeCarrierMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TypeCarrierMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyMonitor.swift; sourceTree = "<group>"; };
 		57CD706CDE712B3914E65FEB /* CarrierPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPayload.swift; sourceTree = "<group>"; };
 		57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecord.swift; sourceTree = "<group>"; };
@@ -116,6 +120,7 @@
 		6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteInjector.swift; sourceTree = "<group>"; };
 		74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarContentView.swift; sourceTree = "<group>"; };
 		7D2121659173D2CFC7EBA563 /* TypeCarrier.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = TypeCarrier.xcconfig; sourceTree = "<group>"; };
+		7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecoveryTests.swift; sourceTree = "<group>"; };
 		829CC626F7A3C4147A40D809 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		847B0360AAB5F8E0004D0D1F /* TypeCarrierMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TypeCarrierMac.entitlements; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -125,6 +130,7 @@
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		B1A98DAE35972ECE7A5C511F /* TypeCarrieriOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TypeCarrieriOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB10FD06F23300742A06B266 /* TypeCarrierCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TypeCarrierCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecovery.swift; sourceTree = "<group>"; };
 		DBB85D30D093D2E61328806C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStore.swift; sourceTree = "<group>"; };
 		F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppCoordinator.swift; sourceTree = "<group>"; };
@@ -170,6 +176,7 @@
 				3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */,
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
+				7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */,
 				23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */,
 				1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */,
 			);
@@ -230,12 +237,14 @@
 			isa = PBXGroup;
 			children = (
 				A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */,
+				48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */,
 				F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */,
 				57CD706CDE712B3914E65FEB /* CarrierPayload.swift */,
 				F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */,
 				57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */,
 				F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */,
 				9BA8751B3877B14B54FCE73C /* ConnectionState.swift */,
+				CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */,
 				0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */,
 				FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */,
 			);
@@ -461,12 +470,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */,
+				1591F23A5EE50FF3C61DC362 /* CarrierDiagnosticLogStore.swift in Sources */,
 				F334F55AE0BF13F3283F7520 /* CarrierEnvelope.swift in Sources */,
 				BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */,
 				65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */,
 				25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */,
 				969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */,
 				074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */,
+				2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */,
 				70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */,
 				B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */,
 			);
@@ -479,6 +490,7 @@
 				C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */,
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,
+				61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */,
 				472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */,
 				30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */,
 			);

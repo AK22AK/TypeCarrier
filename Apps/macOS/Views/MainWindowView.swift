@@ -201,6 +201,9 @@ private struct DiagnosticsSummary: View {
                 diagnosticLine("Service", store.carrierService.diagnostics.serviceType)
                 diagnosticLine("Connected", store.carrierService.diagnostics.connectedPeersText)
                 diagnosticLine("Discovered", store.carrierService.diagnostics.discoveredPeersText)
+                if let logURL = store.connectionDiagnosticLogFileURL {
+                    diagnosticLine("Log", logURL.path)
+                }
 
                 ForEach(Array(store.carrierService.diagnostics.events.suffix(5).reversed())) { event in
                     Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.name): \(event.message)")

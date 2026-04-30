@@ -11,13 +11,19 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
 
     let carrierService: MultipeerCarrierService
+    let connectionDiagnosticLogFileURL: URL?
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
     private let permissionChecker = AccessibilityPermissionChecker()
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
-        carrierService = MultipeerCarrierService(role: .receiver, displayName: Host.current().localizedName ?? "TypeCarrier Mac")
+        connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
+        carrierService = MultipeerCarrierService(
+            role: .receiver,
+            displayName: Host.current().localizedName ?? "TypeCarrier Mac",
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
