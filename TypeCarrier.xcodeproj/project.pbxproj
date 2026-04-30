@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		039DC71ECCC2E4FEDC92499A /* CarrierDiagnosticExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */; };
 		03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */; };
 		074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BA8751B3877B14B54FCE73C /* ConnectionState.swift */; };
 		1591F23A5EE50FF3C61DC362 /* CarrierDiagnosticLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */; };
@@ -27,6 +28,7 @@
 		61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */; };
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
+		6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */; };
 		6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */; };
 		70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */; };
 		772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */; };
@@ -105,6 +107,7 @@
 
 /* Begin PBXFileReference section */
 		0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierService.swift; sourceTree = "<group>"; };
+		075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticExport.swift; sourceTree = "<group>"; };
 		08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionChecker.swift; sourceTree = "<group>"; };
 		0CBC5EDEAA504D926640A76F /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
 		1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistoryTests.swift; sourceTree = "<group>"; };
@@ -130,6 +133,7 @@
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		B1A98DAE35972ECE7A5C511F /* TypeCarrieriOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TypeCarrieriOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB10FD06F23300742A06B266 /* TypeCarrierCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TypeCarrierCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticExportTests.swift; sourceTree = "<group>"; };
 		CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecovery.swift; sourceTree = "<group>"; };
 		DBB85D30D093D2E61328806C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStore.swift; sourceTree = "<group>"; };
@@ -173,6 +177,7 @@
 		1C9827CC5304AB81DFDD1A55 /* TypeCarrierCoreTests */ = {
 			isa = PBXGroup;
 			children = (
+				CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */,
 				3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */,
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
@@ -237,6 +242,7 @@
 			isa = PBXGroup;
 			children = (
 				A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */,
+				075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */,
 				48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */,
 				F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */,
 				57CD706CDE712B3914E65FEB /* CarrierPayload.swift */,
@@ -470,6 +476,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */,
+				6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */,
 				1591F23A5EE50FF3C61DC362 /* CarrierDiagnosticLogStore.swift in Sources */,
 				F334F55AE0BF13F3283F7520 /* CarrierEnvelope.swift in Sources */,
 				BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */,
@@ -487,6 +494,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				039DC71ECCC2E4FEDC92499A /* CarrierDiagnosticExportTests.swift in Sources */,
 				C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */,
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,

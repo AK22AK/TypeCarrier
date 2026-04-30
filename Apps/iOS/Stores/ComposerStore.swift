@@ -216,6 +216,23 @@ final class ComposerStore: ObservableObject {
         start()
     }
 
+    func makeConnectionDiagnosticExportURL(now: Date = Date()) throws -> URL {
+        guard let connectionDiagnosticLogFileURL else {
+            throw CarrierDiagnosticExportError.missingLogFile
+        }
+
+        carrierService.recordDiagnosticMarker(
+            "diagnostic.exportPrepared",
+            message: "Prepared timestamped diagnostic export."
+        )
+        return try CarrierDiagnosticExport.createTimestampedCopy(
+            sourceURL: connectionDiagnosticLogFileURL,
+            directory: CarrierDiagnosticExport.defaultExportDirectory(),
+            prefix: "ios-connection-events",
+            now: now
+        )
+    }
+
     func refreshConnectionAfterAppBecameActive() {
         guard hasStarted, sendState != .sending, !connectionState.isConnected else {
             return

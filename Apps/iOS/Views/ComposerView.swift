@@ -487,6 +487,8 @@ private extension ComposerStore.ConnectionStatus {
 private struct ConnectionDiagnosticsSheet: View {
     @ObservedObject var store: ComposerStore
     @Environment(\.dismiss) private var dismiss
+    @State private var diagnosticExportShareItem: DiagnosticExportShareItem?
+    @State private var diagnosticExportErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -518,8 +520,10 @@ private struct ConnectionDiagnosticsSheet: View {
             .navigationTitle("Diagnostics")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if let logURL = store.connectionDiagnosticLogFileURL {
-                        ShareLink(item: logURL) {
+                    if store.connectionDiagnosticLogFileURL != nil {
+                        Button {
+                            exportLog()
+                        } label: {
                             Label("Export Log", systemImage: "square.and.arrow.up")
                         }
                     }
@@ -531,6 +535,24 @@ private struct ConnectionDiagnosticsSheet: View {
                     }
                 }
             }
+        }
+        .sheet(item: $diagnosticExportShareItem) { shareItem in
+            ActivityView(activityItems: [shareItem.url])
+        }
+        .alert(
+            "Export Failed",
+            isPresented: Binding(
+                get: { diagnosticExportErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        diagnosticExportErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(diagnosticExportErrorMessage ?? "")
         }
     }
 
@@ -544,6 +566,30 @@ private struct ConnectionDiagnosticsSheet: View {
                 .textSelection(.enabled)
         }
     }
+
+    private func exportLog() {
+        do {
+            let exportURL = try store.makeConnectionDiagnosticExportURL()
+            diagnosticExportShareItem = DiagnosticExportShareItem(url: exportURL)
+        } catch {
+            diagnosticExportErrorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct DiagnosticExportShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct DiagnosticEventRow: View {
