@@ -8,8 +8,22 @@ on:
       - master
 
 jobs:
-  build:
+  project-sanity:
     runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run project sanity checks
+        run: script/ci_sanity.sh
+
+  xcode-build:
+    runs-on: macos-latest
+    needs: project-sanity
 
     steps:
       - name: Check out repository
