@@ -119,11 +119,13 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let peerID: MCPeerID
     private let searchTimeout: Duration
     private let connectionTimeout: Duration
+    private let connectionRetryDelay: Duration
     private nonisolated(unsafe) let session: MCSession
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
     private var searchTimeoutTask: Task<Void, Never>?
     private var connectionTimeoutTask: Task<Void, Never>?
+    private var connectionRetryTask: Task<Void, Never>?
     private var knownPeerIDs: [String: MCPeerID] = [:]
     private var invitedPeerIDs: Set<String> = []
     private var connectingPeerName: String?
@@ -135,11 +137,13 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         role: Role,
         displayName: String? = nil,
         searchTimeout: Duration = .seconds(30),
-        connectionTimeout: Duration = .seconds(15)
+        connectionTimeout: Duration = .seconds(15),
+        connectionRetryDelay: Duration = .seconds(2)
     ) {
         self.role = role
         self.searchTimeout = searchTimeout
         self.connectionTimeout = connectionTimeout
+        self.connectionRetryDelay = connectionRetryDelay
         let localPeerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
         peerID = localPeerID
         session = MCSession(peer: localPeerID, securityIdentity: nil, encryptionPreference: .required)
@@ -172,6 +176,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         session.disconnect()
         cancelSearchTimeout()
         cancelConnectionTimeout()
+        cancelConnectionRetry()
         connectionState = .idle
         discoveredPeers = []
         knownPeerIDs = [:]
@@ -252,12 +257,14 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             knownPeerIDs[peerID.displayName] = peerID
             cancelSearchTimeout()
             cancelConnectionTimeout()
+            cancelConnectionRetry()
             connectingPeerName = nil
             connectionState = .connected(peerID.displayName)
             recordDiagnosticEvent("session.connected", message: "Session connected", peerName: peerID.displayName)
         case .connecting:
             knownPeerIDs[peerID.displayName] = peerID
             cancelSearchTimeout()
+            cancelConnectionRetry()
             connectingPeerName = peerID.displayName
             scheduleConnectionTimeout(for: peerID.displayName)
             connectionState = .connecting(peerID.displayName)
@@ -273,6 +280,8 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             } else if case .connected = previousState {
                 returnToSearchingAfterConnectionAttempt()
             } else if case .connecting = previousState {
+                returnToSearchingAfterConnectionAttempt()
+            } else if case .reconnecting = previousState {
                 returnToSearchingAfterConnectionAttempt()
             }
             recordDiagnosticEvent("session.notConnected", message: "Previous state: \(previousState.displayText)", peerName: peerID.displayName)
@@ -342,8 +351,45 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectionTimeoutTask = nil
     }
 
+    private func scheduleConnectionRetry() {
+        guard case .sender = role,
+              connectionState.isWaitingToRetryKnownPeer,
+              !knownPeerIDs.isEmpty,
+              session.connectedPeers.isEmpty else {
+            return
+        }
+
+        cancelConnectionRetry()
+        connectionRetryTask = Task { @MainActor [weak self, connectionRetryDelay] in
+            do {
+                try await Task.sleep(for: connectionRetryDelay)
+            } catch {
+                return
+            }
+
+            self?.retryKnownPeer()
+        }
+    }
+
+    private func cancelConnectionRetry() {
+        connectionRetryTask?.cancel()
+        connectionRetryTask = nil
+    }
+
+    private func retryKnownPeer() {
+        guard case .sender = role,
+              connectionState.isWaitingToRetryKnownPeer,
+              session.connectedPeers.isEmpty,
+              let peerID = knownPeerIDs.values.sorted(by: { $0.displayName < $1.displayName }).first else {
+            return
+        }
+
+        recordDiagnosticEvent("browser.retryKnownPeer", message: "Retrying known peer", peerName: peerID.displayName)
+        rememberAndInvite(peerID)
+    }
+
     private func handleSearchTimeout() {
-        guard case .sender = role, case .searching = connectionState, session.connectedPeers.isEmpty else {
+        guard case .sender = role, connectionState.isSearchTimeoutEligible, session.connectedPeers.isEmpty else {
             return
         }
 
@@ -369,14 +415,21 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     private func returnToSearchingAfterConnectionAttempt() {
         cancelConnectionTimeout()
-        connectionState = .searching
+        if session.connectedPeers.isEmpty,
+           let peerID = knownPeerIDs.values.sorted(by: { $0.displayName < $1.displayName }).first {
+            connectionState = .reconnecting(peerID.displayName)
+        } else {
+            connectionState = .searching
+        }
         scheduleSearchTimeout()
+        scheduleConnectionRetry()
         updateDiagnostics()
     }
 
     private func stopBrowsingAndDisconnect() {
         cancelSearchTimeout()
         cancelConnectionTimeout()
+        cancelConnectionRetry()
         browser?.stopBrowsingForPeers()
         connectionState = .idle
         updateDiagnostics()
@@ -488,6 +541,9 @@ extension MultipeerCarrierService: MCNearbyServiceBrowserDelegate {
             self?.knownPeerIDs[peerID.displayName] = nil
             self?.invitedPeerIDs.remove(peerID.displayName)
             self?.discoveredPeers.removeAll { $0.id == peerID.displayName }
+            if self?.knownPeerIDs.isEmpty == true {
+                self?.cancelConnectionRetry()
+            }
             self?.recordDiagnosticEvent("browser.lostPeer", message: "Lost peer", peerName: peerID.displayName)
         }
     }

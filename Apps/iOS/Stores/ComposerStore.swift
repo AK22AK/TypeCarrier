@@ -69,6 +69,14 @@ final class ComposerStore: ObservableObject {
         carrierService.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshConnectionAfterAppBecameActive()
+                }
+            }
+            .store(in: &cancellables)
     }
 
     var connectionState: ConnectionState {
@@ -91,7 +99,7 @@ final class ComposerStore: ObservableObject {
         switch connectionState {
         case .connected:
             .connected
-        case .connecting:
+        case .connecting, .reconnecting:
             .connecting
         case .searching:
             .searching
@@ -158,6 +166,16 @@ final class ComposerStore: ObservableObject {
         carrierService.stop()
         hasStarted = false
         sendState = .idle
+        start()
+    }
+
+    func refreshConnectionAfterAppBecameActive() {
+        guard hasStarted, sendState != .sending, !connectionState.isConnected else {
+            return
+        }
+
+        carrierService.stop()
+        hasStarted = false
         start()
     }
 

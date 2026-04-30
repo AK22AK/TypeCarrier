@@ -5,6 +5,7 @@ public enum ConnectionState: Equatable, Sendable {
     case searching
     case advertising
     case connecting(String)
+    case reconnecting(String)
     case connected(String)
     case failed(String)
 
@@ -18,6 +19,8 @@ public enum ConnectionState: Equatable, Sendable {
             "Advertising"
         case .connecting(let peerName):
             "Connecting to \(peerName)"
+        case .reconnecting(let peerName):
+            "Reconnecting to \(peerName)"
         case .connected(let peerName):
             "Connected to \(peerName)"
         case .failed(let message):
@@ -27,7 +30,7 @@ public enum ConnectionState: Equatable, Sendable {
 
     public var peerName: String? {
         switch self {
-        case .connecting(let peerName), .connected(let peerName):
+        case .connecting(let peerName), .reconnecting(let peerName), .connected(let peerName):
             peerName
         default:
             nil
@@ -46,5 +49,23 @@ public enum ConnectionState: Equatable, Sendable {
             return true
         }
         return false
+    }
+
+    var isWaitingToRetryKnownPeer: Bool {
+        switch self {
+        case .searching, .reconnecting:
+            true
+        default:
+            false
+        }
+    }
+
+    var isSearchTimeoutEligible: Bool {
+        switch self {
+        case .searching, .reconnecting:
+            true
+        default:
+            false
+        }
     }
 }
