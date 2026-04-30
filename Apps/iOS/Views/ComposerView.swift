@@ -140,6 +140,7 @@ struct ComposerView: View {
                 }
                 .padding(.bottom, showsEditorAccessoryBar ? editorAccessoryReservedHeight : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .id(store.editorResetGeneration)
 
             if showsEditorAccessoryBar {
                 editorAccessoryBar

@@ -43,6 +43,7 @@ final class ComposerStore: ObservableObject {
     }
     @Published private(set) var sendState: SendState = .idle
     @Published private(set) var records: [CarrierRecord] = []
+    @Published private(set) var editorResetGeneration = 0
 
     let carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
@@ -562,9 +563,13 @@ final class ComposerStore: ObservableObject {
     }
 
     private func replaceEditorText(_ newText: String, resetsHistory: Bool = false) {
+        let shouldResetEditorIdentity = text != newText && newText.isEmpty
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
+        if shouldResetEditorIdentity {
+            editorResetGeneration += 1
+        }
 
         if resetsHistory {
             textHistory.reset()
