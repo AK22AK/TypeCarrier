@@ -682,81 +682,181 @@ private struct DiagnosticEventRow: View {
 }
 
 private struct CarrierHistorySheet: View {
-    @ObservedObject var store: ComposerStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var showsClearDraftsConfirmation = false
+    private enum HistoryTab {
+        case drafts
+        case history
 
-    var body: some View {
-        NavigationStack {
-            List {
-                if !store.drafts.isEmpty {
-                    Section {
-                        ForEach(store.drafts) { record in
-                            NavigationLink {
-                                CarrierRecordDetailView(record: record, store: store)
-                            } label: {
-                                CarrierRecordRow(record: record)
-                            }
-                        }
-                        .onDelete { offsets in
-                            delete(offsets, from: store.drafts)
-                        }
-                    } header: {
-                        draftsSectionHeader
-                    }
-                }
-
-                Section("Sent History") {
-                    if store.outgoingHistory.isEmpty {
-                        ContentUnavailableView("No sent text", systemImage: "paperplane")
-                    } else {
-                        ForEach(store.outgoingHistory) { record in
-                            NavigationLink {
-                                CarrierRecordDetailView(record: record, store: store)
-                            } label: {
-                                CarrierRecordRow(record: record)
-                            }
-                        }
-                        .onDelete { offsets in
-                            delete(offsets, from: store.outgoingHistory)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("History")
-            .alert("清空草稿箱？", isPresented: $showsClearDraftsConfirmation) {
-                Button("取消", role: .cancel) {}
-                Button("清空", role: .destructive) {
-                    store.deleteAllDrafts()
-                }
-            } message: {
-                Text("这会删除 \(store.draftCount) 条草稿，无法撤销。")
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
+        var title: String {
+            switch self {
+            case .drafts:
+                "Drafts"
+            case .history:
+                "History"
             }
         }
     }
 
-    private var draftsSectionHeader: some View {
-        HStack(spacing: 12) {
-            Text("Drafts")
+    @ObservedObject var store: ComposerStore
+    @State private var selectedTab: HistoryTab
+    @State private var showsClearConfirmation = false
 
-            Spacer(minLength: 12)
+    init(store: ComposerStore) {
+        self.store = store
+        _selectedTab = State(initialValue: store.drafts.isEmpty ? .history : .drafts)
+    }
 
-            Button(role: .destructive) {
-                showsClearDraftsConfirmation = true
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 30, height: 28)
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 16) {
+                    Text(selectedTab.title)
+                        .font(.system(size: 48, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+
+                    Spacer(minLength: 16)
+
+                    Button(role: .destructive) {
+                        showsClearConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(canClearCurrentTab ? Color.red : Color.secondary.opacity(0.38))
+                            .frame(width: 40, height: 38)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canClearCurrentTab)
+                    .accessibilityLabel(clearActionAccessibilityLabel)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .offset(x: 4, y: -8)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 32)
+                .padding(.bottom, 12)
+
+                historyTabControl
+
+                List {
+                    switch selectedTab {
+                    case .drafts:
+                        draftsContent
+                    case .history:
+                        historyContent
+                    }
+                }
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Clear all drafts")
+            .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
+                Button("取消", role: .cancel) {}
+                Button("清空", role: .destructive) {
+                    clearCurrentTab()
+                }
+            } message: {
+                Text(clearConfirmationMessage)
+            }
+        }
+    }
+
+    private var historyTabControl: some View {
+        Picker("History view", selection: $selectedTab) {
+            Text("")
+                .tag(HistoryTab.drafts)
+            Text("")
+                .tag(HistoryTab.history)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .center) {
+            HistoryTabLabelOverlay(
+                draftCount: store.draftCount,
+                historyCount: store.outgoingHistory.count,
+                isDraftsSelected: selectedTab == .drafts,
+                isHistorySelected: selectedTab == .history
+            )
+            .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private var draftsContent: some View {
+        if store.drafts.isEmpty {
+            ContentUnavailableView("No drafts", systemImage: "tray")
+        } else {
+            ForEach(store.drafts) { record in
+                NavigationLink {
+                    CarrierRecordDetailView(record: record, store: store)
+                } label: {
+                    CarrierRecordRow(record: record)
+                }
+            }
+            .onDelete { offsets in
+                delete(offsets, from: store.drafts)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var historyContent: some View {
+        if store.outgoingHistory.isEmpty {
+            ContentUnavailableView("No sent text", systemImage: "paperplane")
+        } else {
+            ForEach(store.outgoingHistory) { record in
+                NavigationLink {
+                    CarrierRecordDetailView(record: record, store: store)
+                } label: {
+                    CarrierRecordRow(record: record)
+                }
+            }
+            .onDelete { offsets in
+                delete(offsets, from: store.outgoingHistory)
+            }
+        }
+    }
+
+    private var canClearCurrentTab: Bool {
+        switch selectedTab {
+        case .drafts:
+            !store.drafts.isEmpty
+        case .history:
+            !store.outgoingHistory.isEmpty
+        }
+    }
+
+    private var clearActionAccessibilityLabel: String {
+        switch selectedTab {
+        case .drafts:
+            "Clear all drafts"
+        case .history:
+            "Clear sent history"
+        }
+    }
+
+    private var clearConfirmationTitle: String {
+        switch selectedTab {
+        case .drafts:
+            "清空草稿箱？"
+        case .history:
+            "清空历史记录？"
+        }
+    }
+
+    private var clearConfirmationMessage: String {
+        switch selectedTab {
+        case .drafts:
+            "这会删除 \(store.draftCount) 条草稿，无法撤销。"
+        case .history:
+            "这会删除 \(store.outgoingHistory.count) 条历史记录，无法撤销。"
+        }
+    }
+
+    private func clearCurrentTab() {
+        switch selectedTab {
+        case .drafts:
+            store.deleteAllDrafts()
+        case .history:
+            store.deleteAllOutgoingHistory()
         }
     }
 
@@ -764,6 +864,55 @@ private struct CarrierHistorySheet: View {
         for index in offsets {
             store.delete(records[index])
         }
+    }
+}
+
+private struct HistoryTabLabelOverlay: View {
+    let draftCount: Int
+    let historyCount: Int
+    let isDraftsSelected: Bool
+    let isHistorySelected: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SegmentTabLabel(title: "Drafts", count: draftCount, isSelected: isDraftsSelected)
+                .frame(maxWidth: .infinity)
+
+            SegmentTabLabel(title: "History", count: historyCount, isSelected: isHistorySelected)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 6)
+    }
+}
+
+private struct SegmentTabLabel: View {
+    let title: String
+    let count: Int
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.subheadline)
+
+            SegmentCountBadge(count: count, isSelected: isSelected)
+        }
+        .foregroundStyle(Color.primary)
+    }
+}
+
+private struct SegmentCountBadge: View {
+    let count: Int
+    let isSelected: Bool
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2)
+            .foregroundStyle(isSelected ? Color.primary.opacity(0.72) : Color.secondary)
+            .monospacedDigit()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.secondary.opacity(isSelected ? 0.12 : 0.18), in: .capsule)
     }
 }
 
