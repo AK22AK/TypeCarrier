@@ -13,15 +13,15 @@ final class ComposerStore: ObservableObject {
     }
 
     enum ConnectionStatus: Equatable {
-        case disconnected
+        case idle
         case searching
         case connecting
         case connected
 
         var displayText: String {
             switch self {
-            case .disconnected:
-                "Disconnected"
+            case .idle:
+                "Idle"
             case .searching:
                 "Searching"
             case .connecting:
@@ -131,7 +131,16 @@ final class ComposerStore: ObservableObject {
     }
 
     var canRestartConnection: Bool {
-        connectionStatus == .disconnected && sendState != .sending
+        guard sendState != .sending else {
+            return false
+        }
+
+        switch connectionState {
+        case .idle, .failed:
+            return true
+        default:
+            return false
+        }
     }
 
     var connectionStatus: ConnectionStatus {
@@ -143,12 +152,8 @@ final class ComposerStore: ObservableObject {
         case .searching:
             .searching
         default:
-            .disconnected
+            .idle
         }
-    }
-
-    var connectionStatusText: String {
-        connectionStatus.displayText
     }
 
     var headerStatusText: String {
@@ -160,6 +165,13 @@ final class ComposerStore: ObservableObject {
         default:
             connectionStatus.displayText
         }
+    }
+
+    var connectionFailureMessage: String? {
+        if case .failed(let message) = connectionState {
+            return message
+        }
+        return nil
     }
 
     var sendButtonText: String {

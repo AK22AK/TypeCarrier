@@ -16,6 +16,7 @@ struct ComposerView: View {
 
             VStack(spacing: 18) {
                 header
+                connectionFailureNotice
                 editor
                 footer
             }
@@ -49,9 +50,10 @@ struct ComposerView: View {
         return GeometryReader { proxy in
             let titleX = interpolated(expanded: headerLogoSize + 12, compact: 0, progress: progress)
             let titleY = interpolated(expanded: expandedHeaderContentY, compact: compactHeaderTitleY, progress: progress)
+            let actionsWidth = headerActionsGroupWidth
             let titleWidth = max(
                 120,
-                proxy.size.width - titleX - (headerActionsGroupWidth + 12) * progress
+                proxy.size.width - titleX - (actionsWidth + 12) * progress
             )
             let logoY = expandedHeaderContentY
             let actionsY = expandedHeaderActionsY
@@ -70,8 +72,8 @@ struct ComposerView: View {
                     .offset(x: titleX, y: titleY)
 
                 headerActions
-                    .frame(width: headerActionsGroupWidth, height: headerActionsGroupHeight)
-                    .offset(x: proxy.size.width - headerActionsGroupWidth, y: actionsY)
+                    .frame(width: actionsWidth, height: headerActionsGroupHeight)
+                    .offset(x: proxy.size.width - actionsWidth, y: actionsY)
             }
         }
         .frame(maxWidth: .infinity, minHeight: headerHeight, maxHeight: headerHeight, alignment: .topLeading)
@@ -85,18 +87,35 @@ struct ComposerView: View {
                 .minimumScaleFactor(0.82)
                 .frame(height: interpolated(expanded: 40, compact: 29, progress: progress), alignment: .topLeading)
 
-            Text(store.headerStatusText)
-                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .topLeading)
+            HStack(spacing: interpolated(expanded: 7, compact: 5, progress: progress)) {
+                ConnectionStatusIndicator(status: store.connectionStatus)
+                    .id(store.connectionStatus)
+
+                Text(store.headerStatusText)
+                    .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var headerActions: some View {
         HStack(spacing: 2) {
+            if store.canRestartConnection {
+                Button {
+                    store.restartConnection()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 21, weight: .medium))
+                        .frame(width: headerActionWidth, height: headerActionHeight)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry connection")
+            }
+
             Button {
                 showsHistory = true
             } label: {
@@ -124,6 +143,29 @@ struct ComposerView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .glassEffect(.regular.interactive(), in: .capsule)
+    }
+
+    @ViewBuilder
+    private var connectionFailureNotice: some View {
+        if let message = store.connectionFailureMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .frame(width: 16, height: 16)
+
+                Text(message)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+            .glassEffect(.regular, in: .capsule)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Connection issue: \(message)")
+        }
     }
 
     private var editor: some View {
@@ -258,7 +300,7 @@ struct ComposerView: View {
     private var footer: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(spacing: 12) {
-                statusChip
+                Spacer(minLength: 0)
 
                 Button {
                     store.saveDraft()
@@ -290,44 +332,8 @@ struct ComposerView: View {
                 .buttonStyle(.plain)
                 .disabled(!store.canSend)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-    }
-
-    @ViewBuilder
-    private var statusChip: some View {
-        if store.canRestartConnection {
-            Button {
-                store.restartConnection()
-            } label: {
-                statusChipContent(showsRetryIcon: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Retry connection")
-        } else {
-            statusChipContent(showsRetryIcon: false)
-        }
-    }
-
-    private func statusChipContent(showsRetryIcon: Bool) -> some View {
-        HStack(spacing: 8) {
-            if showsRetryIcon {
-                Image(systemName: "arrow.clockwise")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-            } else {
-                ConnectionStatusIndicator(status: store.connectionStatus)
-                    .id(store.connectionStatus)
-            }
-
-            Text(store.connectionStatusText)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: footerControlHeight, maxHeight: footerControlHeight, alignment: .leading)
-        .glassEffect(.regular, in: .capsule)
     }
 
     private var footerControlHeight: CGFloat {
@@ -367,7 +373,8 @@ struct ComposerView: View {
     }
 
     private var headerActionsGroupWidth: CGFloat {
-        headerActionWidth * 2 + 2 + 16
+        let actionCount: CGFloat = store.canRestartConnection ? 3 : 2
+        return headerActionWidth * actionCount + 2 * (actionCount - 1) + 16
     }
 
     private var headerActionsGroupHeight: CGFloat {
@@ -454,7 +461,7 @@ private struct ConnectionStatusIndicator: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.green)
-            case .disconnected:
+            case .idle:
                 Circle()
                     .fill(Color.secondary)
                     .frame(width: 7, height: 7)
