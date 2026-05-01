@@ -419,7 +419,7 @@ final class ComposerStore: ObservableObject {
                 status: .sent,
                 detail: "Sent to Mac"
             )
-            replaceEditorText("", resetsHistory: true)
+            replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
@@ -486,7 +486,7 @@ final class ComposerStore: ObservableObject {
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("")
+        replaceEditorText("", rebuildsEditorWhenEmptying: false)
         sendState = .idle
     }
 
@@ -495,7 +495,7 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        replaceEditorText(previous)
+        replaceEditorText(previous, rebuildsEditorWhenEmptying: false)
         sendState = .idle
     }
 
@@ -504,7 +504,7 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        replaceEditorText(next)
+        replaceEditorText(next, rebuildsEditorWhenEmptying: false)
         sendState = .idle
     }
 
@@ -591,8 +591,12 @@ final class ComposerStore: ObservableObject {
         records = recordStore?.records ?? []
     }
 
-    private func replaceEditorText(_ newText: String, resetsHistory: Bool = false) {
-        let shouldResetEditorIdentity = text != newText && newText.isEmpty
+    private func replaceEditorText(
+        _ newText: String,
+        resetsHistory: Bool = false,
+        rebuildsEditorWhenEmptying: Bool = true
+    ) {
+        let shouldResetEditorIdentity = rebuildsEditorWhenEmptying && text != newText && newText.isEmpty
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
