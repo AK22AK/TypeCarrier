@@ -83,6 +83,16 @@ public struct CarrierDiagnostics: Equatable, Sendable {
         connectedPeers.isEmpty ? emptyPlaceholder : connectedPeers.joined(separator: ", ")
     }
 
+    public var connectionRecoverySuggestion: String? {
+        guard role == "sender",
+              connectionState.isFailed,
+              let peerName = discoveredPeers.sorted().first else {
+            return nil
+        }
+
+        return "\(peerName) was found, but the connection did not complete. Try opening TypeCarrier on the Mac, choosing Restart Receiver, then retry here."
+    }
+
     fileprivate func updating(
         connectionState: ConnectionState,
         discoveredPeers: [String],

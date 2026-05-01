@@ -167,24 +167,57 @@ struct ComposerView: View {
     @ViewBuilder
     private var connectionFailureNotice: some View {
         if let message = store.connectionFailureMessage {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.red)
                     .frame(width: 16, height: 16)
+                    .padding(.top, 2)
 
-                Text(message)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(message)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+
+                    if let suggestion = store.connectionRecoverySuggestion {
+                        Text(suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if store.canRestartConnection {
+                    Button {
+                        store.restartConnection()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.footnote.weight(.semibold))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retry connection")
+                }
             }
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-            .glassEffect(.regular, in: .capsule)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 18))
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Connection issue: \(message)")
+            .accessibilityLabel(connectionFailureAccessibilityLabel(message: message))
         }
+    }
+
+    private func connectionFailureAccessibilityLabel(message: String) -> String {
+        if let suggestion = store.connectionRecoverySuggestion {
+            return "Connection issue: \(message) \(suggestion)"
+        }
+
+        return "Connection issue: \(message)"
     }
 
     private var editor: some View {

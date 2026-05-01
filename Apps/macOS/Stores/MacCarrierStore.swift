@@ -9,6 +9,8 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastPasteResult = PasteInjectionResult.idle
     @Published private(set) var accessibilityTrusted = false
     @Published private(set) var records: [CarrierRecord] = []
+    @Published private(set) var lastDiagnosticExportURL: URL?
+    @Published private(set) var lastDiagnosticExportErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
@@ -44,11 +46,23 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var menuBarSystemImage: String {
-        carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
+        if receiverHealthWarning != nil {
+            return "exclamationmark.triangle"
+        }
+
+        return carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
     }
 
     var connectionState: ConnectionState {
         carrierService.connectionState
+    }
+
+    var receiverHealthWarning: String? {
+        if case .failed(let message) = connectionState {
+            return message
+        }
+
+        return carrierService.diagnostics.lastErrorMessage
     }
 
     var lastPayloadPreview: String {
@@ -74,6 +88,53 @@ final class MacCarrierStore: ObservableObject {
         start()
     }
 
+    func restartFromUserAction() {
+        restart(
+            reason: "receiver.restart.user",
+            message: "User requested receiver restart."
+        )
+    }
+
+    func restartAfterWake(notificationName: String, sleepDuration: TimeInterval?) {
+        let durationText = sleepDuration.map(Self.formattedDuration) ?? "unknown"
+        restart(
+            reason: "receiver.restart.wake",
+            message: "Restarting receiver after \(notificationName); sleep duration: \(durationText)."
+        )
+    }
+
+    func recordLifecycleMarker(_ name: String, message: String) {
+        carrierService.recordDiagnosticMarker(name, message: message)
+    }
+
+    func exportConnectionDiagnosticsToFinder(now: Date = Date()) {
+        do {
+            let exportURL = try makeConnectionDiagnosticExportURL(now: now)
+            lastDiagnosticExportURL = exportURL
+            lastDiagnosticExportErrorMessage = nil
+            NSWorkspace.shared.activateFileViewerSelecting([exportURL])
+        } catch {
+            lastDiagnosticExportErrorMessage = error.localizedDescription
+        }
+    }
+
+    func makeConnectionDiagnosticExportURL(now: Date = Date()) throws -> URL {
+        guard let connectionDiagnosticLogFileURL else {
+            throw CarrierDiagnosticExportError.missingLogFile
+        }
+
+        carrierService.recordDiagnosticMarker(
+            "diagnostic.exportPrepared",
+            message: "Prepared timestamped diagnostic export."
+        )
+        return try CarrierDiagnosticExport.createTimestampedCopy(
+            sourceURL: connectionDiagnosticLogFileURL,
+            directory: CarrierDiagnosticExport.defaultExportDirectory(),
+            prefix: "mac-connection-events",
+            now: now
+        )
+    }
+
     func refreshAccessibilityStatus() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
     }
@@ -81,6 +142,32 @@ final class MacCarrierStore: ObservableObject {
     func requestAccessibilityAccess() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: true)
         permissionChecker.openAccessibilitySettings()
+    }
+
+    private func restart(reason: String, message: String) {
+        carrierService.recordDiagnosticMarker(reason, message: message)
+        restart()
+    }
+
+    private static func formattedDuration(_ duration: TimeInterval) -> String {
+        guard duration.isFinite, duration >= 0 else {
+            return "unknown"
+        }
+
+        if duration < 60 {
+            return String(format: "%.1fs", duration)
+        }
+
+        let totalSeconds = Int(duration.rounded())
+        let hours = totalSeconds / 3_600
+        let minutes = (totalSeconds % 3_600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m \(seconds)s"
+        }
+
+        return "\(minutes)m \(seconds)s"
     }
 
     func pasteTestText() {

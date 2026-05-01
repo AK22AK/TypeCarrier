@@ -177,6 +177,10 @@ final class ComposerStore: ObservableObject {
         return nil
     }
 
+    var connectionRecoverySuggestion: String? {
+        diagnostics.connectionRecoverySuggestion
+    }
+
     var sendButtonText: String {
         switch sendState {
         case .sending:
