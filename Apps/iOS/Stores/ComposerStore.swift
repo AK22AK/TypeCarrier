@@ -5,6 +5,8 @@ import UIKit
 
 @MainActor
 final class ComposerStore: ObservableObject {
+    private static let maximumDraftCount = 99
+
     enum SendState: Equatable {
         case idle
         case sending
@@ -44,6 +46,7 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var sendState: SendState = .idle
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var editorResetGeneration = 0
+    @Published private(set) var draftLimitErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
@@ -187,6 +190,18 @@ final class ComposerStore: ObservableObject {
 
     var drafts: [CarrierRecord] {
         records.filter { $0.kind == .draft }
+    }
+
+    var draftCount: Int {
+        drafts.count
+    }
+
+    var draftBadgeText: String? {
+        guard draftCount > 0 else {
+            return nil
+        }
+
+        return "\(min(draftCount, Self.maximumDraftCount))"
     }
 
     var outgoingHistory: [CarrierRecord] {
@@ -443,6 +458,11 @@ final class ComposerStore: ObservableObject {
             return
         }
 
+        guard draftCount < Self.maximumDraftCount else {
+            draftLimitErrorMessage = "请先处理或删除一些草稿，再保存新的草稿。"
+            return
+        }
+
         let now = Date()
         let record = CarrierRecord(
             kind: .draft,
@@ -465,6 +485,10 @@ final class ComposerStore: ObservableObject {
         } catch {
             sendState = .failed("Failed to save draft: \(error.localizedDescription)")
         }
+    }
+
+    func dismissDraftLimitError() {
+        draftLimitErrorMessage = nil
     }
 
     func loadIntoEditor(_ record: CarrierRecord) {

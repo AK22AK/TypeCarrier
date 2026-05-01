@@ -34,6 +34,23 @@ struct ComposerView: View {
         .sheet(isPresented: $showsHistory) {
             CarrierHistorySheet(store: store)
         }
+        .alert(
+            "草稿箱已满",
+            isPresented: Binding(
+                get: { store.draftLimitErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        store.dismissDraftLimitError()
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                store.dismissDraftLimitError()
+            }
+        } message: {
+            Text(store.draftLimitErrorMessage ?? "")
+        }
         .onChange(of: isEditorFocused) { _, isFocused in
             if isFocused {
                 collapseHeaderForEditing()
@@ -119,12 +136,14 @@ struct ComposerView: View {
             Button {
                 showsHistory = true
             } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 22, weight: .medium))
-                    .frame(width: headerActionWidth, height: headerActionHeight)
+                HeaderHistoryButtonLabel(
+                    badgeText: store.draftBadgeText,
+                    width: headerActionWidth,
+                    height: headerActionHeight
+                )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("History and drafts")
+            .accessibilityLabel(historyAccessibilityLabel)
 
             Menu {
                 Button {
@@ -381,6 +400,14 @@ struct ComposerView: View {
         headerActionHeight + 8
     }
 
+    private var historyAccessibilityLabel: String {
+        if store.draftCount > 0 {
+            return "History and drafts, \(store.draftCount) drafts"
+        }
+
+        return "History and drafts"
+    }
+
     private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
         expanded + (compact - expanded) * progress
     }
@@ -434,6 +461,33 @@ struct ComposerView: View {
         48
     }
 
+}
+
+private struct HeaderHistoryButtonLabel: View {
+    let badgeText: String?
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Image(systemName: "clock.arrow.circlepath")
+            .font(.system(size: 22, weight: .medium))
+            .frame(width: width, height: height)
+            .overlay(alignment: .topTrailing) {
+                if let badgeText {
+                    Text(badgeText)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 17, minHeight: 17)
+                        .background(Color.red, in: .capsule)
+                        .accessibilityHidden(true)
+                        .padding(.top, 1)
+                        .padding(.trailing, 1)
+                }
+            }
+    }
 }
 
 private struct ConnectionStatusIndicator: View {
