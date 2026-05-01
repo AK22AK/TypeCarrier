@@ -28,5 +28,9 @@
 	<string>TypeCarrier uses the local network to send text to your nearby Mac.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>
