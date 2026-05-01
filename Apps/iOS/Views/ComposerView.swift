@@ -684,12 +684,13 @@ private struct DiagnosticEventRow: View {
 private struct CarrierHistorySheet: View {
     @ObservedObject var store: ComposerStore
     @Environment(\.dismiss) private var dismiss
+    @State private var showsClearDraftsConfirmation = false
 
     var body: some View {
         NavigationStack {
             List {
                 if !store.drafts.isEmpty {
-                    Section("Drafts") {
+                    Section {
                         ForEach(store.drafts) { record in
                             NavigationLink {
                                 CarrierRecordDetailView(record: record, store: store)
@@ -700,6 +701,8 @@ private struct CarrierHistorySheet: View {
                         .onDelete { offsets in
                             delete(offsets, from: store.drafts)
                         }
+                    } header: {
+                        draftsSectionHeader
                     }
                 }
 
@@ -721,6 +724,14 @@ private struct CarrierHistorySheet: View {
                 }
             }
             .navigationTitle("History")
+            .alert("清空草稿箱？", isPresented: $showsClearDraftsConfirmation) {
+                Button("取消", role: .cancel) {}
+                Button("清空", role: .destructive) {
+                    store.deleteAllDrafts()
+                }
+            } message: {
+                Text("这会删除 \(store.draftCount) 条草稿，无法撤销。")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
@@ -728,6 +739,24 @@ private struct CarrierHistorySheet: View {
                     }
                 }
             }
+        }
+    }
+
+    private var draftsSectionHeader: some View {
+        HStack(spacing: 12) {
+            Text("Drafts")
+
+            Spacer(minLength: 12)
+
+            Button(role: .destructive) {
+                showsClearDraftsConfirmation = true
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 30, height: 28)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Clear all drafts")
         }
     }
 

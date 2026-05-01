@@ -565,6 +565,28 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    func deleteAllDrafts() {
+        guard let recordStore else {
+            sendState = .failed("History storage unavailable")
+            return
+        }
+
+        let draftIDs = drafts.map(\.id)
+        guard !draftIDs.isEmpty else {
+            return
+        }
+
+        do {
+            for id in draftIDs {
+                try recordStore.delete(id: id)
+            }
+            syncRecords()
+        } catch {
+            sendState = .failed("Failed to clear drafts: \(error.localizedDescription)")
+            syncRecords()
+        }
+    }
+
     private func handle(_ envelope: CarrierEnvelope) {
         if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
             finishPendingSend(status: .sent, detail: "Mac acknowledged receipt")
