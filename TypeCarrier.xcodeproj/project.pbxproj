@@ -24,6 +24,7 @@
 		472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */; };
 		4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */; };
 		505D4CAB42A8B9CA3F1DB3E4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
+		54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */; };
 		54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */; };
 		61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */; };
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
@@ -35,6 +36,7 @@
 		83944AC0357B36329DC743F4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
+		A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */; };
 		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
 		BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */; };
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
@@ -132,8 +134,10 @@
 		A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeliveryReceipt.swift; sourceTree = "<group>"; };
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		B1A98DAE35972ECE7A5C511F /* TypeCarrieriOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TypeCarrieriOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextReplacementPolicyTests.swift; sourceTree = "<group>"; };
 		CB10FD06F23300742A06B266 /* TypeCarrierCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TypeCarrierCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticExportTests.swift; sourceTree = "<group>"; };
+		CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextReplacementPolicy.swift; sourceTree = "<group>"; };
 		CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecovery.swift; sourceTree = "<group>"; };
 		DBB85D30D093D2E61328806C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStore.swift; sourceTree = "<group>"; };
@@ -181,6 +185,7 @@
 				3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */,
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
+				C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */,
 				7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */,
 				23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */,
 				1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */,
@@ -250,6 +255,7 @@
 				57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */,
 				F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */,
 				9BA8751B3877B14B54FCE73C /* ConnectionState.swift */,
+				CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */,
 				CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */,
 				0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */,
 				FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */,
@@ -484,6 +490,7 @@
 				25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */,
 				969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */,
 				074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */,
+				A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */,
 				2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */,
 				70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */,
 				B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */,
@@ -498,6 +505,7 @@
 				C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */,
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,
+				54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */,
 				61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */,
 				472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */,
 				30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */,
