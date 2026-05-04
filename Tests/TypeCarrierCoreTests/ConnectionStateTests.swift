@@ -39,7 +39,7 @@ final class ConnectionStateTests: XCTestCase {
 
         XCTAssertEqual(
             diagnostics.connectionRecoverySuggestion,
-            "MacBook Pro was found, but the connection did not complete. Try opening TypeCarrier on the Mac, choosing Restart Receiver, then retry here."
+            "Try Restart Receiver on the Mac, then retry here."
         )
     }
 

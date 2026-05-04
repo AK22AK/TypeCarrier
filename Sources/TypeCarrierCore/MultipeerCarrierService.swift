@@ -86,11 +86,11 @@ public struct CarrierDiagnostics: Equatable, Sendable {
     public var connectionRecoverySuggestion: String? {
         guard role == "sender",
               connectionState.isFailed,
-              let peerName = discoveredPeers.sorted().first else {
+              !discoveredPeers.isEmpty else {
             return nil
         }
 
-        return "\(peerName) was found, but the connection did not complete. Try opening TypeCarrier on the Mac, choosing Restart Receiver, then retry here."
+        return "Try Restart Receiver on the Mac, then retry here."
     }
 
     fileprivate func updating(

@@ -58,11 +58,11 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var receiverHealthWarning: String? {
-        if case .failed(let message) = connectionState {
-            return message
+        if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
+            return "Connection issue. Try Restart Receiver."
         }
 
-        return carrierService.diagnostics.lastErrorMessage
+        return nil
     }
 
     var lastPayloadPreview: String {

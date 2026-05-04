@@ -10,29 +10,33 @@ struct ComposerView: View {
     @State private var isHeaderCollapsed = false
 
     var body: some View {
-        ZStack {
-            Color(uiColor: .systemBackground)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color(uiColor: .systemBackground)
+                    .ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                header
-                connectionFailureNotice
-                editor
-                footer
+                VStack(spacing: 18) {
+                    header
+                    connectionFailureNotice
+                    editor
+                    footer
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, pageTopPadding)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, pageTopPadding)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .navigationDestination(isPresented: $showsHistory) {
+                CarrierHistoryView(store: store)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             store.start()
         }
         .sheet(isPresented: $showsDiagnostics) {
             ConnectionDiagnosticsSheet(store: store)
-        }
-        .sheet(isPresented: $showsHistory) {
-            CarrierHistorySheet(store: store)
         }
         .alert(
             "草稿箱已满",
@@ -714,7 +718,7 @@ private struct DiagnosticEventRow: View {
     }
 }
 
-private struct CarrierHistorySheet: View {
+private struct CarrierHistoryView: View {
     private enum HistoryTab {
         case drafts
         case history
@@ -730,8 +734,10 @@ private struct CarrierHistorySheet: View {
     }
 
     @ObservedObject var store: ComposerStore
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: HistoryTab
     @State private var showsClearConfirmation = false
+    @State private var headerCollapseProgress: CGFloat = 0
 
     init(store: ComposerStore) {
         self.store = store
@@ -739,54 +745,138 @@ private struct CarrierHistorySheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 16) {
-                    Text(selectedTab.title)
-                        .font(.system(size: 48, weight: .bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+        VStack(spacing: 0) {
+            historyHeader
 
-                    Spacer(minLength: 16)
-
-                    Button(role: .destructive) {
-                        showsClearConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(canClearCurrentTab ? Color.red : Color.secondary.opacity(0.38))
-                            .frame(width: 40, height: 38)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canClearCurrentTab)
-                    .accessibilityLabel(clearActionAccessibilityLabel)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                    .offset(x: 4, y: -8)
+            List {
+                switch selectedTab {
+                case .drafts:
+                    draftsContent
+                case .history:
+                    historyContent
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 32)
-                .padding(.bottom, 12)
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, offset in
+                headerCollapseProgress = clamped(offset / historyHeaderCollapseDistance)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) {
+                clearCurrentTab()
+            }
+        } message: {
+            Text(clearConfirmationMessage)
+        }
+    }
+
+    private var historyHeader: some View {
+        let progress = headerCollapseProgress
+        let height = interpolated(
+            expanded: historyHeaderExpandedHeight,
+            compact: historyHeaderCompactHeight,
+            progress: progress
+        )
+
+        return GeometryReader { proxy in
+            let navButtonCenterY = historyNavButtonCenterY
+
+            ZStack(alignment: .topLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 23, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: historyNavButtonSize, height: historyNavButtonSize)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("Back")
+                .position(
+                    x: historyHorizontalPadding + historyNavButtonSize / 2,
+                    y: navButtonCenterY
+                )
+
+                historyActionMenu
+                    .position(
+                        x: proxy.size.width - historyHorizontalPadding - historyNavButtonSize / 2,
+                        y: navButtonCenterY
+                    )
+
+                historyExpandedTitle
+                    .opacity(1 - clamped(progress * 1.35))
+                    .scaleEffect(interpolated(expanded: 1, compact: 0.92, progress: progress), anchor: .leading)
+                    .offset(
+                        x: historyHorizontalPadding,
+                        y: interpolated(expanded: 78, compact: 20, progress: progress)
+                    )
+
+                historyCompactTitle
+                    .opacity(clamped((progress - 0.28) / 0.72))
+                    .frame(width: proxy.size.width, height: 40, alignment: .center)
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: navButtonCenterY
+                    )
 
                 historyTabControl
-
-                List {
-                    switch selectedTab {
-                    case .drafts:
-                        draftsContent
-                    case .history:
-                        historyContent
-                    }
-                }
-            }
-            .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
-                Button("取消", role: .cancel) {}
-                Button("清空", role: .destructive) {
-                    clearCurrentTab()
-                }
-            } message: {
-                Text(clearConfirmationMessage)
+                    .offset(y: interpolated(expanded: 146, compact: 76, progress: progress))
             }
         }
+        .frame(height: height)
+        .animation(.snappy(duration: 0.18), value: selectedTab)
+    }
+
+    private var historyExpandedTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(selectedTab.title)
+                .font(.system(size: 38, weight: .bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+            Text(currentSubtitle)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var historyCompactTitle: some View {
+        VStack(spacing: 0) {
+            Text(selectedTab.title)
+                .font(.system(size: 18, weight: .bold))
+                .lineLimit(1)
+
+            Text(currentSubtitle)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var historyActionMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                showsClearConfirmation = true
+            } label: {
+                Label(clearActionTitle, systemImage: "trash")
+            }
+            .disabled(!canClearCurrentTab)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.primary)
+                .frame(width: historyNavButtonSize, height: historyNavButtonSize)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("History actions")
+        .frame(width: historyNavButtonSize, height: historyNavButtonSize)
+        .glassEffect(.regular.interactive(), in: .circle)
     }
 
     private var historyTabControl: some View {
@@ -800,16 +890,12 @@ private struct CarrierHistorySheet: View {
         .frame(maxWidth: .infinity)
         .overlay(alignment: .center) {
             HistoryTabLabelOverlay(
-                draftCount: store.draftCount,
-                historyCount: store.outgoingHistory.count,
                 isDraftsSelected: selectedTab == .drafts,
                 isHistorySelected: selectedTab == .history
             )
             .allowsHitTesting(false)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, historyHorizontalPadding)
     }
 
     @ViewBuilder
@@ -857,12 +943,30 @@ private struct CarrierHistorySheet: View {
         }
     }
 
+    private var currentSubtitle: String {
+        switch selectedTab {
+        case .drafts:
+            return "\(store.draftCount) drafts"
+        case .history:
+            return "\(store.outgoingHistory.count) sent records"
+        }
+    }
+
     private var clearActionAccessibilityLabel: String {
         switch selectedTab {
         case .drafts:
             "Clear all drafts"
         case .history:
             "Clear sent history"
+        }
+    }
+
+    private var clearActionTitle: String {
+        switch selectedTab {
+        case .drafts:
+            "Clear Drafts"
+        case .history:
+            "Clear History"
         }
     }
 
@@ -898,20 +1002,50 @@ private struct CarrierHistorySheet: View {
             store.delete(records[index])
         }
     }
+
+    private var historyHeaderExpandedHeight: CGFloat {
+        188
+    }
+
+    private var historyHeaderCompactHeight: CGFloat {
+        122
+    }
+
+    private var historyHeaderCollapseDistance: CGFloat {
+        72
+    }
+
+    private var historyHorizontalPadding: CGFloat {
+        20
+    }
+
+    private var historyNavButtonSize: CGFloat {
+        48
+    }
+
+    private var historyNavButtonCenterY: CGFloat {
+        34
+    }
+
+    private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
+        expanded + (compact - expanded) * progress
+    }
+
+    private func clamped(_ value: CGFloat) -> CGFloat {
+        min(max(value, 0), 1)
+    }
 }
 
 private struct HistoryTabLabelOverlay: View {
-    let draftCount: Int
-    let historyCount: Int
     let isDraftsSelected: Bool
     let isHistorySelected: Bool
 
     var body: some View {
         HStack(spacing: 0) {
-            SegmentTabLabel(title: "Drafts", count: draftCount, isSelected: isDraftsSelected)
+            SegmentTabLabel(title: "Drafts", isSelected: isDraftsSelected)
                 .frame(maxWidth: .infinity)
 
-            SegmentTabLabel(title: "History", count: historyCount, isSelected: isHistorySelected)
+            SegmentTabLabel(title: "History", isSelected: isHistorySelected)
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 6)
@@ -920,32 +1054,12 @@ private struct HistoryTabLabelOverlay: View {
 
 private struct SegmentTabLabel: View {
     let title: String
-    let count: Int
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.subheadline)
-
-            SegmentCountBadge(count: count, isSelected: isSelected)
-        }
+        Text(title)
+            .font(.footnote)
         .foregroundStyle(Color.primary)
-    }
-}
-
-private struct SegmentCountBadge: View {
-    let count: Int
-    let isSelected: Bool
-
-    var body: some View {
-        Text("\(count)")
-            .font(.caption2)
-            .foregroundStyle(isSelected ? Color.primary.opacity(0.72) : Color.secondary)
-            .monospacedDigit()
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.secondary.opacity(isSelected ? 0.12 : 0.18), in: .capsule)
     }
 }
 
