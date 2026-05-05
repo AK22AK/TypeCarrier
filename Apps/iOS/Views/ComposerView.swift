@@ -28,7 +28,6 @@ struct ComposerView: View {
             }
             .navigationDestination(isPresented: $showsHistory) {
                 CarrierHistoryView(store: store)
-                    .toolbar(.hidden, for: .navigationBar)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -734,10 +733,8 @@ private struct CarrierHistoryView: View {
     }
 
     @ObservedObject var store: ComposerStore
-    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab: HistoryTab
     @State private var showsClearConfirmation = false
-    @State private var headerCollapseProgress: CGFloat = 0
 
     init(store: ComposerStore) {
         self.store = store
@@ -745,27 +742,26 @@ private struct CarrierHistoryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            historyHeader
-
-            List {
-                switch selectedTab {
-                case .drafts:
-                    draftsContent
-                case .history:
-                    historyContent
-                }
+        List {
+            switch selectedTab {
+            case .drafts:
+                draftsContent
+            case .history:
+                historyContent
             }
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
-            } action: { _, offset in
-                headerCollapseProgress = clamped(offset / historyHeaderCollapseDistance)
-            }
-            .contentMargins(.top, 6, for: .scrollContent)
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
         }
+        .contentMargins(.top, 0, for: .scrollContent)
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(selectedTab.title)
+        .navigationSubtitle(currentSubtitle)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                historyActionMenu
+            }
+        }
         .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
             Button("取消", role: .cancel) {}
             Button("清空", role: .destructive) {
@@ -776,89 +772,15 @@ private struct CarrierHistoryView: View {
         }
     }
 
-    private var historyHeader: some View {
-        let progress = headerCollapseProgress
-        let height = interpolated(
-            expanded: historyHeaderExpandedHeight,
-            compact: historyHeaderCompactHeight,
-            progress: progress
-        )
-
-        return GeometryReader { proxy in
-            let navButtonCenterY = historyNavButtonCenterY
-
-            ZStack(alignment: .topLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 23, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .frame(width: historyNavButtonSize, height: historyNavButtonSize)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .accessibilityLabel("Back")
-                .position(
-                    x: historyHorizontalPadding + historyNavButtonSize / 2,
-                    y: navButtonCenterY
-                )
-
-                historyActionMenu
-                    .position(
-                        x: proxy.size.width - historyHorizontalPadding - historyNavButtonSize / 2,
-                        y: navButtonCenterY
-                    )
-
-                historyExpandedTitle
-                    .opacity(1 - clamped(progress * 1.35))
-                    .scaleEffect(interpolated(expanded: 1, compact: 0.92, progress: progress), anchor: .leading)
-                    .offset(
-                        x: historyHorizontalPadding,
-                        y: interpolated(expanded: 78, compact: 20, progress: progress)
-                    )
-
-                historyCompactTitle
-                    .opacity(clamped((progress - 0.28) / 0.72))
-                    .frame(width: proxy.size.width, height: 40, alignment: .center)
-                    .position(
-                        x: proxy.size.width / 2,
-                        y: navButtonCenterY
-                    )
-
-                historyTabControl
-                    .offset(y: interpolated(expanded: 154, compact: 76, progress: progress))
-            }
+    private var historyScrollableHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            historyTabControl
         }
-        .frame(height: height)
+        .padding(.bottom, 8)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
         .animation(.snappy(duration: 0.18), value: selectedTab)
-    }
-
-    private var historyExpandedTitle: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(selectedTab.title)
-                .font(.system(size: 38, weight: .bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-
-            Text(currentSubtitle)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-    }
-
-    private var historyCompactTitle: some View {
-        VStack(spacing: 0) {
-            Text(selectedTab.title)
-                .font(.system(size: 18, weight: .bold))
-                .lineLimit(1)
-
-            Text(currentSubtitle)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
     }
 
     private var historyActionMenu: some View {
@@ -873,12 +795,9 @@ private struct CarrierHistoryView: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 21, weight: .bold))
                 .foregroundStyle(.primary)
-                .frame(width: historyNavButtonSize, height: historyNavButtonSize)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("History actions")
-        .frame(width: historyNavButtonSize, height: historyNavButtonSize)
-        .glassEffect(.regular.interactive(), in: .circle)
     }
 
     private var historyTabControl: some View {
@@ -903,7 +822,12 @@ private struct CarrierHistoryView: View {
     @ViewBuilder
     private var draftsContent: some View {
         if store.drafts.isEmpty {
-            ContentUnavailableView("No drafts", systemImage: "tray")
+            Section {
+                ContentUnavailableView("No drafts", systemImage: "tray")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
         } else {
             Section {
                 ForEach(store.drafts) { record in
@@ -916,14 +840,22 @@ private struct CarrierHistoryView: View {
                 .onDelete { offsets in
                     delete(offsets, from: store.drafts)
                 }
+            } header: {
+                historyScrollableHeader
             }
+            .textCase(nil)
         }
     }
 
     @ViewBuilder
     private var historyContent: some View {
         if store.outgoingHistory.isEmpty {
-            ContentUnavailableView("No sent text", systemImage: "paperplane")
+            Section {
+                ContentUnavailableView("No sent text", systemImage: "paperplane")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
         } else {
             Section {
                 ForEach(store.outgoingHistory) { record in
@@ -936,7 +868,10 @@ private struct CarrierHistoryView: View {
                 .onDelete { offsets in
                     delete(offsets, from: store.outgoingHistory)
                 }
+            } header: {
+                historyScrollableHeader
             }
+            .textCase(nil)
         }
     }
 
@@ -1009,36 +944,8 @@ private struct CarrierHistoryView: View {
         }
     }
 
-    private var historyHeaderExpandedHeight: CGFloat {
-        202
-    }
-
-    private var historyHeaderCompactHeight: CGFloat {
-        122
-    }
-
-    private var historyHeaderCollapseDistance: CGFloat {
-        72
-    }
-
     private var historyHorizontalPadding: CGFloat {
         20
-    }
-
-    private var historyNavButtonSize: CGFloat {
-        48
-    }
-
-    private var historyNavButtonCenterY: CGFloat {
-        34
-    }
-
-    private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
-        expanded + (compact - expanded) * progress
-    }
-
-    private func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, 0), 1)
     }
 }
 
