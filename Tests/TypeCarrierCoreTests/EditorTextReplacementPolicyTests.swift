@@ -8,10 +8,23 @@ struct EditorTextReplacementPolicyTests {
         let generation = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: "sent text",
             newText: "",
-            currentGeneration: 4
+            currentGeneration: 4,
+            rebuildsWhenEmptying: true
         )
 
         #expect(generation == 5)
+    }
+
+    @Test("Emptying can preserve the active input session")
+    func emptyingCanPreserveActiveInputSession() {
+        let generation = EditorTextReplacementPolicy.nextEditorGeneration(
+            currentText: "draft text",
+            newText: "",
+            currentGeneration: 4,
+            rebuildsWhenEmptying: false
+        )
+
+        #expect(generation == 4)
     }
 
     @Test("Non-empty replacements keep the editor identity")

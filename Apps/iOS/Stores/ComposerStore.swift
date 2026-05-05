@@ -514,7 +514,7 @@ final class ComposerStore: ObservableObject {
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("")
+        replaceEditorText("", rebuildsEditorWhenEmptying: false)
         sendState = .idle
     }
 
@@ -665,7 +665,8 @@ final class ComposerStore: ObservableObject {
 
     private func replaceEditorText(
         _ newText: String,
-        resetsHistory: Bool = false
+        resetsHistory: Bool = false,
+        rebuildsEditorWhenEmptying: Bool = true
     ) {
         let previousText = text
         shouldRecordTextChange = false
@@ -674,7 +675,8 @@ final class ComposerStore: ObservableObject {
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
         )
 
         if resetsHistory {

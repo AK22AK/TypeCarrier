@@ -8,6 +8,7 @@ struct ComposerView: View {
     @State private var showsDiagnostics = false
     @State private var showsHistory = false
     @State private var isHeaderCollapsed = false
+    @State private var pendingEditorRefocus = false
 
     var body: some View {
         NavigationStack {
@@ -57,7 +58,7 @@ struct ComposerView: View {
         .onChange(of: isEditorFocused) { _, isFocused in
             if isFocused {
                 collapseHeaderForEditing()
-            } else {
+            } else if !pendingEditorRefocus {
                 restoreHeaderAfterEditing()
             }
         }
@@ -232,18 +233,18 @@ struct ComposerView: View {
                 .focused($isEditorFocused)
                 .onSubmit {
                     if store.canSend {
-                        store.send()
+                        performEditorActionPreservingFocus {
+                            store.send()
+                        }
                     }
                 }
-                .padding(.bottom, showsEditorAccessoryBar ? editorAccessoryReservedHeight : 0)
+                .padding(.bottom, editorAccessoryReservedHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .id(store.editorResetGeneration)
 
-            if showsEditorAccessoryBar {
-                editorAccessoryBar
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 2)
-            }
+            editorAccessoryBar
+                .padding(.horizontal, 4)
+                .padding(.bottom, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -280,7 +281,7 @@ struct ComposerView: View {
                 editorStandaloneToolButton(
                     systemName: "doc.on.doc",
                     accessibilityLabel: "Copy text",
-                    isVisible: store.hasEditorText
+                    isEnabled: store.hasEditorText
                 ) {
                     store.copyText()
                 }
@@ -290,7 +291,7 @@ struct ComposerView: View {
                 editorStandaloneToolButton(
                     systemName: "trash",
                     accessibilityLabel: "Clear text",
-                    isVisible: store.hasEditorText
+                    isEnabled: store.hasEditorText
                 ) {
                     store.clearText()
                 }
@@ -306,8 +307,7 @@ struct ComposerView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            action()
-            focusEditor()
+            performEditorActionPreservingFocus(action)
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
@@ -322,22 +322,21 @@ struct ComposerView: View {
     private func editorStandaloneToolButton(
         systemName: String,
         accessibilityLabel: String,
-        isVisible: Bool,
+        isEnabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            action()
-            focusEditor()
+            performEditorActionPreservingFocus(action)
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.42))
                 .frame(width: editorAccessoryHeight, height: editorAccessoryHeight)
                 .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
-        .disabled(!isVisible)
-        .opacity(isVisible ? 1 : 0)
-        .accessibilityHidden(!isVisible)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.48)
         .accessibilityLabel(accessibilityLabel)
     }
 
@@ -371,7 +370,9 @@ struct ComposerView: View {
                 .accessibilityLabel("Save draft")
 
                 Button {
-                    store.send()
+                    performEditorActionPreservingFocus {
+                        store.send()
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
@@ -393,10 +394,6 @@ struct ComposerView: View {
 
     private var footerControlHeight: CGFloat {
         46
-    }
-
-    private var showsEditorAccessoryBar: Bool {
-        store.canUndo || store.canRedo || store.hasEditorText
     }
 
     private var pageTopPadding: CGFloat {
@@ -449,12 +446,32 @@ struct ComposerView: View {
     }
 
     private func focusEditor() {
-        guard !isEditorFocused else {
-            return
-        }
-
         collapseHeaderForEditing()
         isEditorFocused = true
+    }
+
+    private func performEditorActionPreservingFocus(_ action: () -> Void) {
+        let previousGeneration = store.editorResetGeneration
+        action()
+
+        if store.editorResetGeneration != previousGeneration {
+            restoreEditorFocusAfterRebuild()
+        } else {
+            focusEditor()
+        }
+    }
+
+    private func restoreEditorFocusAfterRebuild() {
+        pendingEditorRefocus = true
+        collapseHeaderForEditing()
+
+        Task { @MainActor in
+            await Task.yield()
+            isEditorFocused = false
+            await Task.yield()
+            pendingEditorRefocus = false
+            focusEditor()
+        }
     }
 
     private func collapseHeaderForEditing() {
