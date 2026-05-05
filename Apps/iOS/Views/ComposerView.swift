@@ -1129,7 +1129,7 @@ private struct CarrierRecordRow: View {
     }
 
     private var updatedTimestampText: String {
-        record.updatedAt.formatted(.dateTime.year().month().day().hour().minute())
+        CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
     }
 }
 
