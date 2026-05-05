@@ -761,9 +761,11 @@ private struct CarrierHistoryView: View {
             } action: { _, offset in
                 headerCollapseProgress = clamped(offset / historyHeaderCollapseDistance)
             }
+            .contentMargins(.top, 6, for: .scrollContent)
+            .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .systemGroupedBackground))
         .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
             Button("取消", role: .cancel) {}
             Button("清空", role: .destructive) {
@@ -825,7 +827,7 @@ private struct CarrierHistoryView: View {
                     )
 
                 historyTabControl
-                    .offset(y: interpolated(expanded: 146, compact: 76, progress: progress))
+                    .offset(y: interpolated(expanded: 154, compact: 76, progress: progress))
             }
         }
         .frame(height: height)
@@ -903,15 +905,17 @@ private struct CarrierHistoryView: View {
         if store.drafts.isEmpty {
             ContentUnavailableView("No drafts", systemImage: "tray")
         } else {
-            ForEach(store.drafts) { record in
-                NavigationLink {
-                    CarrierRecordDetailView(record: record, store: store)
-                } label: {
-                    CarrierRecordRow(record: record)
+            Section {
+                ForEach(store.drafts) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
+                    }
                 }
-            }
-            .onDelete { offsets in
-                delete(offsets, from: store.drafts)
+                .onDelete { offsets in
+                    delete(offsets, from: store.drafts)
+                }
             }
         }
     }
@@ -921,15 +925,17 @@ private struct CarrierHistoryView: View {
         if store.outgoingHistory.isEmpty {
             ContentUnavailableView("No sent text", systemImage: "paperplane")
         } else {
-            ForEach(store.outgoingHistory) { record in
-                NavigationLink {
-                    CarrierRecordDetailView(record: record, store: store)
-                } label: {
-                    CarrierRecordRow(record: record)
+            Section {
+                ForEach(store.outgoingHistory) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
+                    }
                 }
-            }
-            .onDelete { offsets in
-                delete(offsets, from: store.outgoingHistory)
+                .onDelete { offsets in
+                    delete(offsets, from: store.outgoingHistory)
+                }
             }
         }
     }
@@ -1004,7 +1010,7 @@ private struct CarrierHistoryView: View {
     }
 
     private var historyHeaderExpandedHeight: CGFloat {
-        188
+        202
     }
 
     private var historyHeaderCompactHeight: CGFloat {
@@ -1067,31 +1073,63 @@ private struct CarrierRecordRow: View {
     let record: CarrierRecord
 
     var body: some View {
+        rowContent
+            .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        switch record.kind {
+        case .draft:
+            draftContent
+        default:
+            historyContent
+        }
+    }
+
+    private var draftContent: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Label(record.status.displayText, systemImage: record.status.systemImage)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(record.status.tint)
-
-                Spacer()
-
-                Text(record.updatedAt, style: .time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Text(record.text)
                 .font(.body)
                 .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let detail = record.detail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(updatedTimestampText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
-        .padding(.vertical, 4)
+    }
+
+    private var historyContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(record.text)
+                .font(.body)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            historyMetadataRow
+        }
+    }
+
+    private var historyMetadataRow: some View {
+        HStack(spacing: 7) {
+            if !record.status.isCompactSuccess {
+                Text(record.status.displayText)
+                    .foregroundStyle(record.status.tint)
+            }
+
+            Text(updatedTimestampText)
+                .monospacedDigit()
+
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var updatedTimestampText: String {
+        record.updatedAt.formatted(.dateTime.year().month().day().hour().minute())
     }
 }
 
@@ -1182,6 +1220,15 @@ private extension CarrierRecord.Kind {
 }
 
 private extension CarrierRecord.Status {
+    var isCompactSuccess: Bool {
+        switch self {
+        case .pastePosted, .received:
+            true
+        default:
+            false
+        }
+    }
+
     var displayText: String {
         switch self {
         case .draft:
