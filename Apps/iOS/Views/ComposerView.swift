@@ -13,7 +13,7 @@ struct ComposerView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(uiColor: .systemBackground)
+                Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
 
                 VStack(spacing: 18) {
@@ -252,7 +252,11 @@ struct ComposerView: View {
         .onTapGesture {
             focusEditor()
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 30))
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
+        }
+        .shadow(color: Color.black.opacity(0.08), radius: 24, x: 0, y: 14)
     }
 
     private var editorAccessoryBar: some View {

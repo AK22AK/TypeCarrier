@@ -27,11 +27,17 @@ struct EditorTextReplacementPolicyTests {
         #expect(generation == 4)
     }
 
-    @Test("Delivery receipts do not clear without verified target insertion")
-    func deliveryReceiptsDoNotClearWithoutVerifiedTargetInsertion() {
+    @Test("Delivery receipts clear only after verified target insertion")
+    func deliveryReceiptsClearOnlyAfterVerifiedTargetInsertion() {
         #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.received))
-        #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.posted))
+        #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.posted))
         #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.failed))
+    }
+
+    @Test("Draft save clears editor only after local persistence succeeds")
+    func draftSaveClearsEditorOnlyAfterLocalPersistenceSucceeds() {
+        #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true))
+        #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: false))
     }
 
     @Test("Non-empty replacements keep the editor identity")

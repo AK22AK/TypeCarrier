@@ -485,6 +485,9 @@ final class ComposerStore: ObservableObject {
             try recordStore.upsert(record)
             syncRecords()
             sendState = .sent
+            if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
+                replaceEditorText("", resetsHistory: true)
+            }
         } catch {
             sendState = .failed("Failed to save draft: \(error.localizedDescription)")
         }
@@ -626,7 +629,7 @@ final class ComposerStore: ObservableObject {
             case .posted:
                 finishPendingSend(
                     status: .pastePosted,
-                    detail: receipt.detail ?? "Mac received text and posted paste command",
+                    detail: receipt.detail ?? "Mac inserted text",
                     pasteStatus: receipt.pasteStatus
                 )
             case .failed:
