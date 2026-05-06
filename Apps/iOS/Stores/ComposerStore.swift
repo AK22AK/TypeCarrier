@@ -186,7 +186,7 @@ final class ComposerStore: ObservableObject {
         case .sending:
             "Sending"
         case .sent:
-            "Sent"
+            hasEditorText ? "Send" : "Sent"
         default:
             "Send"
         }
@@ -438,7 +438,6 @@ final class ComposerStore: ObservableObject {
                 status: .sent,
                 detail: "Sent to Mac"
             )
-            replaceEditorText("", resetsHistory: true)
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
@@ -619,22 +618,42 @@ final class ComposerStore: ObservableObject {
         } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
             switch receipt.pasteStatus {
             case .received:
-                finishPendingSend(status: .received, detail: receipt.detail ?? "Mac received and saved text")
+                finishPendingSend(
+                    status: .received,
+                    detail: receipt.detail ?? "Mac received and saved text",
+                    pasteStatus: receipt.pasteStatus
+                )
             case .posted:
-                finishPendingSend(status: .pastePosted, detail: receipt.detail ?? "Mac posted paste command")
+                finishPendingSend(
+                    status: .pastePosted,
+                    detail: receipt.detail ?? "Mac received text and posted paste command",
+                    pasteStatus: receipt.pasteStatus
+                )
             case .failed:
-                finishPendingSend(status: .pasteFailed, detail: receipt.detail ?? "Mac paste failed")
+                finishPendingSend(
+                    status: .pasteFailed,
+                    detail: receipt.detail ?? "Mac paste failed",
+                    pasteStatus: receipt.pasteStatus
+                )
             }
         }
     }
 
-    private func finishPendingSend(status: CarrierRecord.Status, detail: String) {
+    private func finishPendingSend(
+        status: CarrierRecord.Status,
+        detail: String,
+        pasteStatus: CarrierDeliveryReceipt.PasteStatus? = nil
+    ) {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
         pendingPayloadID = nil
         pendingRecordID = nil
         sendState = .sent
+
+        if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
+            replaceEditorText("", resetsHistory: true)
+        }
     }
 
     private func updateRecord(id: UUID, status: CarrierRecord.Status, detail: String?) {

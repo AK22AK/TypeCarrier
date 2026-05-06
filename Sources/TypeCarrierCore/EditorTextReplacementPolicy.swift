@@ -11,4 +11,13 @@ public enum EditorTextReplacementPolicy {
 
         return currentGeneration + 1
     }
+
+    public static func shouldClearEditorAfterDeliveryReceipt(
+        _ pasteStatus: CarrierDeliveryReceipt.PasteStatus
+    ) -> Bool {
+        switch pasteStatus {
+        case .received, .posted, .failed:
+            false
+        }
+    }
 }

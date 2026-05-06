@@ -378,7 +378,7 @@ struct ComposerView: View {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .frame(width: 16, height: 16)
-                        Text("Send")
+                        Text(store.sendButtonText)
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundStyle(store.canSend ? Color.primary : Color.secondary.opacity(0.45))
@@ -1146,7 +1146,7 @@ private extension CarrierRecord.Kind {
 private extension CarrierRecord.Status {
     var isCompactSuccess: Bool {
         switch self {
-        case .pastePosted, .received:
+        case .received:
             true
         default:
             false
@@ -1164,7 +1164,7 @@ private extension CarrierRecord.Status {
         case .received:
             "Received"
         case .pastePosted:
-            "Paste Posted"
+            "Paste Attempted"
         case .pasteFailed:
             "Paste Failed"
         case .failed:
@@ -1183,7 +1183,7 @@ private extension CarrierRecord.Status {
         case .received:
             "checkmark.circle"
         case .pastePosted:
-            "checkmark.circle.fill"
+            "paperplane.circle"
         case .pasteFailed, .failed:
             "exclamationmark.triangle.fill"
         }
@@ -1193,8 +1193,10 @@ private extension CarrierRecord.Status {
         switch self {
         case .pasteFailed, .failed:
             .red
-        case .pastePosted, .received:
+        case .received:
             .green
+        case .pastePosted:
+            .orange
         case .queued:
             .orange
         default:

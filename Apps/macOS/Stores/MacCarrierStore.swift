@@ -173,11 +173,13 @@ final class MacCarrierStore: ObservableObject {
     func pasteTestText() {
         refreshAccessibilityStatus()
         lastPasteResult = pasteInjector.paste(text: "Hello from TypeCarrier")
+        recordPasteDiagnostic(lastPasteResult)
     }
 
     func paste(record: CarrierRecord) {
         refreshAccessibilityStatus()
         lastPasteResult = pasteInjector.paste(text: record.text)
+        recordPasteDiagnostic(lastPasteResult)
         updateRecordAfterPaste(record, result: lastPasteResult)
     }
 
@@ -250,11 +252,12 @@ final class MacCarrierStore: ObservableObject {
         }
 
         lastPasteResult = pasteInjector.paste(text: payload.text)
+        recordPasteDiagnostic(lastPasteResult)
         updateRecordAfterPaste(record, result: lastPasteResult)
         sendReceipt(
             payloadID: payload.id,
             pasteStatus: lastPasteResult.succeeded ? .posted : .failed,
-            detail: lastPasteResult.status
+            detail: lastPasteResult.fullDetail
         )
     }
 
@@ -262,7 +265,7 @@ final class MacCarrierStore: ObservableObject {
         var updated = record
         updated.status = result.succeeded ? .pastePosted : .pasteFailed
         updated.updatedAt = result.date
-        updated.detail = result.status
+        updated.detail = result.fullDetail
 
         guard let recordStore else {
             lastPasteResult = PasteInjectionResult(status: "History storage unavailable", succeeded: false)
@@ -275,6 +278,13 @@ final class MacCarrierStore: ObservableObject {
         } catch {
             lastPasteResult = PasteInjectionResult(status: "Failed to update paste result: \(error.localizedDescription)", succeeded: false)
         }
+    }
+
+    private func recordPasteDiagnostic(_ result: PasteInjectionResult) {
+        carrierService.recordDiagnosticMarker(
+            result.succeeded ? "paste.injection.succeeded" : "paste.injection.failed",
+            message: result.fullDetail
+        )
     }
 
     private func sendReceipt(payloadID: UUID, pasteStatus: CarrierDeliveryReceipt.PasteStatus, detail: String) {
