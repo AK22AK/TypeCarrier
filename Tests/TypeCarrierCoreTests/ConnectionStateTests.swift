@@ -26,4 +26,32 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertEqual(ConnectionState.reconnecting("MacBook Pro").peerName, "MacBook Pro")
         XCTAssertEqual(ConnectionState.connected("MacBook Pro").peerName, "MacBook Pro")
     }
+
+    func testSenderFailureSuggestionExplainsMacReceiverRestartWhenPeerWasFound() {
+        let diagnostics = CarrierDiagnostics(
+            role: "sender",
+            localPeerName: "iPhone",
+            serviceType: "typecarrier",
+            connectionState: .failed("Could not connect to MacBook Pro."),
+            discoveredPeers: ["MacBook Pro"],
+            lastErrorMessage: "Could not connect to MacBook Pro."
+        )
+
+        XCTAssertEqual(
+            diagnostics.connectionRecoverySuggestion,
+            "Try Restart Receiver on the Mac, then retry here."
+        )
+    }
+
+    func testSenderFailureSuggestionIsHiddenBeforeDiscovery() {
+        let diagnostics = CarrierDiagnostics(
+            role: "sender",
+            localPeerName: "iPhone",
+            serviceType: "typecarrier",
+            connectionState: .failed("No nearby Mac found."),
+            lastErrorMessage: "No nearby Mac found."
+        )
+
+        XCTAssertNil(diagnostics.connectionRecoverySuggestion)
+    }
 }

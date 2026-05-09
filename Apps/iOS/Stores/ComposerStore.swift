@@ -5,6 +5,8 @@ import UIKit
 
 @MainActor
 final class ComposerStore: ObservableObject {
+    private static let maximumDraftCount = 99
+
     enum SendState: Equatable {
         case idle
         case sending
@@ -13,15 +15,15 @@ final class ComposerStore: ObservableObject {
     }
 
     enum ConnectionStatus: Equatable {
-        case disconnected
+        case idle
         case searching
         case connecting
         case connected
 
         var displayText: String {
             switch self {
-            case .disconnected:
-                "Disconnected"
+            case .idle:
+                "Idle"
             case .searching:
                 "Searching"
             case .connecting:
@@ -44,6 +46,7 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var sendState: SendState = .idle
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var editorResetGeneration = 0
+    @Published private(set) var draftLimitErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
@@ -131,7 +134,16 @@ final class ComposerStore: ObservableObject {
     }
 
     var canRestartConnection: Bool {
-        connectionStatus == .disconnected && sendState != .sending
+        guard sendState != .sending else {
+            return false
+        }
+
+        switch connectionState {
+        case .idle, .failed:
+            return true
+        default:
+            return false
+        }
     }
 
     var connectionStatus: ConnectionStatus {
@@ -143,12 +155,8 @@ final class ComposerStore: ObservableObject {
         case .searching:
             .searching
         default:
-            .disconnected
+            .idle
         }
-    }
-
-    var connectionStatusText: String {
-        connectionStatus.displayText
     }
 
     var headerStatusText: String {
@@ -162,12 +170,23 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    var connectionFailureMessage: String? {
+        if case .failed(let message) = connectionState {
+            return message
+        }
+        return nil
+    }
+
+    var connectionRecoverySuggestion: String? {
+        diagnostics.connectionRecoverySuggestion
+    }
+
     var sendButtonText: String {
         switch sendState {
         case .sending:
             "Sending"
         case .sent:
-            "Sent"
+            hasEditorText ? "Send" : "Sent"
         default:
             "Send"
         }
@@ -175,6 +194,18 @@ final class ComposerStore: ObservableObject {
 
     var drafts: [CarrierRecord] {
         records.filter { $0.kind == .draft }
+    }
+
+    var draftCount: Int {
+        drafts.count
+    }
+
+    var draftBadgeText: String? {
+        guard draftCount > 0 else {
+            return nil
+        }
+
+        return "\(min(draftCount, Self.maximumDraftCount))"
     }
 
     var outgoingHistory: [CarrierRecord] {
@@ -407,7 +438,6 @@ final class ComposerStore: ObservableObject {
                 status: .sent,
                 detail: "Sent to Mac"
             )
-            replaceEditorText("", resetsHistory: true)
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
@@ -431,6 +461,11 @@ final class ComposerStore: ObservableObject {
             return
         }
 
+        guard draftCount < Self.maximumDraftCount else {
+            draftLimitErrorMessage = "请先处理或删除一些草稿，再保存新的草稿。"
+            return
+        }
+
         let now = Date()
         let record = CarrierRecord(
             kind: .draft,
@@ -450,9 +485,16 @@ final class ComposerStore: ObservableObject {
             try recordStore.upsert(record)
             syncRecords()
             sendState = .sent
+            if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
+                replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
+            }
         } catch {
             sendState = .failed("Failed to save draft: \(error.localizedDescription)")
         }
+    }
+
+    func dismissDraftLimitError() {
+        draftLimitErrorMessage = nil
     }
 
     func loadIntoEditor(_ record: CarrierRecord) {
@@ -474,7 +516,7 @@ final class ComposerStore: ObservableObject {
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("")
+        replaceEditorText("", rebuildsEditorWhenEmptying: false)
         sendState = .idle
     }
 
@@ -529,28 +571,92 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    func deleteAllDrafts() {
+        guard let recordStore else {
+            sendState = .failed("History storage unavailable")
+            return
+        }
+
+        let draftIDs = drafts.map(\.id)
+        guard !draftIDs.isEmpty else {
+            return
+        }
+
+        do {
+            for id in draftIDs {
+                try recordStore.delete(id: id)
+            }
+            syncRecords()
+        } catch {
+            sendState = .failed("Failed to clear drafts: \(error.localizedDescription)")
+            syncRecords()
+        }
+    }
+
+    func deleteAllOutgoingHistory() {
+        guard let recordStore else {
+            sendState = .failed("History storage unavailable")
+            return
+        }
+
+        let outgoingIDs = outgoingHistory.map(\.id)
+        guard !outgoingIDs.isEmpty else {
+            return
+        }
+
+        do {
+            for id in outgoingIDs {
+                try recordStore.delete(id: id)
+            }
+            syncRecords()
+        } catch {
+            sendState = .failed("Failed to clear history: \(error.localizedDescription)")
+            syncRecords()
+        }
+    }
+
     private func handle(_ envelope: CarrierEnvelope) {
         if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
             finishPendingSend(status: .sent, detail: "Mac acknowledged receipt")
         } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
             switch receipt.pasteStatus {
             case .received:
-                finishPendingSend(status: .received, detail: receipt.detail ?? "Mac received and saved text")
+                finishPendingSend(
+                    status: .received,
+                    detail: receipt.detail ?? "Mac received and saved text",
+                    pasteStatus: receipt.pasteStatus
+                )
             case .posted:
-                finishPendingSend(status: .pastePosted, detail: receipt.detail ?? "Mac posted paste command")
+                finishPendingSend(
+                    status: .pastePosted,
+                    detail: receipt.detail ?? "Mac inserted text",
+                    pasteStatus: receipt.pasteStatus
+                )
             case .failed:
-                finishPendingSend(status: .pasteFailed, detail: receipt.detail ?? "Mac paste failed")
+                finishPendingSend(
+                    status: .pasteFailed,
+                    detail: receipt.detail ?? "Mac paste failed",
+                    pasteStatus: receipt.pasteStatus
+                )
             }
         }
     }
 
-    private func finishPendingSend(status: CarrierRecord.Status, detail: String) {
+    private func finishPendingSend(
+        status: CarrierRecord.Status,
+        detail: String,
+        pasteStatus: CarrierDeliveryReceipt.PasteStatus? = nil
+    ) {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
         pendingPayloadID = nil
         pendingRecordID = nil
         sendState = .sent
+
+        if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
+            replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
+        }
     }
 
     private func updateRecord(id: UUID, status: CarrierRecord.Status, detail: String?) {
@@ -579,14 +685,21 @@ final class ComposerStore: ObservableObject {
         records = recordStore?.records ?? []
     }
 
-    private func replaceEditorText(_ newText: String, resetsHistory: Bool = false) {
-        let shouldResetEditorIdentity = text != newText && newText.isEmpty
+    private func replaceEditorText(
+        _ newText: String,
+        resetsHistory: Bool = false,
+        rebuildsEditorWhenEmptying: Bool = true
+    ) {
+        let previousText = text
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
-        if shouldResetEditorIdentity {
-            editorResetGeneration += 1
-        }
+        editorResetGeneration = EditorTextReplacementPolicy.nextEditorGeneration(
+            currentText: previousText,
+            newText: newText,
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+        )
 
         if resetsHistory {
             textHistory.reset()

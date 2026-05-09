@@ -30,7 +30,7 @@ struct MainWindowView: View {
             .navigationTitle("TypeCarrier")
             .toolbar {
                 Button {
-                    store.restart()
+                    store.restartFromUserAction()
                 } label: {
                     Label("Restart Receiver", systemImage: "arrow.clockwise")
                 }
@@ -201,8 +201,17 @@ private struct DiagnosticsSummary: View {
                 diagnosticLine("Service", store.carrierService.diagnostics.serviceType)
                 diagnosticLine("Connected", store.carrierService.diagnostics.connectedPeersText)
                 diagnosticLine("Discovered", store.carrierService.diagnostics.discoveredPeersText)
+                if let warning = store.receiverHealthWarning {
+                    diagnosticLine("Warning", warning)
+                }
                 if let logURL = store.connectionDiagnosticLogFileURL {
                     diagnosticLine("Log", logURL.path)
+                }
+                if let exportURL = store.lastDiagnosticExportURL {
+                    diagnosticLine("Export", exportURL.path)
+                }
+                if let exportError = store.lastDiagnosticExportErrorMessage {
+                    diagnosticLine("Export Error", exportError)
                 }
 
                 ForEach(Array(store.carrierService.diagnostics.events.suffix(5).reversed())) { event in
@@ -211,6 +220,13 @@ private struct DiagnosticsSummary: View {
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
+
+                Button {
+                    store.exportConnectionDiagnosticsToFinder()
+                } label: {
+                    Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                }
+                .padding(.top, 4)
             }
             .padding(.top, 8)
         }

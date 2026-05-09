@@ -341,6 +341,36 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.sessionResetForInvitation" && $0.peerName == "iPhone" })
     }
 
+    func testReceiverRejectsInvitationFromDifferentPeerWhileConnected() async {
+        let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
+        let connectedPeer = MCPeerID(displayName: "iPhone 17 Pro")
+        let secondPeer = MCPeerID(displayName: "iPhone")
+        let advertiser = MCNearbyServiceAdvertiser(
+            peer: MCPeerID(displayName: "Test Advertiser"),
+            discoveryInfo: nil,
+            serviceType: MultipeerCarrierService.serviceType
+        )
+        var accepted = true
+        var sessionWasProvided = true
+
+        service.simulateSessionStateForTesting(.connected, peerID: connectedPeer)
+
+        service.advertiser(
+            advertiser,
+            didReceiveInvitationFromPeer: secondPeer,
+            withContext: nil
+        ) { shouldAccept, session in
+            accepted = shouldAccept
+            sessionWasProvided = session != nil
+        }
+        await Task.yield()
+
+        XCTAssertFalse(accepted)
+        XCTAssertFalse(sessionWasProvided)
+        XCTAssertEqual(service.connectionState, .connected("iPhone 17 Pro"))
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.rejectedBusy" && $0.peerName == "iPhone" })
+    }
+
     private func temporaryFileURL(fileName: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

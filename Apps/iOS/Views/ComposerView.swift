@@ -8,21 +8,29 @@ struct ComposerView: View {
     @State private var showsDiagnostics = false
     @State private var showsHistory = false
     @State private var isHeaderCollapsed = false
+    @State private var pendingEditorRefocus = false
 
     var body: some View {
-        ZStack {
-            Color(uiColor: .systemBackground)
-                .ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color(uiColor: .systemGroupedBackground)
+                    .ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                header
-                editor
-                footer
+                VStack(spacing: 18) {
+                    header
+                    connectionFailureNotice
+                    editor
+                    footer
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, pageTopPadding)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, pageTopPadding)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .navigationDestination(isPresented: $showsHistory) {
+                CarrierHistoryView(store: store)
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             store.start()
@@ -30,13 +38,27 @@ struct ComposerView: View {
         .sheet(isPresented: $showsDiagnostics) {
             ConnectionDiagnosticsSheet(store: store)
         }
-        .sheet(isPresented: $showsHistory) {
-            CarrierHistorySheet(store: store)
+        .alert(
+            "草稿箱已满",
+            isPresented: Binding(
+                get: { store.draftLimitErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        store.dismissDraftLimitError()
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                store.dismissDraftLimitError()
+            }
+        } message: {
+            Text(store.draftLimitErrorMessage ?? "")
         }
         .onChange(of: isEditorFocused) { _, isFocused in
             if isFocused {
                 collapseHeaderForEditing()
-            } else {
+            } else if !pendingEditorRefocus {
                 restoreHeaderAfterEditing()
             }
         }
@@ -49,9 +71,10 @@ struct ComposerView: View {
         return GeometryReader { proxy in
             let titleX = interpolated(expanded: headerLogoSize + 12, compact: 0, progress: progress)
             let titleY = interpolated(expanded: expandedHeaderContentY, compact: compactHeaderTitleY, progress: progress)
+            let actionsWidth = headerActionsGroupWidth
             let titleWidth = max(
                 120,
-                proxy.size.width - titleX - (headerActionsGroupWidth + 12) * progress
+                proxy.size.width - titleX - (actionsWidth + 12) * progress
             )
             let logoY = expandedHeaderContentY
             let actionsY = expandedHeaderActionsY
@@ -70,8 +93,8 @@ struct ComposerView: View {
                     .offset(x: titleX, y: titleY)
 
                 headerActions
-                    .frame(width: headerActionsGroupWidth, height: headerActionsGroupHeight)
-                    .offset(x: proxy.size.width - headerActionsGroupWidth, y: actionsY)
+                    .frame(width: actionsWidth, height: headerActionsGroupHeight)
+                    .offset(x: proxy.size.width - actionsWidth, y: actionsY)
             }
         }
         .frame(maxWidth: .infinity, minHeight: headerHeight, maxHeight: headerHeight, alignment: .topLeading)
@@ -85,27 +108,46 @@ struct ComposerView: View {
                 .minimumScaleFactor(0.82)
                 .frame(height: interpolated(expanded: 40, compact: 29, progress: progress), alignment: .topLeading)
 
-            Text(store.headerStatusText)
-                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .topLeading)
+            HStack(spacing: interpolated(expanded: 7, compact: 5, progress: progress)) {
+                ConnectionStatusIndicator(status: store.connectionStatus)
+                    .id(store.connectionStatus)
+
+                Text(store.headerStatusText)
+                    .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var headerActions: some View {
         HStack(spacing: 2) {
+            if store.canRestartConnection {
+                Button {
+                    store.restartConnection()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 21, weight: .medium))
+                        .frame(width: headerActionWidth, height: headerActionHeight)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry connection")
+            }
+
             Button {
                 showsHistory = true
             } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 22, weight: .medium))
-                    .frame(width: headerActionWidth, height: headerActionHeight)
+                HeaderHistoryButtonLabel(
+                    badgeText: store.draftBadgeText,
+                    width: headerActionWidth,
+                    height: headerActionHeight
+                )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("History and drafts")
+            .accessibilityLabel(historyAccessibilityLabel)
 
             Menu {
                 Button {
@@ -126,6 +168,62 @@ struct ComposerView: View {
         .glassEffect(.regular.interactive(), in: .capsule)
     }
 
+    @ViewBuilder
+    private var connectionFailureNotice: some View {
+        if let message = store.connectionFailureMessage {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .frame(width: 16, height: 16)
+                    .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(message)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+
+                    if let suggestion = store.connectionRecoverySuggestion {
+                        Text(suggestion)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if store.canRestartConnection {
+                    Button {
+                        store.restartConnection()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.footnote.weight(.semibold))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retry connection")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 18))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(connectionFailureAccessibilityLabel(message: message))
+        }
+    }
+
+    private func connectionFailureAccessibilityLabel(message: String) -> String {
+        if let suggestion = store.connectionRecoverySuggestion {
+            return "Connection issue: \(message) \(suggestion)"
+        }
+
+        return "Connection issue: \(message)"
+    }
+
     private var editor: some View {
         ZStack(alignment: .bottom) {
             TextField("Type or dictate here", text: $store.text, axis: .vertical)
@@ -135,18 +233,18 @@ struct ComposerView: View {
                 .focused($isEditorFocused)
                 .onSubmit {
                     if store.canSend {
-                        store.send()
+                        performEditorActionPreservingFocus {
+                            store.send()
+                        }
                     }
                 }
-                .padding(.bottom, showsEditorAccessoryBar ? editorAccessoryReservedHeight : 0)
+                .padding(.bottom, editorAccessoryReservedHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .id(store.editorResetGeneration)
 
-            if showsEditorAccessoryBar {
-                editorAccessoryBar
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 2)
-            }
+            editorAccessoryBar
+                .padding(.horizontal, 4)
+                .padding(.bottom, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -154,7 +252,11 @@ struct ComposerView: View {
         .onTapGesture {
             focusEditor()
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 30))
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
+        }
+        .shadow(color: Color.black.opacity(0.08), radius: 24, x: 0, y: 14)
     }
 
     private var editorAccessoryBar: some View {
@@ -183,7 +285,7 @@ struct ComposerView: View {
                 editorStandaloneToolButton(
                     systemName: "doc.on.doc",
                     accessibilityLabel: "Copy text",
-                    isVisible: store.hasEditorText
+                    isEnabled: store.hasEditorText
                 ) {
                     store.copyText()
                 }
@@ -193,7 +295,7 @@ struct ComposerView: View {
                 editorStandaloneToolButton(
                     systemName: "trash",
                     accessibilityLabel: "Clear text",
-                    isVisible: store.hasEditorText
+                    isEnabled: store.hasEditorText
                 ) {
                     store.clearText()
                 }
@@ -209,8 +311,7 @@ struct ComposerView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            action()
-            focusEditor()
+            performEditorActionPreservingFocus(action)
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
@@ -225,22 +326,21 @@ struct ComposerView: View {
     private func editorStandaloneToolButton(
         systemName: String,
         accessibilityLabel: String,
-        isVisible: Bool,
+        isEnabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button {
-            action()
-            focusEditor()
+            performEditorActionPreservingFocus(action)
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.42))
                 .frame(width: editorAccessoryHeight, height: editorAccessoryHeight)
                 .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.plain)
-        .disabled(!isVisible)
-        .opacity(isVisible ? 1 : 0)
-        .accessibilityHidden(!isVisible)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.48)
         .accessibilityLabel(accessibilityLabel)
     }
 
@@ -258,10 +358,12 @@ struct ComposerView: View {
     private var footer: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(spacing: 12) {
-                statusChip
+                Spacer(minLength: 0)
 
                 Button {
-                    store.saveDraft()
+                    performEditorActionPreservingFocus {
+                        store.saveDraft()
+                    }
                 } label: {
                     Image(systemName: "tray.and.arrow.down")
                         .font(.system(size: 15, weight: .semibold))
@@ -274,13 +376,15 @@ struct ComposerView: View {
                 .accessibilityLabel("Save draft")
 
                 Button {
-                    store.send()
+                    performEditorActionPreservingFocus {
+                        store.send()
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .frame(width: 16, height: 16)
-                        Text("Send")
+                        Text(store.sendButtonText)
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundStyle(store.canSend ? Color.primary : Color.secondary.opacity(0.45))
@@ -290,52 +394,12 @@ struct ComposerView: View {
                 .buttonStyle(.plain)
                 .disabled(!store.canSend)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-    }
-
-    @ViewBuilder
-    private var statusChip: some View {
-        if store.canRestartConnection {
-            Button {
-                store.restartConnection()
-            } label: {
-                statusChipContent(showsRetryIcon: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Retry connection")
-        } else {
-            statusChipContent(showsRetryIcon: false)
-        }
-    }
-
-    private func statusChipContent(showsRetryIcon: Bool) -> some View {
-        HStack(spacing: 8) {
-            if showsRetryIcon {
-                Image(systemName: "arrow.clockwise")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 16, height: 16)
-            } else {
-                ConnectionStatusIndicator(status: store.connectionStatus)
-                    .id(store.connectionStatus)
-            }
-
-            Text(store.connectionStatusText)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: footerControlHeight, maxHeight: footerControlHeight, alignment: .leading)
-        .glassEffect(.regular, in: .capsule)
     }
 
     private var footerControlHeight: CGFloat {
         46
-    }
-
-    private var showsEditorAccessoryBar: Bool {
-        store.canUndo || store.canRedo || store.hasEditorText
     }
 
     private var pageTopPadding: CGFloat {
@@ -367,11 +431,20 @@ struct ComposerView: View {
     }
 
     private var headerActionsGroupWidth: CGFloat {
-        headerActionWidth * 2 + 2 + 16
+        let actionCount: CGFloat = store.canRestartConnection ? 3 : 2
+        return headerActionWidth * actionCount + 2 * (actionCount - 1) + 16
     }
 
     private var headerActionsGroupHeight: CGFloat {
         headerActionHeight + 8
+    }
+
+    private var historyAccessibilityLabel: String {
+        if store.draftCount > 0 {
+            return "History and drafts, \(store.draftCount) drafts"
+        }
+
+        return "History and drafts"
     }
 
     private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
@@ -379,12 +452,32 @@ struct ComposerView: View {
     }
 
     private func focusEditor() {
-        guard !isEditorFocused else {
-            return
-        }
-
         collapseHeaderForEditing()
         isEditorFocused = true
+    }
+
+    private func performEditorActionPreservingFocus(_ action: () -> Void) {
+        let previousGeneration = store.editorResetGeneration
+        action()
+
+        if store.editorResetGeneration != previousGeneration {
+            restoreEditorFocusAfterRebuild()
+        } else {
+            focusEditor()
+        }
+    }
+
+    private func restoreEditorFocusAfterRebuild() {
+        pendingEditorRefocus = true
+        collapseHeaderForEditing()
+
+        Task { @MainActor in
+            await Task.yield()
+            isEditorFocused = false
+            await Task.yield()
+            pendingEditorRefocus = false
+            focusEditor()
+        }
     }
 
     private func collapseHeaderForEditing() {
@@ -429,6 +522,33 @@ struct ComposerView: View {
 
 }
 
+private struct HeaderHistoryButtonLabel: View {
+    let badgeText: String?
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        Image(systemName: "clock.arrow.circlepath")
+            .font(.system(size: 22, weight: .medium))
+            .frame(width: width, height: height)
+            .overlay(alignment: .topTrailing) {
+                if let badgeText {
+                    Text(badgeText)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 17, minHeight: 17)
+                        .background(Color.red, in: .capsule)
+                        .accessibilityHidden(true)
+                        .padding(.top, 1)
+                        .padding(.trailing, 1)
+                }
+            }
+    }
+}
+
 private struct ConnectionStatusIndicator: View {
     let status: ComposerStore.ConnectionStatus
     @State private var isBreathing = false
@@ -454,7 +574,7 @@ private struct ConnectionStatusIndicator: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.green)
-            case .disconnected:
+            case .idle:
                 Circle()
                     .fill(Color.secondary)
                     .frame(width: 7, height: 7)
@@ -620,53 +740,224 @@ private struct DiagnosticEventRow: View {
     }
 }
 
-private struct CarrierHistorySheet: View {
+private struct CarrierHistoryView: View {
+    private enum HistoryTab {
+        case drafts
+        case history
+
+        var title: String {
+            switch self {
+            case .drafts:
+                "Drafts"
+            case .history:
+                "History"
+            }
+        }
+    }
+
     @ObservedObject var store: ComposerStore
-    @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: HistoryTab
+    @State private var showsClearConfirmation = false
+
+    init(store: ComposerStore) {
+        self.store = store
+        _selectedTab = State(initialValue: store.drafts.isEmpty ? .history : .drafts)
+    }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !store.drafts.isEmpty {
-                    Section("Drafts") {
-                        ForEach(store.drafts) { record in
-                            NavigationLink {
-                                CarrierRecordDetailView(record: record, store: store)
-                            } label: {
-                                CarrierRecordRow(record: record)
-                            }
-                        }
-                        .onDelete { offsets in
-                            delete(offsets, from: store.drafts)
-                        }
-                    }
-                }
+        List {
+            switch selectedTab {
+            case .drafts:
+                draftsContent
+            case .history:
+                historyContent
+            }
+        }
+        .contentMargins(.top, 0, for: .scrollContent)
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(selectedTab.title)
+        .navigationSubtitle(currentSubtitle)
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                historyActionMenu
+            }
+        }
+        .alert(clearConfirmationTitle, isPresented: $showsClearConfirmation) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) {
+                clearCurrentTab()
+            }
+        } message: {
+            Text(clearConfirmationMessage)
+        }
+    }
 
-                Section("Sent History") {
-                    if store.outgoingHistory.isEmpty {
-                        ContentUnavailableView("No sent text", systemImage: "paperplane")
-                    } else {
-                        ForEach(store.outgoingHistory) { record in
-                            NavigationLink {
-                                CarrierRecordDetailView(record: record, store: store)
-                            } label: {
-                                CarrierRecordRow(record: record)
-                            }
-                        }
-                        .onDelete { offsets in
-                            delete(offsets, from: store.outgoingHistory)
-                        }
+    private var historyScrollableHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            historyTabControl
+        }
+        .padding(.bottom, 8)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .animation(.snappy(duration: 0.18), value: selectedTab)
+    }
+
+    private var historyActionMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                showsClearConfirmation = true
+            } label: {
+                Label(clearActionTitle, systemImage: "trash")
+            }
+            .disabled(!canClearCurrentTab)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("History actions")
+    }
+
+    private var historyTabControl: some View {
+        Picker("History view", selection: $selectedTab) {
+            Text("")
+                .tag(HistoryTab.drafts)
+            Text("")
+                .tag(HistoryTab.history)
+        }
+        .pickerStyle(.segmented)
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .center) {
+            HistoryTabLabelOverlay(
+                isDraftsSelected: selectedTab == .drafts,
+                isHistorySelected: selectedTab == .history
+            )
+            .allowsHitTesting(false)
+        }
+        .padding(.horizontal, historyHorizontalPadding)
+    }
+
+    @ViewBuilder
+    private var draftsContent: some View {
+        if store.drafts.isEmpty {
+            Section {
+                ContentUnavailableView("No drafts", systemImage: "tray")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
+        } else {
+            Section {
+                ForEach(store.drafts) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
                     }
                 }
+                .onDelete { offsets in
+                    delete(offsets, from: store.drafts)
+                }
+            } header: {
+                historyScrollableHeader
             }
-            .navigationTitle("History")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
+            .textCase(nil)
+        }
+    }
+
+    @ViewBuilder
+    private var historyContent: some View {
+        if store.outgoingHistory.isEmpty {
+            Section {
+                ContentUnavailableView("No sent text", systemImage: "paperplane")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
+        } else {
+            Section {
+                ForEach(store.outgoingHistory) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
                     }
                 }
+                .onDelete { offsets in
+                    delete(offsets, from: store.outgoingHistory)
+                }
+            } header: {
+                historyScrollableHeader
             }
+            .textCase(nil)
+        }
+    }
+
+    private var canClearCurrentTab: Bool {
+        switch selectedTab {
+        case .drafts:
+            !store.drafts.isEmpty
+        case .history:
+            !store.outgoingHistory.isEmpty
+        }
+    }
+
+    private var currentSubtitle: String {
+        switch selectedTab {
+        case .drafts:
+            return "\(store.draftCount) drafts"
+        case .history:
+            return "\(store.outgoingHistory.count) sent records"
+        }
+    }
+
+    private var clearActionAccessibilityLabel: String {
+        switch selectedTab {
+        case .drafts:
+            "Clear all drafts"
+        case .history:
+            "Clear sent history"
+        }
+    }
+
+    private var clearActionTitle: String {
+        switch selectedTab {
+        case .drafts:
+            "Clear Drafts"
+        case .history:
+            "Clear History"
+        }
+    }
+
+    private var clearConfirmationTitle: String {
+        switch selectedTab {
+        case .drafts:
+            "清空草稿箱？"
+        case .history:
+            "清空历史记录？"
+        }
+    }
+
+    private var clearConfirmationMessage: String {
+        switch selectedTab {
+        case .drafts:
+            "这会删除 \(store.draftCount) 条草稿，无法撤销。"
+        case .history:
+            "这会删除 \(store.outgoingHistory.count) 条历史记录，无法撤销。"
+        }
+    }
+
+    private func clearCurrentTab() {
+        switch selectedTab {
+        case .drafts:
+            store.deleteAllDrafts()
+        case .history:
+            store.deleteAllOutgoingHistory()
         }
     }
 
@@ -675,37 +966,100 @@ private struct CarrierHistorySheet: View {
             store.delete(records[index])
         }
     }
+
+    private var historyHorizontalPadding: CGFloat {
+        20
+    }
+}
+
+private struct HistoryTabLabelOverlay: View {
+    let isDraftsSelected: Bool
+    let isHistorySelected: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            SegmentTabLabel(title: "Drafts", isSelected: isDraftsSelected)
+                .frame(maxWidth: .infinity)
+
+            SegmentTabLabel(title: "History", isSelected: isHistorySelected)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 6)
+    }
+}
+
+private struct SegmentTabLabel: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        Text(title)
+            .font(.footnote)
+        .foregroundStyle(Color.primary)
+    }
 }
 
 private struct CarrierRecordRow: View {
     let record: CarrierRecord
 
     var body: some View {
+        rowContent
+            .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        switch record.kind {
+        case .draft:
+            draftContent
+        default:
+            historyContent
+        }
+    }
+
+    private var draftContent: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Label(record.status.displayText, systemImage: record.status.systemImage)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(record.status.tint)
-
-                Spacer()
-
-                Text(record.updatedAt, style: .time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Text(record.text)
                 .font(.body)
                 .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let detail = record.detail {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(updatedTimestampText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
-        .padding(.vertical, 4)
+    }
+
+    private var historyContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(record.text)
+                .font(.body)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            historyMetadataRow
+        }
+    }
+
+    private var historyMetadataRow: some View {
+        HStack(spacing: 7) {
+            if !record.status.isCompactSuccess {
+                Text(record.status.displayText)
+                    .foregroundStyle(record.status.tint)
+            }
+
+            Text(updatedTimestampText)
+                .monospacedDigit()
+
+            Spacer(minLength: 0)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private var updatedTimestampText: String {
+        CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
     }
 }
 
@@ -796,6 +1150,15 @@ private extension CarrierRecord.Kind {
 }
 
 private extension CarrierRecord.Status {
+    var isCompactSuccess: Bool {
+        switch self {
+        case .received:
+            true
+        default:
+            false
+        }
+    }
+
     var displayText: String {
         switch self {
         case .draft:
@@ -807,7 +1170,7 @@ private extension CarrierRecord.Status {
         case .received:
             "Received"
         case .pastePosted:
-            "Paste Posted"
+            "Paste Attempted"
         case .pasteFailed:
             "Paste Failed"
         case .failed:
@@ -826,7 +1189,7 @@ private extension CarrierRecord.Status {
         case .received:
             "checkmark.circle"
         case .pastePosted:
-            "checkmark.circle.fill"
+            "paperplane.circle"
         case .pasteFailed, .failed:
             "exclamationmark.triangle.fill"
         }
@@ -836,8 +1199,10 @@ private extension CarrierRecord.Status {
         switch self {
         case .pasteFailed, .failed:
             .red
-        case .pastePosted, .received:
+        case .received:
             .green
+        case .pastePosted:
+            .orange
         case .queued:
             .orange
         default:

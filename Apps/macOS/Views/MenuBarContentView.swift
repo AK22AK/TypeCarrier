@@ -14,6 +14,15 @@ struct MenuBarContentView: View {
 
             Label(store.connectionState.displayText, systemImage: store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right")
 
+            if let warning = store.receiverHealthWarning {
+                Label("Receiver needs attention", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(warning)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
             Label(
                 store.accessibilityTrusted ? "Accessibility enabled" : "Accessibility required",
                 systemImage: store.accessibilityTrusted ? "lock.open.fill" : "lock.fill"
@@ -37,7 +46,18 @@ struct MenuBarContentView: View {
             }
 
             Button("Restart Receiver") {
-                store.restart()
+                store.restartFromUserAction()
+            }
+
+            Button("Export Diagnostics") {
+                store.exportConnectionDiagnosticsToFinder()
+            }
+
+            if let exportError = store.lastDiagnosticExportErrorMessage {
+                Text(exportError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             Divider()

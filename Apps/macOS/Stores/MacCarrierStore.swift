@@ -9,6 +9,8 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastPasteResult = PasteInjectionResult.idle
     @Published private(set) var accessibilityTrusted = false
     @Published private(set) var records: [CarrierRecord] = []
+    @Published private(set) var lastDiagnosticExportURL: URL?
+    @Published private(set) var lastDiagnosticExportErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
@@ -44,11 +46,23 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var menuBarSystemImage: String {
-        carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
+        if receiverHealthWarning != nil {
+            return "exclamationmark.triangle"
+        }
+
+        return carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
     }
 
     var connectionState: ConnectionState {
         carrierService.connectionState
+    }
+
+    var receiverHealthWarning: String? {
+        if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
+            return "Connection issue. Try Restart Receiver."
+        }
+
+        return nil
     }
 
     var lastPayloadPreview: String {
@@ -74,6 +88,53 @@ final class MacCarrierStore: ObservableObject {
         start()
     }
 
+    func restartFromUserAction() {
+        restart(
+            reason: "receiver.restart.user",
+            message: "User requested receiver restart."
+        )
+    }
+
+    func restartAfterWake(notificationName: String, sleepDuration: TimeInterval?) {
+        let durationText = sleepDuration.map(Self.formattedDuration) ?? "unknown"
+        restart(
+            reason: "receiver.restart.wake",
+            message: "Restarting receiver after \(notificationName); sleep duration: \(durationText)."
+        )
+    }
+
+    func recordLifecycleMarker(_ name: String, message: String) {
+        carrierService.recordDiagnosticMarker(name, message: message)
+    }
+
+    func exportConnectionDiagnosticsToFinder(now: Date = Date()) {
+        do {
+            let exportURL = try makeConnectionDiagnosticExportURL(now: now)
+            lastDiagnosticExportURL = exportURL
+            lastDiagnosticExportErrorMessage = nil
+            NSWorkspace.shared.activateFileViewerSelecting([exportURL])
+        } catch {
+            lastDiagnosticExportErrorMessage = error.localizedDescription
+        }
+    }
+
+    func makeConnectionDiagnosticExportURL(now: Date = Date()) throws -> URL {
+        guard let connectionDiagnosticLogFileURL else {
+            throw CarrierDiagnosticExportError.missingLogFile
+        }
+
+        carrierService.recordDiagnosticMarker(
+            "diagnostic.exportPrepared",
+            message: "Prepared timestamped diagnostic export."
+        )
+        return try CarrierDiagnosticExport.createTimestampedCopy(
+            sourceURL: connectionDiagnosticLogFileURL,
+            directory: CarrierDiagnosticExport.defaultExportDirectory(),
+            prefix: "mac-connection-events",
+            now: now
+        )
+    }
+
     func refreshAccessibilityStatus() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
     }
@@ -83,14 +144,42 @@ final class MacCarrierStore: ObservableObject {
         permissionChecker.openAccessibilitySettings()
     }
 
+    private func restart(reason: String, message: String) {
+        carrierService.recordDiagnosticMarker(reason, message: message)
+        restart()
+    }
+
+    private static func formattedDuration(_ duration: TimeInterval) -> String {
+        guard duration.isFinite, duration >= 0 else {
+            return "unknown"
+        }
+
+        if duration < 60 {
+            return String(format: "%.1fs", duration)
+        }
+
+        let totalSeconds = Int(duration.rounded())
+        let hours = totalSeconds / 3_600
+        let minutes = (totalSeconds % 3_600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m \(seconds)s"
+        }
+
+        return "\(minutes)m \(seconds)s"
+    }
+
     func pasteTestText() {
         refreshAccessibilityStatus()
         lastPasteResult = pasteInjector.paste(text: "Hello from TypeCarrier")
+        recordPasteDiagnostic(lastPasteResult)
     }
 
     func paste(record: CarrierRecord) {
         refreshAccessibilityStatus()
         lastPasteResult = pasteInjector.paste(text: record.text)
+        recordPasteDiagnostic(lastPasteResult)
         updateRecordAfterPaste(record, result: lastPasteResult)
     }
 
@@ -163,11 +252,12 @@ final class MacCarrierStore: ObservableObject {
         }
 
         lastPasteResult = pasteInjector.paste(text: payload.text)
+        recordPasteDiagnostic(lastPasteResult)
         updateRecordAfterPaste(record, result: lastPasteResult)
         sendReceipt(
             payloadID: payload.id,
             pasteStatus: lastPasteResult.succeeded ? .posted : .failed,
-            detail: lastPasteResult.status
+            detail: lastPasteResult.fullDetail
         )
     }
 
@@ -175,7 +265,7 @@ final class MacCarrierStore: ObservableObject {
         var updated = record
         updated.status = result.succeeded ? .pastePosted : .pasteFailed
         updated.updatedAt = result.date
-        updated.detail = result.status
+        updated.detail = result.fullDetail
 
         guard let recordStore else {
             lastPasteResult = PasteInjectionResult(status: "History storage unavailable", succeeded: false)
@@ -188,6 +278,13 @@ final class MacCarrierStore: ObservableObject {
         } catch {
             lastPasteResult = PasteInjectionResult(status: "Failed to update paste result: \(error.localizedDescription)", succeeded: false)
         }
+    }
+
+    private func recordPasteDiagnostic(_ result: PasteInjectionResult) {
+        carrierService.recordDiagnosticMarker(
+            result.succeeded ? "paste.injection.succeeded" : "paste.injection.failed",
+            message: result.fullDetail
+        )
     }
 
     private func sendReceipt(payloadID: UUID, pasteStatus: CarrierDeliveryReceipt.PasteStatus, detail: String) {
