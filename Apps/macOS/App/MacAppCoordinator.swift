@@ -17,6 +17,8 @@ final class MacAppCoordinator: NSObject, ObservableObject {
     override init() {
         super.init()
 
+        NSApp.delegate = self
+        NSApp.setActivationPolicy(.regular)
         hotKeyMonitor.register { [weak self] in
             self?.showMainWindow()
         }
@@ -24,6 +26,12 @@ final class MacAppCoordinator: NSObject, ObservableObject {
     }
 
     func showMainWindow() {
+        if let existingWindow = NSApp.windows.first(where: { $0.title == "TypeCarrier" && $0.canBecomeMain }) {
+            NSApp.activate(ignoringOtherApps: true)
+            existingWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
         if mainWindow == nil {
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 780, height: 560),
@@ -113,6 +121,15 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
         lastWakeRestartAt = now
         store.restartAfterWake(notificationName: notificationName, sleepDuration: sleepDuration)
+    }
+}
+
+extension MacAppCoordinator: NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            showMainWindow()
+        }
+        return true
     }
 }
 

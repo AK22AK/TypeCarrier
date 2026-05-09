@@ -8,40 +8,9 @@ struct MainWindowView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selectedRecordID) {
-                Section("Received") {
-                    if store.receivedHistory.isEmpty {
-                        Text("No received text")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(store.receivedHistory) { record in
-                            ReceivedRecordRow(record: record)
-                                .tag(record.id)
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                store.delete(store.receivedHistory[index])
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("TypeCarrier")
-            .toolbar {
-                Button {
-                    store.restartFromUserAction()
-                } label: {
-                    Label("Restart Receiver", systemImage: "arrow.clockwise")
-                }
-            }
+            sidebar
         } detail: {
-            if let selectedRecord {
-                ReceivedRecordDetail(record: selectedRecord, store: store)
-                    .id(selectedRecord.id)
-            } else {
-                ContentUnavailableView("Select received text", systemImage: "text.page")
-            }
+            DetailContainer(selectedRecord: selectedRecord, store: store)
         }
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -56,6 +25,53 @@ struct MainWindowView: View {
 
     private var selectedRecord: CarrierRecord? {
         store.receivedHistory.first { $0.id == selectedRecordID }
+    }
+
+    private var sidebar: some View {
+        List(selection: $selectedRecordID) {
+            Section("Received") {
+                if store.receivedHistory.isEmpty {
+                    Text("No received text")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.receivedHistory) { record in
+                        ReceivedRecordRow(record: record)
+                            .tag(record.id)
+                    }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            store.delete(store.receivedHistory[index])
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+}
+
+private struct DetailContainer: View {
+    let selectedRecord: CarrierRecord?
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Spacer()
+                ReceiverStatusMenu(store: store)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            if let selectedRecord {
+                ReceivedRecordDetail(record: selectedRecord, store: store)
+                    .id(selectedRecord.id)
+            } else {
+                ContentUnavailableView("Select received text", systemImage: "text.page")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
 }
 
@@ -109,9 +125,7 @@ private struct ReceivedRecordDetail: View {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 detailRow("Status", record.status.displayText)
                 detailRow("Updated", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                detailRow("Paste", store.lastPasteResult.status)
-                detailRow("Connection", store.connectionState.displayText)
-                detailRow("Accessibility", store.accessibilityTrusted ? "Enabled" : "Required")
+                detailRow("Paste", record.pasteSummaryText)
                 if let detail = record.detail {
                     detailRow("Detail", detail)
                 }
@@ -157,11 +171,8 @@ private struct ReceivedRecordDetail: View {
                 }
             }
             .buttonStyle(.glass)
-
-            DiagnosticsSummary(store: store)
         }
         .padding(24)
-        .navigationTitle("Received Text")
     }
 
     private var header: some View {
@@ -191,56 +202,129 @@ private struct ReceivedRecordDetail: View {
     }
 }
 
-private struct DiagnosticsSummary: View {
+private struct ReceiverStatusMenu: View {
     @ObservedObject var store: MacCarrierStore
 
     var body: some View {
-        DisclosureGroup("Diagnostics") {
-            VStack(alignment: .leading, spacing: 8) {
-                diagnosticLine("Local Peer", store.carrierService.diagnostics.localPeerName)
-                diagnosticLine("Service", store.carrierService.diagnostics.serviceType)
-                diagnosticLine("Connected", store.carrierService.diagnostics.connectedPeersText)
-                diagnosticLine("Discovered", store.carrierService.diagnostics.discoveredPeersText)
-                if let warning = store.receiverHealthWarning {
-                    diagnosticLine("Warning", warning)
-                }
-                if let logURL = store.connectionDiagnosticLogFileURL {
-                    diagnosticLine("Log", logURL.path)
-                }
-                if let exportURL = store.lastDiagnosticExportURL {
-                    diagnosticLine("Export", exportURL.path)
-                }
-                if let exportError = store.lastDiagnosticExportErrorMessage {
-                    diagnosticLine("Export Error", exportError)
-                }
-
-                ForEach(Array(store.carrierService.diagnostics.events.suffix(5).reversed())) { event in
-                    Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.name): \(event.message)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-
-                Button {
-                    store.exportConnectionDiagnosticsToFinder()
-                } label: {
-                    Label("Export Diagnostics", systemImage: "square.and.arrow.up")
-                }
-                .padding(.top, 4)
+        Menu {
+            Section("Receiver") {
+                Text(store.connectionState.displayText)
+                Text(accessibilityText)
             }
-            .padding(.top, 8)
+
+            if let warning = store.receiverHealthWarning {
+                Section("Warning") {
+                    Text(warning)
+                }
+            }
+
+            Divider()
+
+            Button {
+                store.restartFromUserAction()
+            } label: {
+                Label("Restart Receiver", systemImage: "arrow.clockwise")
+            }
+
+            Button {
+                store.exportConnectionDiagnosticsToFinder()
+            } label: {
+                Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+            }
+
+            if !store.accessibilityTrusted {
+                Button {
+                    store.requestAccessibilityAccess()
+                } label: {
+                    Label("Request Accessibility", systemImage: "lock.open")
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: statusSystemImage)
+                    .foregroundStyle(statusTint)
+                Text(statusTitle)
+                    .fontWeight(.medium)
+                Text(statusDetail)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .font(.callout)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .help("Current receiver status")
+    }
+
+    private var statusTitle: String {
+        if store.receiverHealthWarning != nil {
+            return "Receiver Issue"
+        }
+
+        switch store.connectionState {
+        case .connected:
+            return "Connected"
+        case .advertising:
+            return "Receiver Ready"
+        case .connecting:
+            return "Connecting"
+        case .reconnecting:
+            return "Reconnecting"
+        case .searching:
+            return "Searching"
+        case .failed:
+            return "Receiver Issue"
+        case .idle:
+            return "Receiver Idle"
         }
     }
 
-    private func diagnosticLine(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .textSelection(.enabled)
+    private var statusDetail: String {
+        "\(store.connectionState.displayText) · \(accessibilityShortText)"
+    }
+
+    private var accessibilityText: String {
+        store.accessibilityTrusted ? "Accessibility Enabled" : "Accessibility Required"
+    }
+
+    private var accessibilityShortText: String {
+        store.accessibilityTrusted ? "AX On" : "AX Required"
+    }
+
+    private var statusSystemImage: String {
+        if store.receiverHealthWarning != nil {
+            return "exclamationmark.triangle.fill"
         }
-        .font(.caption)
+
+        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
+    }
+
+    private var statusTint: Color {
+        if store.receiverHealthWarning != nil {
+            return .orange
+        }
+
+        return store.connectionState.isConnected ? .green : .secondary
+    }
+}
+
+private extension CarrierRecord {
+    var pasteSummaryText: String {
+        switch status {
+        case .pastePosted:
+            "Posted"
+        case .pasteFailed:
+            "Failed"
+        case .received:
+            "Received"
+        default:
+            status.displayText
+        }
     }
 }
 
