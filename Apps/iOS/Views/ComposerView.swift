@@ -3,6 +3,7 @@ import TypeCarrierCore
 import UIKit
 
 struct ComposerView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var store = ComposerStore()
     @FocusState private var isEditorFocused: Bool
     @State private var showsDiagnostics = false
@@ -254,9 +255,33 @@ struct ComposerView: View {
         }
         .background {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color(uiColor: .systemBackground))
+                .fill(editorPanelFill)
         }
-        .shadow(color: Color.black.opacity(0.08), radius: 24, x: 0, y: 14)
+        .overlay {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(editorPanelStroke, lineWidth: 1)
+        }
+        .shadow(color: editorPanelShadow, radius: editorPanelShadowRadius, x: 0, y: editorPanelShadowYOffset)
+    }
+
+    private var editorPanelFill: Color {
+        Color(uiColor: colorScheme == .dark ? .secondarySystemGroupedBackground : .systemBackground)
+    }
+
+    private var editorPanelStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.clear
+    }
+
+    private var editorPanelShadow: Color {
+        colorScheme == .dark ? Color.black.opacity(0.28) : Color.black.opacity(0.08)
+    }
+
+    private var editorPanelShadowRadius: CGFloat {
+        colorScheme == .dark ? 18 : 24
+    }
+
+    private var editorPanelShadowYOffset: CGFloat {
+        colorScheme == .dark ? 10 : 14
     }
 
     private var editorAccessoryBar: some View {
