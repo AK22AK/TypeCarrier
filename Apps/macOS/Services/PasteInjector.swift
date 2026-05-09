@@ -186,7 +186,11 @@ private struct FocusedTextTarget {
             return nil
         }
 
-        let element = focusedElement as! AXUIElement
+        guard CFGetTypeID(focusedElement) == AXUIElementGetTypeID() else {
+            trace.add("focusedElementType", "unsupported")
+            return nil
+        }
+        let element = unsafeDowncast(focusedElement, to: AXUIElement.self)
         let initialValueResult = stringAttribute(element, kAXValueAttribute)
         trace.add("initialValueResult", initialValueResult.result.debugDescription)
         if let value = initialValueResult.value {
@@ -355,7 +359,7 @@ private struct FocusedTextTarget {
             return (nil, result.result)
         }
 
-        let axValue = value as! AXValue
+        let axValue = unsafeDowncast(value, to: AXValue.self)
         guard AXValueGetType(axValue) == .cfRange else {
             return (nil, result.result)
         }
