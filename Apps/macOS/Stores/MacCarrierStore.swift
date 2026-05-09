@@ -12,18 +12,19 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
 
-    let carrierService: MultipeerCarrierService
+    @Published private(set) var carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
+    private let receiverDisplayName: String
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
     private let permissionChecker = AccessibilityPermissionChecker()
-    private var cancellables: Set<AnyCancellable> = []
+    private var carrierServiceCancellable: AnyCancellable?
 
     init() {
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
-        carrierService = MultipeerCarrierService(
-            role: .receiver,
-            displayName: Host.current().localizedName ?? "TypeCarrier Mac",
+        receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
+        carrierService = Self.makeCarrierService(
+            displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         do {
@@ -37,10 +38,7 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "History storage unavailable: \(error.localizedDescription)", succeeded: false)
         }
 
-        carrierService.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-
+        bindCarrierService()
         refreshAccessibilityStatus()
         start()
     }
@@ -84,8 +82,22 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func restart() {
+        rebuildReceiverService(rebuiltReason: "receiver.restart.rebuilt")
+    }
+
+    private func rebuildReceiverService(rebuiltReason: String) {
         carrierService.stop()
+        carrierServiceCancellable = nil
+        carrierService = Self.makeCarrierService(
+            displayName: receiverDisplayName,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
+        bindCarrierService()
         start()
+        carrierService.recordDiagnosticMarker(
+            rebuiltReason,
+            message: "Created a fresh receiver service after restart."
+        )
     }
 
     func restartFromUserAction() {
@@ -147,6 +159,22 @@ final class MacCarrierStore: ObservableObject {
     private func restart(reason: String, message: String) {
         carrierService.recordDiagnosticMarker(reason, message: message)
         restart()
+    }
+
+    private static func makeCarrierService(
+        displayName: String,
+        diagnosticLogFileURL: URL?
+    ) -> MultipeerCarrierService {
+        MultipeerCarrierService(
+            role: .receiver,
+            displayName: displayName,
+            diagnosticLogFileURL: diagnosticLogFileURL
+        )
+    }
+
+    private func bindCarrierService() {
+        carrierServiceCancellable = carrierService.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     private static func formattedDuration(_ duration: TimeInterval) -> String {
