@@ -486,7 +486,7 @@ final class ComposerStore: ObservableObject {
             syncRecords()
             sendState = .sent
             if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
-                replaceEditorText("", resetsHistory: true)
+                replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
             }
         } catch {
             sendState = .failed("Failed to save draft: \(error.localizedDescription)")
@@ -655,7 +655,7 @@ final class ComposerStore: ObservableObject {
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
-            replaceEditorText("", resetsHistory: true)
+            replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
         }
     }
 

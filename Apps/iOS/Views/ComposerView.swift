@@ -361,7 +361,9 @@ struct ComposerView: View {
                 Spacer(minLength: 0)
 
                 Button {
-                    store.saveDraft()
+                    performEditorActionPreservingFocus {
+                        store.saveDraft()
+                    }
                 } label: {
                     Image(systemName: "tray.and.arrow.down")
                         .font(.system(size: 15, weight: .semibold))

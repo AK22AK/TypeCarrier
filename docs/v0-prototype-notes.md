@@ -47,6 +47,7 @@ xcodegen generate
 ## v0 已知限制
 
 - 自动连接第一个发现的 Mac peer。
+- 当前按 1 对 1 连接设计：一个 Mac receiver 同一时间只应服务一个 iOS sender。真机和 iOS 模拟器同时运行时会抢同一个 Mac receiver，导致连接状态互相打断。
 - 还没有配对码或可信设备列表。
 - 还没有重试队列。
 - 剪贴板恢复只处理纯字符串内容。
