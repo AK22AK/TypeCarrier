@@ -26,4 +26,17 @@ public enum EditorTextReplacementPolicy {
     public static func shouldClearEditorAfterDraftSave(succeeded: Bool) -> Bool {
         succeeded
     }
+
+    public static func nextEditorGenerationAfterUndoRedo(
+        currentText: String,
+        newText: String,
+        currentGeneration: Int
+    ) -> Int {
+        nextEditorGeneration(
+            currentText: currentText,
+            newText: newText,
+            currentGeneration: currentGeneration,
+            rebuildsWhenEmptying: false
+        )
+    }
 }

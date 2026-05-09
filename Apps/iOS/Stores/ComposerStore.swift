@@ -525,7 +525,7 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        replaceEditorText(previous)
+        replaceEditorTextAfterUndoRedo(previous)
         sendState = .idle
     }
 
@@ -534,7 +534,7 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        replaceEditorText(next)
+        replaceEditorTextAfterUndoRedo(next)
         sendState = .idle
     }
 
@@ -704,5 +704,17 @@ final class ComposerStore: ObservableObject {
         if resetsHistory {
             textHistory.reset()
         }
+    }
+
+    private func replaceEditorTextAfterUndoRedo(_ newText: String) {
+        let previousText = text
+        shouldRecordTextChange = false
+        text = newText
+        shouldRecordTextChange = true
+        editorResetGeneration = EditorTextReplacementPolicy.nextEditorGenerationAfterUndoRedo(
+            currentText: previousText,
+            newText: newText,
+            currentGeneration: editorResetGeneration
+        )
     }
 }

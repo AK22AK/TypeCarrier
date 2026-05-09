@@ -27,6 +27,17 @@ struct EditorTextReplacementPolicyTests {
         #expect(generation == 4)
     }
 
+    @Test("Undo and redo emptying preserve the active input session")
+    func undoRedoEmptyingPreservesActiveInputSession() {
+        let generation = EditorTextReplacementPolicy.nextEditorGenerationAfterUndoRedo(
+            currentText: "draft text",
+            newText: "",
+            currentGeneration: 4
+        )
+
+        #expect(generation == 4)
+    }
+
     @Test("Delivery receipts clear only after verified target insertion")
     func deliveryReceiptsClearOnlyAfterVerifiedTargetInsertion() {
         #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.received))
