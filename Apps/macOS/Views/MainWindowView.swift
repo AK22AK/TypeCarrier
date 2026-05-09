@@ -4,10 +4,11 @@ import TypeCarrierCore
 
 struct MainWindowView: View {
     @ObservedObject var store: MacCarrierStore
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedRecordID: UUID?
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
         } detail: {
             DetailContainer(selectedRecord: selectedRecord, store: store)
