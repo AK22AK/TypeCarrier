@@ -34,12 +34,14 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
         if mainWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 780, height: 560),
+                contentRect: NSRect(x: 0, y: 0, width: 980, height: 620),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
             window.title = "TypeCarrier"
+            window.minSize = NSSize(width: 900, height: 560)
+            window.maxSize = NSSize(width: 1_040, height: 1_000)
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.contentView = NSHostingView(rootView: MainWindowView(store: store))

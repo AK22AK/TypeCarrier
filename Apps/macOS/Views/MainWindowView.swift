@@ -5,13 +5,22 @@ import TypeCarrierCore
 struct MainWindowView: View {
     @ObservedObject var store: MacCarrierStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var isStatusInspectorPresented = false
     @State private var selectedRecordID: UUID?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
         } detail: {
-            DetailContainer(selectedRecord: selectedRecord, store: store)
+            DetailContainer(
+                selectedRecord: selectedRecord,
+                store: store,
+                isStatusInspectorPresented: $isStatusInspectorPresented
+            )
+        }
+        .inspector(isPresented: $isStatusInspectorPresented) {
+            ReceiverStatusInspector(store: store)
+                .inspectorColumnWidth(min: 220, ideal: 240, max: 260)
         }
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -22,6 +31,13 @@ struct MainWindowView: View {
                 selectedRecordID = store.receivedHistory.first?.id
             }
         }
+        .frame(
+            minWidth: 900,
+            idealWidth: 980,
+            maxWidth: 1_040,
+            minHeight: 560,
+            idealHeight: 620
+        )
     }
 
     private var selectedRecord: CarrierRecord? {
@@ -54,23 +70,24 @@ struct MainWindowView: View {
 private struct DetailContainer: View {
     let selectedRecord: CarrierRecord?
     @ObservedObject var store: MacCarrierStore
+    @Binding var isStatusInspectorPresented: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Spacer()
-                ReceiverStatusMenu(store: store)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
-
+        Group {
             if let selectedRecord {
                 ReceivedRecordDetail(record: selectedRecord, store: store)
                     .id(selectedRecord.id)
             } else {
                 ContentUnavailableView("Select received text", systemImage: "text.page")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                ReceiverStatusToolbarButton(
+                    store: store,
+                    isPresented: $isStatusInspectorPresented
+                )
             }
         }
     }
@@ -203,63 +220,18 @@ private struct ReceivedRecordDetail: View {
     }
 }
 
-private struct ReceiverStatusMenu: View {
+private struct ReceiverStatusToolbarButton: View {
     @ObservedObject var store: MacCarrierStore
+    @Binding var isPresented: Bool
 
     var body: some View {
-        Menu {
-            Section("Receiver") {
-                Text(store.connectionState.displayText)
-                Text(accessibilityText)
-            }
-
-            if let warning = store.receiverHealthWarning {
-                Section("Warning") {
-                    Text(warning)
-                }
-            }
-
-            Divider()
-
-            Button {
-                store.restartFromUserAction()
-            } label: {
-                Label("Restart Receiver", systemImage: "arrow.clockwise")
-            }
-
-            Button {
-                store.exportConnectionDiagnosticsToFinder()
-            } label: {
-                Label("Export Diagnostics", systemImage: "square.and.arrow.up")
-            }
-
-            if !store.accessibilityTrusted {
-                Button {
-                    store.requestAccessibilityAccess()
-                } label: {
-                    Label("Request Accessibility", systemImage: "lock.open")
-                }
-            }
+        Button {
+            isPresented.toggle()
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: statusSystemImage)
-                    .foregroundStyle(statusTint)
-                Text(statusTitle)
-                    .fontWeight(.medium)
-                Text(statusDetail)
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .font(.callout)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            Label("Receiver Status", systemImage: statusSystemImage)
+                .foregroundStyle(statusTint)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .help("Current receiver status")
+        .help(statusTitle)
     }
 
     private var statusTitle: String {
@@ -285,18 +257,6 @@ private struct ReceiverStatusMenu: View {
         }
     }
 
-    private var statusDetail: String {
-        "\(store.connectionState.displayText) · \(accessibilityShortText)"
-    }
-
-    private var accessibilityText: String {
-        store.accessibilityTrusted ? "Accessibility Enabled" : "Accessibility Required"
-    }
-
-    private var accessibilityShortText: String {
-        store.accessibilityTrusted ? "AX On" : "AX Required"
-    }
-
     private var statusSystemImage: String {
         if store.receiverHealthWarning != nil {
             return "exclamationmark.triangle.fill"
@@ -311,6 +271,109 @@ private struct ReceiverStatusMenu: View {
         }
 
         return store.connectionState.isConnected ? .green : .secondary
+    }
+}
+
+private struct ReceiverStatusInspector: View {
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Receiver")
+                    .font(.title3.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    statusLine("Status", store.connectionState.displayText)
+                    statusLine("Connected Device", diagnostics.connectedPeersText)
+                    statusLine("Discovered", diagnostics.discoveredPeersText)
+                    statusLine("Invited", diagnostics.invitedPeersText)
+                    statusLine("Local Device", diagnostics.localPeerName)
+                    statusLine("Service", diagnostics.serviceType)
+                    statusLine("Accessibility", accessibilityText)
+                }
+
+                if let warning = store.receiverHealthWarning {
+                    Divider()
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+
+                if let lastError = diagnostics.lastErrorMessage {
+                    statusLine("Last Error", lastError)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        store.restartFromUserAction()
+                    } label: {
+                        Label("Restart Receiver", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        store.exportConnectionDiagnosticsToFinder()
+                    } label: {
+                        Label("Export Diagnostics", systemImage: "square.and.arrow.up")
+                    }
+
+                    if !store.accessibilityTrusted {
+                        Button {
+                            store.requestAccessibilityAccess()
+                        } label: {
+                            Label("Request Accessibility", systemImage: "lock.open")
+                        }
+                    }
+                }
+
+                if let exportError = store.lastDiagnosticExportErrorMessage {
+                    statusLine("Export Error", exportError)
+                } else if let exportURL = store.lastDiagnosticExportURL {
+                    statusLine("Last Export", exportURL.path)
+                }
+
+                if !diagnostics.events.isEmpty {
+                    Divider()
+                    Text("Recent Events")
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(diagnostics.events.suffix(5).reversed())) { event in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.name)
+                                    .font(.caption.weight(.semibold))
+                                Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private var diagnostics: CarrierDiagnostics {
+        store.carrierService.diagnostics
+    }
+
+    private var accessibilityText: String {
+        store.accessibilityTrusted ? "Enabled" : "Required"
+    }
+
+    private func statusLine(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .textSelection(.enabled)
+                .lineLimit(3)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
