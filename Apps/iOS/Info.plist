@@ -25,7 +25,7 @@
 		<string>_typecarrier._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>TypeCarrier uses the local network to send text to your nearby Mac.</string>
+	<string>TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

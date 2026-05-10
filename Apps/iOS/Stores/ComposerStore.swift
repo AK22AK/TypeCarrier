@@ -23,13 +23,13 @@ final class ComposerStore: ObservableObject {
         var displayText: String {
             switch self {
             case .idle:
-                "Idle"
+                "空闲"
             case .searching:
-                "Searching"
+                "正在搜索"
             case .connecting:
-                "Connecting"
+                "正在连接"
             case .connected:
-                "Connected"
+                "已连接"
             }
         }
     }
@@ -81,7 +81,7 @@ final class ComposerStore: ObservableObject {
         } catch {
             recordStore = nil
             records = []
-            sendState = .failed("History storage unavailable: \(error.localizedDescription)")
+            sendState = .failed("历史记录存储不可用：\(error.localizedDescription)")
         }
 
         carrierService.objectWillChange
@@ -164,7 +164,7 @@ final class ComposerStore: ObservableObject {
         case .connecting(let peerName), .reconnecting(let peerName), .connected(let peerName):
             peerName
         case .searching:
-            connectionState.displayText
+            connectionState.localizedDisplayText
         default:
             connectionStatus.displayText
         }
@@ -184,11 +184,11 @@ final class ComposerStore: ObservableObject {
     var sendButtonText: String {
         switch sendState {
         case .sending:
-            "Sending"
+            "发送中"
         case .sent:
-            hasEditorText ? "Send" : "Sent"
+            hasEditorText ? "发送" : "已发送"
         default:
-            "Send"
+            "发送"
         }
     }
 
@@ -397,7 +397,7 @@ final class ComposerStore: ObservableObject {
 
     func send() {
         guard CarrierPayload.canSend(text) else {
-            sendState = .failed("Text is empty")
+            sendState = .failed("文本为空")
             return
         }
 
@@ -411,11 +411,11 @@ final class ComposerStore: ObservableObject {
             text: textToSend,
             createdAt: now,
             updatedAt: now,
-            detail: "Queued for sending"
+            detail: "等待发送"
         )
 
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -423,7 +423,7 @@ final class ComposerStore: ObservableObject {
             try recordStore.upsert(record)
             syncRecords()
         } catch {
-            sendState = .failed("Failed to save history: \(error.localizedDescription)")
+            sendState = .failed("保存历史记录失败：\(error.localizedDescription)")
             return
         }
 
@@ -436,7 +436,7 @@ final class ComposerStore: ObservableObject {
             updateRecord(
                 id: record.id,
                 status: .sent,
-                detail: "Sent to Mac"
+                detail: "已发送到 Mac"
             )
         } catch {
             pendingPayloadID = nil
@@ -457,7 +457,7 @@ final class ComposerStore: ObservableObject {
 
     func saveDraft() {
         guard CarrierPayload.canSend(text) else {
-            sendState = .failed("Text is empty")
+            sendState = .failed("文本为空")
             return
         }
 
@@ -473,11 +473,11 @@ final class ComposerStore: ObservableObject {
             text: text,
             createdAt: now,
             updatedAt: now,
-            detail: "Saved draft"
+            detail: "已保存草稿"
         )
 
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -489,7 +489,7 @@ final class ComposerStore: ObservableObject {
                 replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
             }
         } catch {
-            sendState = .failed("Failed to save draft: \(error.localizedDescription)")
+            sendState = .failed("保存草稿失败：\(error.localizedDescription)")
         }
     }
 
@@ -542,10 +542,10 @@ final class ComposerStore: ObservableObject {
         var updated = record
         updated.text = text
         updated.updatedAt = Date()
-        updated.detail = record.kind == .draft ? "Updated draft" : "Edited history text"
+        updated.detail = record.kind == .draft ? "已更新草稿" : "已编辑历史文本"
 
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -553,13 +553,13 @@ final class ComposerStore: ObservableObject {
             try recordStore.upsert(updated)
             syncRecords()
         } catch {
-            sendState = .failed("Failed to update history: \(error.localizedDescription)")
+            sendState = .failed("更新历史记录失败：\(error.localizedDescription)")
         }
     }
 
     func delete(_ record: CarrierRecord) {
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -567,13 +567,13 @@ final class ComposerStore: ObservableObject {
             try recordStore.delete(id: record.id)
             syncRecords()
         } catch {
-            sendState = .failed("Failed to delete history: \(error.localizedDescription)")
+            sendState = .failed("删除历史记录失败：\(error.localizedDescription)")
         }
     }
 
     func deleteAllDrafts() {
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -588,14 +588,14 @@ final class ComposerStore: ObservableObject {
             }
             syncRecords()
         } catch {
-            sendState = .failed("Failed to clear drafts: \(error.localizedDescription)")
+            sendState = .failed("清空草稿失败：\(error.localizedDescription)")
             syncRecords()
         }
     }
 
     func deleteAllOutgoingHistory() {
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -610,32 +610,32 @@ final class ComposerStore: ObservableObject {
             }
             syncRecords()
         } catch {
-            sendState = .failed("Failed to clear history: \(error.localizedDescription)")
+            sendState = .failed("清空历史记录失败：\(error.localizedDescription)")
             syncRecords()
         }
     }
 
     private func handle(_ envelope: CarrierEnvelope) {
         if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
-            finishPendingSend(status: .sent, detail: "Mac acknowledged receipt")
+            finishPendingSend(status: .sent, detail: "Mac 已确认收到")
         } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
             switch receipt.pasteStatus {
             case .received:
                 finishPendingSend(
                     status: .received,
-                    detail: receipt.detail ?? "Mac received and saved text",
+                    detail: receipt.detail ?? "Mac 已接收并保存文本",
                     pasteStatus: receipt.pasteStatus
                 )
             case .posted:
                 finishPendingSend(
                     status: .pastePosted,
-                    detail: receipt.detail ?? "Mac inserted text",
+                    detail: receipt.detail ?? "Mac 已插入文本",
                     pasteStatus: receipt.pasteStatus
                 )
             case .failed:
                 finishPendingSend(
                     status: .pasteFailed,
-                    detail: receipt.detail ?? "Mac paste failed",
+                    detail: receipt.detail ?? "Mac 粘贴失败",
                     pasteStatus: receipt.pasteStatus
                 )
             }
@@ -669,7 +669,7 @@ final class ComposerStore: ObservableObject {
         record.updatedAt = Date()
 
         guard let recordStore else {
-            sendState = .failed("History storage unavailable")
+            sendState = .failed("历史记录存储不可用")
             return
         }
 
@@ -677,7 +677,7 @@ final class ComposerStore: ObservableObject {
             try recordStore.upsert(record)
             syncRecords()
         } catch {
-            sendState = .failed("Failed to update history: \(error.localizedDescription)")
+            sendState = .failed("更新历史记录失败：\(error.localizedDescription)")
         }
     }
 

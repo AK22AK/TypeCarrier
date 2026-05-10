@@ -55,7 +55,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        NSLocalNetworkUsageDescription: TypeCarrier uses the local network to send text to your nearby Mac.
+        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。
         NSBonjourServices:
           - _typecarrier._tcp
     settings:
@@ -74,7 +74,7 @@ targets:
       path: Apps/macOS/Info.plist
       properties:
         CFBundleDisplayName: TypeCarrier
-        NSLocalNetworkUsageDescription: TypeCarrier uses the local network to receive text from your nearby iPhone.
+        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，接收附近 iPhone 发来的文本。
         NSBonjourServices:
           - _typecarrier._tcp
     entitlements:

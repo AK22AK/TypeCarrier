@@ -663,9 +663,9 @@ public enum CarrierServiceError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .blankText:
-            "Text is empty."
+            "文本为空。"
         case .noConnectedPeer:
-            "No connected peer."
+            "没有已连接设备。"
         }
     }
 }

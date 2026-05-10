@@ -14,6 +14,7 @@
 		2280932E9B287A87DEE156CE /* TypeCarrierMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */; };
 		2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */; };
 		25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */; };
+		26A4BF2022474F76DFEF01E0 /* MacUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */; };
 		26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */; };
 		2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */; };
 		30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */; };
@@ -39,6 +40,7 @@
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
 		A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */; };
 		B1C2036907E336791A66DC4D /* TextInsertionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */; };
+		B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */; };
 		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
 		BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */; };
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
@@ -136,11 +138,13 @@
 		847B0360AAB5F8E0004D0D1F /* TypeCarrierMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TypeCarrierMac.entitlements; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrierMacApp.swift; sourceTree = "<group>"; };
+		98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSUILocalization.swift; sourceTree = "<group>"; };
 		9BA8751B3877B14B54FCE73C /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeliveryReceipt.swift; sourceTree = "<group>"; };
 		A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInsertionPolicyTests.swift; sourceTree = "<group>"; };
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		B1A98DAE35972ECE7A5C511F /* TypeCarrieriOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TypeCarrieriOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacUILocalization.swift; sourceTree = "<group>"; };
 		C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextReplacementPolicyTests.swift; sourceTree = "<group>"; };
 		CB10FD06F23300742A06B266 /* TypeCarrierCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TypeCarrierCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticExportTests.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 			isa = PBXGroup;
 			children = (
 				0CBC5EDEAA504D926640A76F /* ComposerView.swift */,
+				98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -310,6 +315,7 @@
 		A76D4DB0B1A2B9A860598E9A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */,
 				18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */,
 				74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */,
 			);
@@ -482,6 +488,7 @@
 				26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */,
 				33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */,
 				690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */,
+				26A4BF2022474F76DFEF01E0 /* MacUILocalization.swift in Sources */,
 				4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */,
 				CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */,
 				865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */,
@@ -535,6 +542,7 @@
 				54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */,
 				36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */,
 				BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */,
+				B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

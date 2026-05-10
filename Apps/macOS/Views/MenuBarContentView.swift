@@ -12,10 +12,10 @@ struct MenuBarContentView: View {
             Text("TypeCarrier")
                 .font(.headline)
 
-            Label(store.connectionState.displayText, systemImage: store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right")
+            Label(store.connectionState.localizedDisplayText, systemImage: store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right")
 
             if let warning = store.receiverHealthWarning {
-                Label("Receiver needs attention", systemImage: "exclamationmark.triangle.fill")
+                Label("接收器需要处理", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 Text(warning)
                     .font(.caption)
@@ -24,32 +24,32 @@ struct MenuBarContentView: View {
             }
 
             Label(
-                store.accessibilityTrusted ? "Accessibility enabled" : "Accessibility required",
+                store.accessibilityTrusted ? "辅助功能已启用" : "需要辅助功能权限",
                 systemImage: store.accessibilityTrusted ? "lock.open.fill" : "lock.fill"
             )
 
             Divider()
 
-            Button("Open TypeCarrier") {
+            Button("打开 TypeCarrier") {
                 coordinator.showMainWindow()
             }
             .keyboardShortcut("t", modifiers: [.command, .option])
 
-            Button("Test Paste") {
+            Button("测试粘贴") {
                 store.pasteTestText()
             }
 
             if !store.accessibilityTrusted {
-                Button("Request Accessibility") {
+                Button("请求辅助功能权限") {
                     store.requestAccessibilityAccess()
                 }
             }
 
-            Button("Restart Receiver") {
+            Button("重启接收器") {
                 store.restartFromUserAction()
             }
 
-            Button("Export Diagnostics") {
+            Button("导出诊断") {
                 store.exportConnectionDiagnosticsToFinder()
             }
 
@@ -62,7 +62,7 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Quit TypeCarrier") {
+            Button("退出 TypeCarrier") {
                 NSApplication.shared.terminate(nil)
             }
         }
