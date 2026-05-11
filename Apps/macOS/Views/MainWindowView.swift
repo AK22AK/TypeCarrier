@@ -280,7 +280,7 @@ private struct ReceiverStatusInspector: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("接收器")
+                Text("连接状态")
                     .font(.title3.weight(.semibold))
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -352,8 +352,9 @@ private struct ReceiverStatusInspector: View {
                     }
                 }
             }
-            .padding(16)
         }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
     }
 
     private var diagnostics: CarrierDiagnostics {
