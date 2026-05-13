@@ -43,14 +43,6 @@ final class MacCarrierStore: ObservableObject {
         start()
     }
 
-    var menuBarSystemImage: String {
-        if receiverHealthWarning != nil {
-            return "exclamationmark.triangle"
-        }
-
-        return carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
-    }
-
     var connectionState: ConnectionState {
         carrierService.connectionState
     }
