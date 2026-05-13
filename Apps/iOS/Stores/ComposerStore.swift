@@ -486,7 +486,7 @@ final class ComposerStore: ObservableObject {
             syncRecords()
             sendState = .sent
             if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
-                replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
+                replaceEditorText("", resetsHistory: true)
             }
         } catch {
             sendState = .failed("保存草稿失败：\(error.localizedDescription)")
@@ -516,7 +516,7 @@ final class ComposerStore: ObservableObject {
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("", rebuildsEditorWhenEmptying: false)
+        replaceEditorText("")
         sendState = .idle
     }
 
@@ -655,7 +655,7 @@ final class ComposerStore: ObservableObject {
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
-            replaceEditorText("", resetsHistory: true, rebuildsEditorWhenEmptying: false)
+            replaceEditorText("", resetsHistory: true)
         }
     }
 
@@ -687,8 +687,7 @@ final class ComposerStore: ObservableObject {
 
     private func replaceEditorText(
         _ newText: String,
-        resetsHistory: Bool = false,
-        rebuildsEditorWhenEmptying: Bool = true
+        resetsHistory: Bool = false
     ) {
         let previousText = text
         shouldRecordTextChange = false
@@ -697,8 +696,7 @@ final class ComposerStore: ObservableObject {
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration,
-            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+            currentGeneration: editorResetGeneration
         )
 
         if resetsHistory {

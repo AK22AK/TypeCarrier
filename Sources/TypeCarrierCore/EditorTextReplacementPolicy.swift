@@ -2,10 +2,9 @@ public enum EditorTextReplacementPolicy {
     public static func nextEditorGeneration(
         currentText: String,
         newText: String,
-        currentGeneration: Int,
-        rebuildsWhenEmptying: Bool = true
+        currentGeneration: Int
     ) -> Int {
-        guard rebuildsWhenEmptying, currentText != newText, newText.isEmpty else {
+        guard currentText != newText, newText.isEmpty else {
             return currentGeneration
         }
 
@@ -35,8 +34,7 @@ public enum EditorTextReplacementPolicy {
         nextEditorGeneration(
             currentText: currentText,
             newText: newText,
-            currentGeneration: currentGeneration,
-            rebuildsWhenEmptying: false
+            currentGeneration: currentGeneration
         )
     }
 }
