@@ -10,6 +10,7 @@ struct ComposerView: View {
     @State private var showsHistory = false
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
+    @State private var hasRequestedInitialEditorFocus = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,7 @@ struct ComposerView: View {
         }
         .task {
             store.start()
+            await requestInitialEditorFocusIfNeeded()
         }
         .sheet(isPresented: $showsDiagnostics) {
             ConnectionDiagnosticsSheet(store: store)
@@ -479,6 +481,17 @@ struct ComposerView: View {
     private func focusEditor() {
         collapseHeaderForEditing()
         isEditorFocused = true
+    }
+
+    @MainActor
+    private func requestInitialEditorFocusIfNeeded() async {
+        guard !hasRequestedInitialEditorFocus else {
+            return
+        }
+
+        hasRequestedInitialEditorFocus = true
+        await Task.yield()
+        focusEditor()
     }
 
     private func performEditorActionPreservingFocus(_ action: () -> Void) {
