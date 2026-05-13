@@ -2,15 +2,28 @@ import SwiftUI
 import TypeCarrierCore
 import UIKit
 
+private enum ComposerPreferenceKeys {
+    static let launchesIntoInputMode = "launchesIntoInputMode"
+}
+
 struct ComposerView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @StateObject private var store = ComposerStore()
     @FocusState private var isEditorFocused: Bool
     @State private var showsDiagnostics = false
     @State private var showsHistory = false
+    @State private var showsSettings = false
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
+
+    init() {
+        let launchesIntoInputMode = UserDefaults.standard.object(
+            forKey: ComposerPreferenceKeys.launchesIntoInputMode
+        ) as? Bool ?? true
+        _isHeaderCollapsed = State(initialValue: launchesIntoInputMode)
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,6 +44,9 @@ struct ComposerView: View {
             }
             .navigationDestination(isPresented: $showsHistory) {
                 CarrierHistoryView(store: store)
+            }
+            .navigationDestination(isPresented: $showsSettings) {
+                ComposerSettingsView()
             }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -153,6 +169,12 @@ struct ComposerView: View {
             .accessibilityLabel(historyAccessibilityLabel)
 
             Menu {
+                Button {
+                    showsSettings = true
+                } label: {
+                    Label("设置", systemImage: "gearshape")
+                }
+
                 Button {
                     showsDiagnostics = true
                 } label: {
@@ -485,7 +507,7 @@ struct ComposerView: View {
 
     @MainActor
     private func requestInitialEditorFocusIfNeeded() async {
-        guard !hasRequestedInitialEditorFocus else {
+        guard launchesIntoInputMode, !hasRequestedInitialEditorFocus else {
             return
         }
 
@@ -639,6 +661,22 @@ private struct ConnectionStatusIndicator: View {
 private extension ComposerStore.ConnectionStatus {
     var isBreathing: Bool {
         self == .searching || self == .connecting
+    }
+}
+
+private struct ComposerSettingsView: View {
+    @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+
+    var body: some View {
+        List {
+            Section {
+                Toggle("启动时进入输入状态", isOn: $launchesIntoInputMode)
+            } footer: {
+                Text("打开应用后自动聚焦输入框，并按键盘将要出现的状态显示主界面。")
+            }
+        }
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
