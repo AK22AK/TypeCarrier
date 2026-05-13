@@ -89,6 +89,7 @@ private struct DetailContainer: View {
                     isPresented: $isStatusInspectorPresented
                 )
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 }
@@ -228,10 +229,26 @@ private struct ReceiverStatusToolbarButton: View {
         Button {
             isPresented.toggle()
         } label: {
-            Label("接收器状态", systemImage: statusSystemImage)
-                .foregroundStyle(statusTint)
+            HStack(spacing: 6) {
+                Image(systemName: statusSystemImage)
+                    .foregroundStyle(statusTint)
+                    .imageScale(.medium)
+
+                Text(statusLabelText)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(statusTextTint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .frame(maxWidth: 180)
         }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.capsule)
+        .controlSize(.regular)
         .help(statusTitle)
+        .accessibilityLabel(statusTitle)
     }
 
     private var statusTitle: String {
@@ -240,20 +257,23 @@ private struct ReceiverStatusToolbarButton: View {
         }
 
         switch store.connectionState {
-        case .connected:
-            return "已连接"
-        case .advertising:
-            return "接收器就绪"
-        case .connecting:
-            return "正在连接"
-        case .reconnecting:
-            return "正在重新连接"
-        case .searching:
-            return "正在搜索"
-        case .failed:
-            return "接收器异常"
-        case .idle:
+        case .connected(let peerName):
+            return "已连接到 \(peerName)"
+        default:
             return "接收器空闲"
+        }
+    }
+
+    private var statusLabelText: String {
+        if store.receiverHealthWarning != nil {
+            return "连接异常"
+        }
+
+        switch store.connectionState {
+        case .connected(let peerName):
+            return peerName
+        default:
+            return "空闲"
         }
     }
 
@@ -271,6 +291,14 @@ private struct ReceiverStatusToolbarButton: View {
         }
 
         return store.connectionState.isConnected ? .green : .secondary
+    }
+
+    private var statusTextTint: Color {
+        if store.receiverHealthWarning != nil {
+            return .orange
+        }
+
+        return store.connectionState.isConnected ? .primary : .secondary
     }
 }
 
