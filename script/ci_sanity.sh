@@ -22,8 +22,17 @@ run_check() {
 }
 
 check_project_generation() {
+  local before
+  local after
+
+  before="$(git diff -- TypeCarrier.xcodeproj | shasum -a 256 | awk '{print $1}')"
   xcodegen generate
-  git diff --exit-code -- TypeCarrier.xcodeproj
+  after="$(git diff -- TypeCarrier.xcodeproj | shasum -a 256 | awk '{print $1}')"
+
+  if [[ "$before" != "$after" ]]; then
+    git diff -- TypeCarrier.xcodeproj
+    return 1
+  fi
 }
 
 check_plists() {
