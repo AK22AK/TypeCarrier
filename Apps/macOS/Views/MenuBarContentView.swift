@@ -2,31 +2,27 @@ import SwiftUI
 
 struct MenuBarContentView: View {
     @ObservedObject var coordinator: MacAppCoordinator
+    @ObservedObject private var store: MacCarrierStore
 
-    private var store: MacCarrierStore {
-        coordinator.store
+    init(coordinator: MacAppCoordinator) {
+        self.coordinator = coordinator
+        store = coordinator.store
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TypeCarrier")
-                .font(.headline)
-
-            Label(store.connectionState.localizedDisplayText, systemImage: store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right")
+            Button {
+                coordinator.showMainWindow()
+            } label: {
+                Label(statusMenuTitle, systemImage: statusSystemImage)
+            }
 
             if let warning = store.receiverHealthWarning {
-                Label("接收器需要处理", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
                 Text(warning)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-
-            Label(
-                store.accessibilityTrusted ? "辅助功能已启用" : "需要辅助功能权限",
-                systemImage: store.accessibilityTrusted ? "lock.open.fill" : "lock.fill"
-            )
 
             Divider()
 
@@ -37,12 +33,6 @@ struct MenuBarContentView: View {
 
             Button("测试粘贴") {
                 store.pasteTestText()
-            }
-
-            if !store.accessibilityTrusted {
-                Button("请求辅助功能权限") {
-                    store.requestAccessibilityAccess()
-                }
             }
 
             Button("重启接收器") {
@@ -69,5 +59,21 @@ struct MenuBarContentView: View {
         .onAppear {
             store.refreshAccessibilityStatus()
         }
+    }
+
+    private var statusMenuTitle: String {
+        if store.receiverHealthWarning != nil {
+            return "接收器需要处理"
+        }
+
+        return store.connectionState.localizedDisplayText
+    }
+
+    private var statusSystemImage: String {
+        if store.receiverHealthWarning != nil {
+            return "exclamationmark.triangle.fill"
+        }
+
+        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
     }
 }
