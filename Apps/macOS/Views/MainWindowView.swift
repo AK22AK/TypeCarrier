@@ -229,23 +229,24 @@ private struct ReceiverStatusToolbarButton: View {
         Button {
             isPresented.toggle()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: statusSystemImage)
-                    .foregroundStyle(statusTint)
-                    .imageScale(.medium)
-
+            Label {
                 Text(statusLabelText)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(statusTextTint)
                     .lineLimit(1)
                     .truncationMode(.middle)
+            } icon: {
+                Image(systemName: statusSystemImage)
+                    .foregroundStyle(statusTint)
+                    .imageScale(.medium)
             }
+            .labelStyle(.titleAndIcon)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .frame(maxWidth: 180)
+            .contentShape(.capsule)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.capsule)
+        .buttonStyle(.accessoryBar)
         .controlSize(.regular)
         .help(statusTitle)
         .accessibilityLabel(statusTitle)
