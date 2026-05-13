@@ -11,7 +11,7 @@ struct ComposerView: View {
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @StateObject private var store = ComposerStore()
     @FocusState private var isEditorFocused: Bool
-    @State private var showsDiagnostics = false
+    @State private var showsDebugFeatures = false
     @State private var showsHistory = false
     @State private var showsSettings = false
     @State private var isHeaderCollapsed = false
@@ -48,14 +48,14 @@ struct ComposerView: View {
             .navigationDestination(isPresented: $showsSettings) {
                 ComposerSettingsView()
             }
+            .navigationDestination(isPresented: $showsDebugFeatures) {
+                DebugFeaturesView(store: store)
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             store.start()
             await requestInitialEditorFocusIfNeeded()
-        }
-        .sheet(isPresented: $showsDiagnostics) {
-            ConnectionDiagnosticsSheet(store: store)
         }
         .alert(
             "草稿箱已满",
@@ -176,9 +176,9 @@ struct ComposerView: View {
                 }
 
                 Button {
-                    showsDiagnostics = true
+                    showsDebugFeatures = true
                 } label: {
-                    Label("连接诊断", systemImage: "info.circle")
+                    Label("调试功能", systemImage: "wrench.and.screwdriver")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -680,54 +680,73 @@ private struct ComposerSettingsView: View {
     }
 }
 
-private struct ConnectionDiagnosticsSheet: View {
+private struct DebugFeaturesView: View {
     @ObservedObject var store: ComposerStore
-    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                NavigationLink {
+                    ConnectionDiagnosticsView(store: store)
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("连接诊断")
+                            Text("查看连接状态、最近事件并导出诊断日志")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                }
+            }
+        }
+        .navigationTitle("调试功能")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ConnectionDiagnosticsView: View {
+    @ObservedObject var store: ComposerStore
     @State private var diagnosticExportShareItem: DiagnosticExportShareItem?
     @State private var diagnosticExportErrorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("会话") {
-                    diagnosticRow("角色", store.diagnostics.role.localizedRoleText)
-                    diagnosticRow("本机设备", store.diagnostics.localPeerName)
-                    diagnosticRow("服务", store.diagnostics.serviceType)
-                    diagnosticRow("状态", store.diagnostics.connectionState.localizedDisplayText)
-                    diagnosticRow("已发现设备", store.diagnostics.discoveredPeers.localizedPeerListText)
-                    diagnosticRow("已邀请设备", store.diagnostics.invitedPeers.localizedPeerListText)
-                    diagnosticRow("已连接设备", store.diagnostics.connectedPeers.localizedPeerListText)
+        List {
+            Section("会话") {
+                diagnosticRow("角色", store.diagnostics.role.localizedRoleText)
+                diagnosticRow("本机设备", store.diagnostics.localPeerName)
+                diagnosticRow("服务", store.diagnostics.serviceType)
+                diagnosticRow("状态", store.diagnostics.connectionState.localizedDisplayText)
+                diagnosticRow("已发现设备", store.diagnostics.discoveredPeers.localizedPeerListText)
+                diagnosticRow("已邀请设备", store.diagnostics.invitedPeers.localizedPeerListText)
+                diagnosticRow("已连接设备", store.diagnostics.connectedPeers.localizedPeerListText)
 
-                    if let error = store.diagnostics.lastErrorMessage {
-                        diagnosticRow("最近错误", error.localizedDiagnosticMessageText)
-                    }
-
-                    if let logURL = store.connectionDiagnosticLogFileURL {
-                        diagnosticRow("日志文件", logURL.lastPathComponent)
-                    }
+                if let error = store.diagnostics.lastErrorMessage {
+                    diagnosticRow("最近错误", error.localizedDiagnosticMessageText)
                 }
 
-                Section("最近事件") {
-                    ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
-                        DiagnosticEventRow(event: event)
-                    }
+                if let logURL = store.connectionDiagnosticLogFileURL {
+                    diagnosticRow("日志文件", logURL.lastPathComponent)
                 }
             }
-            .navigationTitle("诊断")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if store.connectionDiagnosticLogFileURL != nil {
-                        Button {
-                            exportLog()
-                        } label: {
-                            Label("导出日志", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        dismiss()
+            Section("最近事件") {
+                ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
+                    DiagnosticEventRow(event: event)
+                }
+            }
+        }
+        .navigationTitle("连接诊断")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if store.connectionDiagnosticLogFileURL != nil {
+                    Button {
+                        exportLog()
+                    } label: {
+                        Label("导出日志", systemImage: "square.and.arrow.up")
                     }
                 }
             }
