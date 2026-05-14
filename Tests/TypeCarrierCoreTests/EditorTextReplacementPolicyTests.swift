@@ -14,26 +14,28 @@ struct EditorTextReplacementPolicyTests {
         #expect(generation == 5)
     }
 
-    @Test("Focus-preserving actions still rebuild on programmatic emptying")
-    func focusPreservingActionsStillRebuildOnProgrammaticEmptying() {
+    @Test("Focus-preserving actions keep the active input session")
+    func focusPreservingActionsKeepActiveInputSession() {
         let generation = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: "draft text",
             newText: "",
-            currentGeneration: 4
+            currentGeneration: 4,
+            rebuildsWhenEmptying: false
         )
 
-        #expect(generation == 5)
+        #expect(generation == 4)
     }
 
-    @Test("Undo and redo emptying rebuild the editor identity")
-    func undoRedoEmptyingRebuildsEditorIdentity() {
+    @Test("Undo and redo emptying can keep the active input session")
+    func undoRedoEmptyingCanKeepActiveInputSession() {
         let generation = EditorTextReplacementPolicy.nextEditorGenerationAfterUndoRedo(
             currentText: "draft text",
             newText: "",
-            currentGeneration: 4
+            currentGeneration: 4,
+            rebuildsWhenEmptying: false
         )
 
-        #expect(generation == 5)
+        #expect(generation == 4)
     }
 
     @Test("Delivery receipts clear only after verified target insertion")

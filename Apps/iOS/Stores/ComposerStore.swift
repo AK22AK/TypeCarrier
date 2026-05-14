@@ -53,6 +53,7 @@ final class ComposerStore: ObservableObject {
     private let recordStore: CarrierRecordStore?
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
+    private var pendingSendPreservesActiveInputSession = false
     private var hasStarted = false
     private let backgroundDisconnectGraceSeconds: TimeInterval
     private let resumeRecoverySearchTimeout: Duration = .seconds(25)
@@ -395,7 +396,7 @@ final class ComposerStore: ObservableObject {
         backgroundStopTask = nil
     }
 
-    func send() {
+    func send(preservesActiveInputSession: Bool = false) {
         guard CarrierPayload.canSend(text) else {
             sendState = .failed("文本为空")
             return
@@ -429,6 +430,7 @@ final class ComposerStore: ObservableObject {
 
         pendingPayloadID = payload.id
         pendingRecordID = record.id
+        pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
 
         do {
@@ -441,6 +443,7 @@ final class ComposerStore: ObservableObject {
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
+            pendingSendPreservesActiveInputSession = false
             updateRecord(
                 id: record.id,
                 status: .failed,
@@ -455,7 +458,7 @@ final class ComposerStore: ObservableObject {
         send()
     }
 
-    func saveDraft() {
+    func saveDraft(preservesActiveInputSession: Bool = false) {
         guard CarrierPayload.canSend(text) else {
             sendState = .failed("文本为空")
             return
@@ -486,7 +489,11 @@ final class ComposerStore: ObservableObject {
             syncRecords()
             sendState = .sent
             if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
-                replaceEditorText("", resetsHistory: true)
+                replaceEditorText(
+                    "",
+                    resetsHistory: true,
+                    rebuildsEditorWhenEmptying: !preservesActiveInputSession
+                )
             }
         } catch {
             sendState = .failed("保存草稿失败：\(error.localizedDescription)")
@@ -510,31 +517,37 @@ final class ComposerStore: ObservableObject {
         UIPasteboard.general.string = text
     }
 
-    func clearText() {
+    func clearText(preservesActiveInputSession: Bool = false) {
         guard hasEditorText else {
             return
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("")
+        replaceEditorText("", rebuildsEditorWhenEmptying: !preservesActiveInputSession)
         sendState = .idle
     }
 
-    func undoTextChange() {
+    func undoTextChange(preservesActiveInputSession: Bool = false) {
         guard let previous = textHistory.undo(current: text) else {
             return
         }
 
-        replaceEditorTextAfterUndoRedo(previous)
+        replaceEditorTextAfterUndoRedo(
+            previous,
+            rebuildsEditorWhenEmptying: !preservesActiveInputSession
+        )
         sendState = .idle
     }
 
-    func redoTextChange() {
+    func redoTextChange(preservesActiveInputSession: Bool = false) {
         guard let next = textHistory.redo(current: text) else {
             return
         }
 
-        replaceEditorTextAfterUndoRedo(next)
+        replaceEditorTextAfterUndoRedo(
+            next,
+            rebuildsEditorWhenEmptying: !preservesActiveInputSession
+        )
         sendState = .idle
     }
 
@@ -655,7 +668,15 @@ final class ComposerStore: ObservableObject {
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
-            replaceEditorText("", resetsHistory: true)
+            let rebuildsEditorWhenEmptying = !pendingSendPreservesActiveInputSession
+            pendingSendPreservesActiveInputSession = false
+            replaceEditorText(
+                "",
+                resetsHistory: true,
+                rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
+            )
+        } else {
+            pendingSendPreservesActiveInputSession = false
         }
     }
 
@@ -687,7 +708,8 @@ final class ComposerStore: ObservableObject {
 
     private func replaceEditorText(
         _ newText: String,
-        resetsHistory: Bool = false
+        resetsHistory: Bool = false,
+        rebuildsEditorWhenEmptying: Bool = true
     ) {
         let previousText = text
         shouldRecordTextChange = false
@@ -696,7 +718,8 @@ final class ComposerStore: ObservableObject {
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
         )
 
         if resetsHistory {
@@ -704,7 +727,10 @@ final class ComposerStore: ObservableObject {
         }
     }
 
-    private func replaceEditorTextAfterUndoRedo(_ newText: String) {
+    private func replaceEditorTextAfterUndoRedo(
+        _ newText: String,
+        rebuildsEditorWhenEmptying: Bool = true
+    ) {
         let previousText = text
         shouldRecordTextChange = false
         text = newText
@@ -712,7 +738,8 @@ final class ComposerStore: ObservableObject {
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGenerationAfterUndoRedo(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
         )
     }
 }

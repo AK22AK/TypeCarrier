@@ -81,6 +81,13 @@ struct ComposerView: View {
                 restoreHeaderAfterEditing()
             }
         }
+        .onChange(of: store.editorResetGeneration) { oldValue, newValue in
+            guard oldValue != newValue, isEditorFocused || pendingEditorRefocus else {
+                return
+            }
+
+            restoreEditorFocusAfterRebuild()
+        }
     }
 
     private var header: some View {
@@ -157,6 +164,7 @@ struct ComposerView: View {
             }
 
             Button {
+                prepareForChildNavigation()
                 showsHistory = true
             } label: {
                 HeaderHistoryButtonLabel(
@@ -170,12 +178,14 @@ struct ComposerView: View {
 
             Menu {
                 Button {
+                    prepareForChildNavigation()
                     showsSettings = true
                 } label: {
                     Label("设置", systemImage: "gearshape")
                 }
 
                 Button {
+                    prepareForChildNavigation()
                     showsDebugFeatures = true
                 } label: {
                     Label("调试功能", systemImage: "wrench.and.screwdriver")
@@ -259,7 +269,7 @@ struct ComposerView: View {
                 .onSubmit {
                     if store.canSend {
                         performEditorActionPreservingFocus {
-                            store.send()
+                            store.send(preservesActiveInputSession: true)
                         }
                     }
                 }
@@ -318,7 +328,7 @@ struct ComposerView: View {
                             accessibilityLabel: "撤销文本编辑",
                             isEnabled: store.canUndo
                         ) {
-                            store.undoTextChange()
+                            store.undoTextChange(preservesActiveInputSession: true)
                         }
 
                         editorToolButton(
@@ -326,7 +336,7 @@ struct ComposerView: View {
                             accessibilityLabel: "重做文本编辑",
                             isEnabled: store.canRedo
                         ) {
-                            store.redoTextChange()
+                            store.redoTextChange(preservesActiveInputSession: true)
                         }
                     }
                 }
@@ -346,7 +356,7 @@ struct ComposerView: View {
                     accessibilityLabel: "清空文本",
                     isEnabled: store.hasEditorText
                 ) {
-                    store.clearText()
+                    store.clearText(preservesActiveInputSession: true)
                 }
             }
         }
@@ -411,7 +421,7 @@ struct ComposerView: View {
 
                 Button {
                     performEditorActionPreservingFocus {
-                        store.saveDraft()
+                        store.saveDraft(preservesActiveInputSession: true)
                     }
                 } label: {
                     Image(systemName: "tray.and.arrow.down")
@@ -426,7 +436,7 @@ struct ComposerView: View {
 
                 Button {
                     performEditorActionPreservingFocus {
-                        store.send()
+                        store.send(preservesActiveInputSession: true)
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -528,16 +538,29 @@ struct ComposerView: View {
     }
 
     private func restoreEditorFocusAfterRebuild() {
+        guard !pendingEditorRefocus else {
+            return
+        }
+
         pendingEditorRefocus = true
         collapseHeaderForEditing()
 
         Task { @MainActor in
             await Task.yield()
-            isEditorFocused = false
+            focusEditor()
             await Task.yield()
             pendingEditorRefocus = false
-            focusEditor()
         }
+    }
+
+    private func prepareForChildNavigation() {
+        guard isHeaderCollapsed || isEditorFocused || pendingEditorRefocus else {
+            return
+        }
+
+        pendingEditorRefocus = false
+        isEditorFocused = false
+        restoreHeaderAfterEditing()
     }
 
     private func collapseHeaderForEditing() {
