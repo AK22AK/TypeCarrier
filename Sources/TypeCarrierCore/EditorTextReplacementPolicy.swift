@@ -2,10 +2,9 @@ public enum EditorTextReplacementPolicy {
     public static func nextEditorGeneration(
         currentText: String,
         newText: String,
-        currentGeneration: Int,
-        rebuildsWhenEmptying: Bool = true
+        currentGeneration: Int
     ) -> Int {
-        guard rebuildsWhenEmptying, currentText != newText, newText.isEmpty else {
+        guard currentText != newText, newText.isEmpty else {
             return currentGeneration
         }
 
@@ -25,5 +24,17 @@ public enum EditorTextReplacementPolicy {
 
     public static func shouldClearEditorAfterDraftSave(succeeded: Bool) -> Bool {
         succeeded
+    }
+
+    public static func nextEditorGenerationAfterUndoRedo(
+        currentText: String,
+        newText: String,
+        currentGeneration: Int
+    ) -> Int {
+        nextEditorGeneration(
+            currentText: currentText,
+            newText: newText,
+            currentGeneration: currentGeneration
+        )
     }
 }

@@ -52,7 +52,7 @@ public enum CarrierDiagnosticExportError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingLogFile:
-            "Connection diagnostic log is unavailable."
+            "连接诊断日志不可用。"
         }
     }
 }

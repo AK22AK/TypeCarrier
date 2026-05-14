@@ -17,16 +17,14 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSUIElement</key>
-	<true/>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_typecarrier._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>TypeCarrier uses the local network to receive text from your nearby iPhone.</string>
+	<string>TypeCarrier 需要使用本地网络，接收附近 iPhone 发来的文本。</string>
 </dict>
 </plist>

@@ -76,6 +76,8 @@ TypeCarrier 源码使用 Apache License 2.0 开源，用户可以自行从源码
 - [竞品分析](docs/competitive-analysis.md)
 - [技术说明](docs/technical-notes.md)
 - [MVP 计划](docs/mvp-plan.md)
+- [0.1 Beta 1 发行说明](docs/releases/0.1-beta.1.md)
+- [多设备管理后续计划](docs/multi-device-management-plan.md)
 - [开源与官方版本策略](docs/open-source-policy.md)
 - [发行说明](docs/distribution.md)
 - [GitHub 历史补救](docs/github-history-remediation.md)

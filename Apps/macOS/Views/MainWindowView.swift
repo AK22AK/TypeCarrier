@@ -4,44 +4,23 @@ import TypeCarrierCore
 
 struct MainWindowView: View {
     @ObservedObject var store: MacCarrierStore
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var isStatusInspectorPresented = false
     @State private var selectedRecordID: UUID?
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedRecordID) {
-                Section("Received") {
-                    if store.receivedHistory.isEmpty {
-                        Text("No received text")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(store.receivedHistory) { record in
-                            ReceivedRecordRow(record: record)
-                                .tag(record.id)
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                store.delete(store.receivedHistory[index])
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("TypeCarrier")
-            .toolbar {
-                Button {
-                    store.restartFromUserAction()
-                } label: {
-                    Label("Restart Receiver", systemImage: "arrow.clockwise")
-                }
-            }
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
         } detail: {
-            if let selectedRecord {
-                ReceivedRecordDetail(record: selectedRecord, store: store)
-                    .id(selectedRecord.id)
-            } else {
-                ContentUnavailableView("Select received text", systemImage: "text.page")
-            }
+            DetailContainer(
+                selectedRecord: selectedRecord,
+                store: store,
+                isStatusInspectorPresented: $isStatusInspectorPresented
+            )
+        }
+        .inspector(isPresented: $isStatusInspectorPresented) {
+            ReceiverStatusInspector(store: store)
+                .inspectorColumnWidth(min: 220, ideal: 240, max: 260)
         }
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -52,10 +31,66 @@ struct MainWindowView: View {
                 selectedRecordID = store.receivedHistory.first?.id
             }
         }
+        .frame(
+            minWidth: 900,
+            idealWidth: 980,
+            maxWidth: 1_040,
+            minHeight: 560,
+            idealHeight: 620
+        )
     }
 
     private var selectedRecord: CarrierRecord? {
         store.receivedHistory.first { $0.id == selectedRecordID }
+    }
+
+    private var sidebar: some View {
+        List(selection: $selectedRecordID) {
+            Section("已接收") {
+                if store.receivedHistory.isEmpty {
+                    Text("暂无接收文本")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.receivedHistory) { record in
+                        ReceivedRecordRow(record: record)
+                            .tag(record.id)
+                    }
+                    .onDelete { offsets in
+                        for index in offsets {
+                            store.delete(store.receivedHistory[index])
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+}
+
+private struct DetailContainer: View {
+    let selectedRecord: CarrierRecord?
+    @ObservedObject var store: MacCarrierStore
+    @Binding var isStatusInspectorPresented: Bool
+
+    var body: some View {
+        Group {
+            if let selectedRecord {
+                ReceivedRecordDetail(record: selectedRecord, store: store)
+                    .id(selectedRecord.id)
+            } else {
+                ContentUnavailableView("选择一条接收记录", systemImage: "text.page")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                ReceiverStatusToolbarButton(
+                    store: store,
+                    isPresented: $isStatusInspectorPresented
+                )
+            }
+            .sharedBackgroundVisibility(.hidden)
+        }
     }
 }
 
@@ -73,7 +108,7 @@ private struct ReceivedRecordRow: View {
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
-                    Text(record.status.displayText)
+                    Text(record.status.localizedDisplayText)
                     Text(record.updatedAt, style: .time)
                 }
                 .font(.caption)
@@ -107,13 +142,11 @@ private struct ReceivedRecordDetail: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 12))
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                detailRow("Status", record.status.displayText)
-                detailRow("Updated", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                detailRow("Paste", store.lastPasteResult.status)
-                detailRow("Connection", store.connectionState.displayText)
-                detailRow("Accessibility", store.accessibilityTrusted ? "Enabled" : "Required")
+                detailRow("状态", record.status.localizedDisplayText)
+                detailRow("更新时间", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                detailRow("粘贴", record.pasteSummaryText)
                 if let detail = record.detail {
-                    detailRow("Detail", detail)
+                    detailRow("详情", detail.localizedPasteDetailText)
                 }
             }
 
@@ -121,7 +154,7 @@ private struct ReceivedRecordDetail: View {
                 Button {
                     store.updateText(for: record, text: editedText)
                 } label: {
-                    Label("Save Edit", systemImage: "checkmark")
+                    Label("保存修改", systemImage: "checkmark")
                 }
 
                 Button {
@@ -130,21 +163,21 @@ private struct ReceivedRecordDetail: View {
                     store.updateText(for: record, text: editedText)
                     store.paste(record: editedRecord)
                 } label: {
-                    Label("Paste Again", systemImage: "text.insert")
+                    Label("再次粘贴", systemImage: "text.insert")
                 }
 
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(editedText, forType: .string)
                 } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
+                    Label("复制", systemImage: "doc.on.doc")
                 }
 
                 if !store.accessibilityTrusted {
                     Button {
                         store.requestAccessibilityAccess()
                     } label: {
-                        Label("Request Accessibility", systemImage: "lock.open")
+                        Label("请求辅助功能权限", systemImage: "lock.open")
                     }
                 }
 
@@ -153,21 +186,18 @@ private struct ReceivedRecordDetail: View {
                 Button(role: .destructive) {
                     store.delete(record)
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label("删除", systemImage: "trash")
                 }
             }
             .buttonStyle(.glass)
-
-            DiagnosticsSummary(store: store)
         }
         .padding(24)
-        .navigationTitle("Received Text")
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Received Text")
+                Text("已接收文本")
                     .font(.title2.weight(.semibold))
                 Text(record.updatedAt, style: .date)
                     .foregroundStyle(.secondary)
@@ -175,7 +205,7 @@ private struct ReceivedRecordDetail: View {
 
             Spacer()
 
-            Label(record.status.displayText, systemImage: record.status.systemImage)
+            Label(record.status.localizedDisplayText, systemImage: record.status.systemImage)
                 .foregroundStyle(record.status.tint)
         }
     }
@@ -191,76 +221,224 @@ private struct ReceivedRecordDetail: View {
     }
 }
 
-private struct DiagnosticsSummary: View {
+private struct ReceiverStatusToolbarButton: View {
     @ObservedObject var store: MacCarrierStore
+    @Binding var isPresented: Bool
 
     var body: some View {
-        DisclosureGroup("Diagnostics") {
-            VStack(alignment: .leading, spacing: 8) {
-                diagnosticLine("Local Peer", store.carrierService.diagnostics.localPeerName)
-                diagnosticLine("Service", store.carrierService.diagnostics.serviceType)
-                diagnosticLine("Connected", store.carrierService.diagnostics.connectedPeersText)
-                diagnosticLine("Discovered", store.carrierService.diagnostics.discoveredPeersText)
-                if let warning = store.receiverHealthWarning {
-                    diagnosticLine("Warning", warning)
-                }
-                if let logURL = store.connectionDiagnosticLogFileURL {
-                    diagnosticLine("Log", logURL.path)
-                }
-                if let exportURL = store.lastDiagnosticExportURL {
-                    diagnosticLine("Export", exportURL.path)
-                }
-                if let exportError = store.lastDiagnosticExportErrorMessage {
-                    diagnosticLine("Export Error", exportError)
-                }
-
-                ForEach(Array(store.carrierService.diagnostics.events.suffix(5).reversed())) { event in
-                    Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.name): \(event.message)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-
-                Button {
-                    store.exportConnectionDiagnosticsToFinder()
-                } label: {
-                    Label("Export Diagnostics", systemImage: "square.and.arrow.up")
-                }
-                .padding(.top, 4)
+        Button {
+            isPresented.toggle()
+        } label: {
+            Label {
+                Text(statusLabelText)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(statusTextTint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } icon: {
+                Image(systemName: statusSystemImage)
+                    .foregroundStyle(statusTint)
+                    .imageScale(.medium)
             }
-            .padding(.top, 8)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .frame(maxWidth: 180)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.accessoryBar)
+        .controlSize(.regular)
+        .help(statusTitle)
+        .accessibilityLabel(statusTitle)
+    }
+
+    private var statusTitle: String {
+        if store.receiverHealthWarning != nil {
+            return "接收器异常"
+        }
+
+        switch store.connectionState {
+        case .connected(let peerName):
+            return "已连接到 \(peerName)"
+        default:
+            return "接收器空闲"
         }
     }
 
-    private func diagnosticLine(_ title: String, _ value: String) -> some View {
-        HStack {
+    private var statusLabelText: String {
+        if store.receiverHealthWarning != nil {
+            return "连接异常"
+        }
+
+        switch store.connectionState {
+        case .connected(let peerName):
+            return peerName
+        default:
+            return "空闲"
+        }
+    }
+
+    private var statusSystemImage: String {
+        if store.receiverHealthWarning != nil {
+            return "exclamationmark.triangle.fill"
+        }
+
+        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
+    }
+
+    private var statusTint: Color {
+        if store.receiverHealthWarning != nil {
+            return .orange
+        }
+
+        return store.connectionState.isConnected ? .green : .secondary
+    }
+
+    private var statusTextTint: Color {
+        if store.receiverHealthWarning != nil {
+            return .orange
+        }
+
+        return store.connectionState.isConnected ? .primary : .secondary
+    }
+}
+
+private struct ReceiverStatusInspector: View {
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("连接状态")
+                    .font(.title3.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    statusLine("状态", store.connectionState.localizedDisplayText)
+                    statusLine("已连接设备", diagnostics.connectedPeers.localizedPeerListText)
+                    statusLine("已发现设备", diagnostics.discoveredPeers.localizedPeerListText)
+                    statusLine("已邀请设备", diagnostics.invitedPeers.localizedPeerListText)
+                    statusLine("本机设备", diagnostics.localPeerName)
+                    statusLine("服务", diagnostics.serviceType)
+                    statusLine("辅助功能", accessibilityText)
+                }
+
+                if let warning = store.receiverHealthWarning {
+                    Divider()
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+
+                if let lastError = diagnostics.lastErrorMessage {
+                    statusLine("最近错误", lastError)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        store.restartFromUserAction()
+                    } label: {
+                        Label("重启接收器", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        store.exportConnectionDiagnosticsToFinder()
+                    } label: {
+                        Label("导出诊断", systemImage: "square.and.arrow.up")
+                    }
+
+                    if !store.accessibilityTrusted {
+                        Button {
+                            store.requestAccessibilityAccess()
+                        } label: {
+                            Label("请求辅助功能权限", systemImage: "lock.open")
+                        }
+                    }
+                }
+
+                if let exportError = store.lastDiagnosticExportErrorMessage {
+                    statusLine("导出错误", exportError)
+                } else if let exportURL = store.lastDiagnosticExportURL {
+                    statusLine("最近导出", exportURL.path)
+                }
+
+                if !diagnostics.events.isEmpty {
+                    Divider()
+                    Text("最近事件")
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(diagnostics.events.suffix(5).reversed())) { event in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.name)
+                                    .font(.caption.weight(.semibold))
+                                Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+    }
+
+    private var diagnostics: CarrierDiagnostics {
+        store.carrierService.diagnostics
+    }
+
+    private var accessibilityText: String {
+        store.accessibilityTrusted ? "已启用" : "需要授权"
+    }
+
+    private func statusLine(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
             Text(value)
                 .textSelection(.enabled)
+                .lineLimit(3)
         }
-        .font(.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension CarrierRecord {
+    var pasteSummaryText: String {
+        switch status {
+        case .pastePosted:
+            "粘贴已提交"
+        case .pasteFailed:
+            "粘贴失败"
+        case .received:
+            "已接收"
+        default:
+            status.localizedDisplayText
+        }
     }
 }
 
 private extension CarrierRecord.Status {
-    var displayText: String {
+    var localizedDisplayText: String {
         switch self {
         case .draft:
-            "Draft"
+            "草稿"
         case .queued:
-            "Queued"
+            "排队中"
         case .sent:
-            "Sent"
+            "已发送"
         case .received:
-            "Received"
+            "已接收"
         case .pastePosted:
-            "Paste Posted"
+            "粘贴已提交"
         case .pasteFailed:
-            "Paste Failed"
+            "粘贴失败"
         case .failed:
-            "Failed"
+            "失败"
         }
     }
 

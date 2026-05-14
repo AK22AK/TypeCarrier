@@ -2,54 +2,44 @@ import SwiftUI
 
 struct MenuBarContentView: View {
     @ObservedObject var coordinator: MacAppCoordinator
+    @ObservedObject private var store: MacCarrierStore
 
-    private var store: MacCarrierStore {
-        coordinator.store
+    init(coordinator: MacAppCoordinator) {
+        self.coordinator = coordinator
+        store = coordinator.store
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TypeCarrier")
-                .font(.headline)
-
-            Label(store.connectionState.displayText, systemImage: store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right")
+            Button {
+                coordinator.showMainWindow()
+            } label: {
+                Label(statusMenuTitle, systemImage: statusSystemImage)
+            }
 
             if let warning = store.receiverHealthWarning {
-                Label("Receiver needs attention", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
                 Text(warning)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
 
-            Label(
-                store.accessibilityTrusted ? "Accessibility enabled" : "Accessibility required",
-                systemImage: store.accessibilityTrusted ? "lock.open.fill" : "lock.fill"
-            )
-
             Divider()
 
-            Button("Open TypeCarrier") {
+            Button("打开 TypeCarrier") {
                 coordinator.showMainWindow()
             }
             .keyboardShortcut("t", modifiers: [.command, .option])
 
-            Button("Test Paste") {
+            Button("测试粘贴") {
                 store.pasteTestText()
             }
 
-            if !store.accessibilityTrusted {
-                Button("Request Accessibility") {
-                    store.requestAccessibilityAccess()
-                }
-            }
-
-            Button("Restart Receiver") {
+            Button("重启接收器") {
                 store.restartFromUserAction()
             }
 
-            Button("Export Diagnostics") {
+            Button("导出诊断") {
                 store.exportConnectionDiagnosticsToFinder()
             }
 
@@ -62,12 +52,28 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Quit TypeCarrier") {
+            Button("退出 TypeCarrier") {
                 NSApplication.shared.terminate(nil)
             }
         }
         .onAppear {
             store.refreshAccessibilityStatus()
         }
+    }
+
+    private var statusMenuTitle: String {
+        if store.receiverHealthWarning != nil {
+            return "接收器需要处理"
+        }
+
+        return store.connectionState.localizedDisplayText
+    }
+
+    private var statusSystemImage: String {
+        if store.receiverHealthWarning != nil {
+            return "exclamationmark.triangle.fill"
+        }
+
+        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
     }
 }

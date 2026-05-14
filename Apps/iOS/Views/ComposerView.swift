@@ -2,13 +2,28 @@ import SwiftUI
 import TypeCarrierCore
 import UIKit
 
+private enum ComposerPreferenceKeys {
+    static let launchesIntoInputMode = "launchesIntoInputMode"
+}
+
 struct ComposerView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @StateObject private var store = ComposerStore()
     @FocusState private var isEditorFocused: Bool
-    @State private var showsDiagnostics = false
+    @State private var showsDebugFeatures = false
     @State private var showsHistory = false
+    @State private var showsSettings = false
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
+    @State private var hasRequestedInitialEditorFocus = false
+
+    init() {
+        let launchesIntoInputMode = UserDefaults.standard.object(
+            forKey: ComposerPreferenceKeys.launchesIntoInputMode
+        ) as? Bool ?? true
+        _isHeaderCollapsed = State(initialValue: launchesIntoInputMode)
+    }
 
     var body: some View {
         NavigationStack {
@@ -30,13 +45,17 @@ struct ComposerView: View {
             .navigationDestination(isPresented: $showsHistory) {
                 CarrierHistoryView(store: store)
             }
+            .navigationDestination(isPresented: $showsSettings) {
+                ComposerSettingsView()
+            }
+            .navigationDestination(isPresented: $showsDebugFeatures) {
+                DebugFeaturesView(store: store)
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             store.start()
-        }
-        .sheet(isPresented: $showsDiagnostics) {
-            ConnectionDiagnosticsSheet(store: store)
+            await requestInitialEditorFocusIfNeeded()
         }
         .alert(
             "草稿箱已满",
@@ -49,7 +68,7 @@ struct ComposerView: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
+            Button("好", role: .cancel) {
                 store.dismissDraftLimitError()
             }
         } message: {
@@ -134,7 +153,7 @@ struct ComposerView: View {
                         .frame(width: headerActionWidth, height: headerActionHeight)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Retry connection")
+                .accessibilityLabel("重试连接")
             }
 
             Button {
@@ -151,9 +170,15 @@ struct ComposerView: View {
 
             Menu {
                 Button {
-                    showsDiagnostics = true
+                    showsSettings = true
                 } label: {
-                    Label("Connection Diagnostics", systemImage: "info.circle")
+                    Label("设置", systemImage: "gearshape")
+                }
+
+                Button {
+                    showsDebugFeatures = true
+                } label: {
+                    Label("调试功能", systemImage: "wrench.and.screwdriver")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -161,7 +186,7 @@ struct ComposerView: View {
                     .frame(width: headerActionWidth, height: headerActionHeight)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("More")
+            .accessibilityLabel("更多")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -179,14 +204,14 @@ struct ComposerView: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(message)
+                    Text(message.localizedDiagnosticMessageText)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.82)
 
                     if let suggestion = store.connectionRecoverySuggestion {
-                        Text(suggestion)
+                        Text(suggestion.localizedDiagnosticMessageText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -204,7 +229,7 @@ struct ComposerView: View {
                             .frame(width: 30, height: 30)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Retry connection")
+                    .accessibilityLabel("重试连接")
                 }
             }
             .padding(.horizontal, 12)
@@ -218,15 +243,15 @@ struct ComposerView: View {
 
     private func connectionFailureAccessibilityLabel(message: String) -> String {
         if let suggestion = store.connectionRecoverySuggestion {
-            return "Connection issue: \(message) \(suggestion)"
+            return "连接异常：\(message.localizedDiagnosticMessageText) \(suggestion.localizedDiagnosticMessageText)"
         }
 
-        return "Connection issue: \(message)"
+        return "连接异常：\(message.localizedDiagnosticMessageText)"
     }
 
     private var editor: some View {
         ZStack(alignment: .bottom) {
-            TextField("Type or dictate here", text: $store.text, axis: .vertical)
+            TextField("输入或语音输入", text: $store.text, axis: .vertical)
                 .font(.system(.body, design: .rounded))
                 .lineLimit(1...10)
                 .submitLabel(.send)
@@ -254,9 +279,33 @@ struct ComposerView: View {
         }
         .background {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color(uiColor: .systemBackground))
+                .fill(editorPanelFill)
         }
-        .shadow(color: Color.black.opacity(0.08), radius: 24, x: 0, y: 14)
+        .overlay {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(editorPanelStroke, lineWidth: 1)
+        }
+        .shadow(color: editorPanelShadow, radius: editorPanelShadowRadius, x: 0, y: editorPanelShadowYOffset)
+    }
+
+    private var editorPanelFill: Color {
+        Color(uiColor: colorScheme == .dark ? .secondarySystemGroupedBackground : .systemBackground)
+    }
+
+    private var editorPanelStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.clear
+    }
+
+    private var editorPanelShadow: Color {
+        colorScheme == .dark ? Color.black.opacity(0.28) : Color.black.opacity(0.08)
+    }
+
+    private var editorPanelShadowRadius: CGFloat {
+        colorScheme == .dark ? 18 : 24
+    }
+
+    private var editorPanelShadowYOffset: CGFloat {
+        colorScheme == .dark ? 10 : 14
     }
 
     private var editorAccessoryBar: some View {
@@ -266,7 +315,7 @@ struct ComposerView: View {
                     editorToolGroup {
                         editorToolButton(
                             systemName: "arrow.uturn.backward",
-                            accessibilityLabel: "Undo text edit",
+                            accessibilityLabel: "撤销文本编辑",
                             isEnabled: store.canUndo
                         ) {
                             store.undoTextChange()
@@ -274,7 +323,7 @@ struct ComposerView: View {
 
                         editorToolButton(
                             systemName: "arrow.uturn.forward",
-                            accessibilityLabel: "Redo text edit",
+                            accessibilityLabel: "重做文本编辑",
                             isEnabled: store.canRedo
                         ) {
                             store.redoTextChange()
@@ -284,7 +333,7 @@ struct ComposerView: View {
 
                 editorStandaloneToolButton(
                     systemName: "doc.on.doc",
-                    accessibilityLabel: "Copy text",
+                    accessibilityLabel: "复制文本",
                     isEnabled: store.hasEditorText
                 ) {
                     store.copyText()
@@ -294,7 +343,7 @@ struct ComposerView: View {
 
                 editorStandaloneToolButton(
                     systemName: "trash",
-                    accessibilityLabel: "Clear text",
+                    accessibilityLabel: "清空文本",
                     isEnabled: store.hasEditorText
                 ) {
                     store.clearText()
@@ -373,7 +422,7 @@ struct ComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!store.canSaveDraft)
-                .accessibilityLabel("Save draft")
+                .accessibilityLabel("保存草稿")
 
                 Button {
                     performEditorActionPreservingFocus {
@@ -441,10 +490,10 @@ struct ComposerView: View {
 
     private var historyAccessibilityLabel: String {
         if store.draftCount > 0 {
-            return "History and drafts, \(store.draftCount) drafts"
+            return "历史和草稿，\(store.draftCount) 条草稿"
         }
 
-        return "History and drafts"
+        return "历史和草稿"
     }
 
     private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
@@ -454,6 +503,17 @@ struct ComposerView: View {
     private func focusEditor() {
         collapseHeaderForEditing()
         isEditorFocused = true
+    }
+
+    @MainActor
+    private func requestInitialEditorFocusIfNeeded() async {
+        guard launchesIntoInputMode, !hasRequestedInitialEditorFocus else {
+            return
+        }
+
+        hasRequestedInitialEditorFocus = true
+        await Task.yield()
+        focusEditor()
     }
 
     private func performEditorActionPreservingFocus(_ action: () -> Void) {
@@ -604,54 +664,89 @@ private extension ComposerStore.ConnectionStatus {
     }
 }
 
-private struct ConnectionDiagnosticsSheet: View {
+private struct ComposerSettingsView: View {
+    @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+
+    var body: some View {
+        List {
+            Section {
+                Toggle("启动时进入输入状态", isOn: $launchesIntoInputMode)
+            } footer: {
+                Text("打开应用后自动聚焦输入框，并按键盘将要出现的状态显示主界面。")
+            }
+        }
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct DebugFeaturesView: View {
     @ObservedObject var store: ComposerStore
-    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            Section {
+                NavigationLink {
+                    ConnectionDiagnosticsView(store: store)
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("连接诊断")
+                            Text("查看连接状态、最近事件并导出诊断日志")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                }
+            }
+        }
+        .navigationTitle("调试功能")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ConnectionDiagnosticsView: View {
+    @ObservedObject var store: ComposerStore
     @State private var diagnosticExportShareItem: DiagnosticExportShareItem?
     @State private var diagnosticExportErrorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Session") {
-                    diagnosticRow("Role", store.diagnostics.role)
-                    diagnosticRow("Local Peer", store.diagnostics.localPeerName)
-                    diagnosticRow("Service", store.diagnostics.serviceType)
-                    diagnosticRow("State", store.diagnostics.connectionState.displayText)
-                    diagnosticRow("Discovered", store.diagnostics.discoveredPeersText)
-                    diagnosticRow("Invited", store.diagnostics.invitedPeersText)
-                    diagnosticRow("Connected", store.diagnostics.connectedPeersText)
+        List {
+            Section("会话") {
+                diagnosticRow("角色", store.diagnostics.role.localizedRoleText)
+                diagnosticRow("本机设备", store.diagnostics.localPeerName)
+                diagnosticRow("服务", store.diagnostics.serviceType)
+                diagnosticRow("状态", store.diagnostics.connectionState.localizedDisplayText)
+                diagnosticRow("已发现设备", store.diagnostics.discoveredPeers.localizedPeerListText)
+                diagnosticRow("已邀请设备", store.diagnostics.invitedPeers.localizedPeerListText)
+                diagnosticRow("已连接设备", store.diagnostics.connectedPeers.localizedPeerListText)
 
-                    if let error = store.diagnostics.lastErrorMessage {
-                        diagnosticRow("Last Error", error)
-                    }
-
-                    if let logURL = store.connectionDiagnosticLogFileURL {
-                        diagnosticRow("Log File", logURL.lastPathComponent)
-                    }
+                if let error = store.diagnostics.lastErrorMessage {
+                    diagnosticRow("最近错误", error.localizedDiagnosticMessageText)
                 }
 
-                Section("Recent Events") {
-                    ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
-                        DiagnosticEventRow(event: event)
-                    }
+                if let logURL = store.connectionDiagnosticLogFileURL {
+                    diagnosticRow("日志文件", logURL.lastPathComponent)
                 }
             }
-            .navigationTitle("Diagnostics")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if store.connectionDiagnosticLogFileURL != nil {
-                        Button {
-                            exportLog()
-                        } label: {
-                            Label("Export Log", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
+            Section("最近事件") {
+                ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
+                    DiagnosticEventRow(event: event)
+                }
+            }
+        }
+        .navigationTitle("连接诊断")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if store.connectionDiagnosticLogFileURL != nil {
+                    Button {
+                        exportLog()
+                    } label: {
+                        Label("导出日志", systemImage: "square.and.arrow.up")
                     }
                 }
             }
@@ -660,7 +755,7 @@ private struct ConnectionDiagnosticsSheet: View {
             ActivityView(activityItems: [shareItem.url])
         }
         .alert(
-            "Export Failed",
+            "导出失败",
             isPresented: Binding(
                 get: { diagnosticExportErrorMessage != nil },
                 set: { isPresented in
@@ -670,7 +765,7 @@ private struct ConnectionDiagnosticsSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button("好", role: .cancel) {}
         } message: {
             Text(diagnosticExportErrorMessage ?? "")
         }
@@ -726,7 +821,7 @@ private struct DiagnosticEventRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            Text(event.message)
+            Text(event.message.localizedDiagnosticMessageText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -748,9 +843,9 @@ private struct CarrierHistoryView: View {
         var title: String {
             switch self {
             case .drafts:
-                "Drafts"
+                "草稿"
             case .history:
-                "History"
+                "历史"
             }
         }
     }
@@ -820,11 +915,11 @@ private struct CarrierHistoryView: View {
                 .foregroundStyle(.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("History actions")
+        .accessibilityLabel("历史操作")
     }
 
     private var historyTabControl: some View {
-        Picker("History view", selection: $selectedTab) {
+        Picker("历史视图", selection: $selectedTab) {
             Text("")
                 .tag(HistoryTab.drafts)
             Text("")
@@ -846,7 +941,7 @@ private struct CarrierHistoryView: View {
     private var draftsContent: some View {
         if store.drafts.isEmpty {
             Section {
-                ContentUnavailableView("No drafts", systemImage: "tray")
+                ContentUnavailableView("暂无草稿", systemImage: "tray")
             } header: {
                 historyScrollableHeader
             }
@@ -874,7 +969,7 @@ private struct CarrierHistoryView: View {
     private var historyContent: some View {
         if store.outgoingHistory.isEmpty {
             Section {
-                ContentUnavailableView("No sent text", systemImage: "paperplane")
+                ContentUnavailableView("暂无发送记录", systemImage: "paperplane")
             } header: {
                 historyScrollableHeader
             }
@@ -910,27 +1005,27 @@ private struct CarrierHistoryView: View {
     private var currentSubtitle: String {
         switch selectedTab {
         case .drafts:
-            return "\(store.draftCount) drafts"
+            return "\(store.draftCount) 条草稿"
         case .history:
-            return "\(store.outgoingHistory.count) sent records"
+            return "\(store.outgoingHistory.count) 条发送记录"
         }
     }
 
     private var clearActionAccessibilityLabel: String {
         switch selectedTab {
         case .drafts:
-            "Clear all drafts"
+            "清空所有草稿"
         case .history:
-            "Clear sent history"
+            "清空发送历史"
         }
     }
 
     private var clearActionTitle: String {
         switch selectedTab {
         case .drafts:
-            "Clear Drafts"
+            "清空草稿"
         case .history:
-            "Clear History"
+            "清空历史"
         }
     }
 
@@ -978,10 +1073,10 @@ private struct HistoryTabLabelOverlay: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SegmentTabLabel(title: "Drafts", isSelected: isDraftsSelected)
+            SegmentTabLabel(title: "草稿", isSelected: isDraftsSelected)
                 .frame(maxWidth: .infinity)
 
-            SegmentTabLabel(title: "History", isSelected: isHistorySelected)
+            SegmentTabLabel(title: "历史", isSelected: isHistorySelected)
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 6)
@@ -1045,7 +1140,7 @@ private struct CarrierRecordRow: View {
     private var historyMetadataRow: some View {
         HStack(spacing: 7) {
             if !record.status.isCompactSuccess {
-                Text(record.status.displayText)
+                Text(record.status.localizedDisplayText)
                     .foregroundStyle(record.status.tint)
             }
 
@@ -1077,18 +1172,18 @@ private struct CarrierRecordDetailView: View {
 
     var body: some View {
         Form {
-            Section("Text") {
+            Section("文本") {
                 TextEditor(text: $editedText)
                     .font(.system(.body, design: .rounded))
                     .frame(minHeight: 220)
             }
 
-            Section("Status") {
-                LabeledContent("Type", value: record.kind.displayText)
-                LabeledContent("State", value: record.status.displayText)
-                LabeledContent("Updated", value: record.updatedAt.formatted(date: .abbreviated, time: .shortened))
+            Section("状态") {
+                LabeledContent("类型", value: record.kind.localizedDisplayText)
+                LabeledContent("状态", value: record.status.localizedDisplayText)
+                LabeledContent("更新时间", value: record.updatedAt.formatted(date: .abbreviated, time: .shortened))
                 if let detail = record.detail {
-                    Text(detail)
+                    Text(detail.localizedDiagnosticMessageText)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -1099,7 +1194,7 @@ private struct CarrierRecordDetailView: View {
                     store.loadIntoEditor(recordWithEditedText)
                     dismiss()
                 } label: {
-                    Label("Edit in Composer", systemImage: "square.and.pencil")
+                    Label("载入编辑器", systemImage: "square.and.pencil")
                 }
 
                 Button {
@@ -1107,25 +1202,25 @@ private struct CarrierRecordDetailView: View {
                     store.send(record: recordWithEditedText)
                     dismiss()
                 } label: {
-                    Label("Send Again", systemImage: "paperplane.fill")
+                    Label("再次发送", systemImage: "paperplane.fill")
                 }
                 .disabled(!CarrierPayload.canSend(editedText))
 
                 Button {
                     UIPasteboard.general.string = editedText
                 } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
+                    Label("复制", systemImage: "doc.on.doc")
                 }
 
                 Button(role: .destructive) {
                     store.delete(record)
                     dismiss()
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label("删除", systemImage: "trash")
                 }
             }
         }
-        .navigationTitle(record.kind == .draft ? "Draft" : "Sent Text")
+        .navigationTitle(record.kind == .draft ? "草稿" : "已发送文本")
     }
 
     private var recordWithEditedText: CarrierRecord {
@@ -1137,14 +1232,14 @@ private struct CarrierRecordDetailView: View {
 }
 
 private extension CarrierRecord.Kind {
-    var displayText: String {
+    var localizedDisplayText: String {
         switch self {
         case .draft:
-            "Draft"
+            "草稿"
         case .outgoing:
-            "Sent"
+            "已发送"
         case .incoming:
-            "Received"
+            "已接收"
         }
     }
 }
@@ -1159,22 +1254,22 @@ private extension CarrierRecord.Status {
         }
     }
 
-    var displayText: String {
+    var localizedDisplayText: String {
         switch self {
         case .draft:
-            "Draft"
+            "草稿"
         case .queued:
-            "Queued"
+            "排队中"
         case .sent:
-            "Sent"
+            "已发送"
         case .received:
-            "Received"
+            "已接收"
         case .pastePosted:
-            "Paste Attempted"
+            "粘贴已提交"
         case .pasteFailed:
-            "Paste Failed"
+            "粘贴失败"
         case .failed:
-            "Failed"
+            "失败"
         }
     }
 

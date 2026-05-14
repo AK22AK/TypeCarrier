@@ -11,7 +11,7 @@ settings:
     CLANG_ENABLE_MODULE_VERIFIER: YES
     DEAD_CODE_STRIPPING: YES
     SWIFT_VERSION: 6.0
-    MARKETING_VERSION: 1.0
+    MARKETING_VERSION: 0.1
     CURRENT_PROJECT_VERSION: 1
     ENABLE_USER_SCRIPT_SANDBOXING: NO
 configFiles:
@@ -52,10 +52,12 @@ targets:
       path: Apps/iOS/Info.plist
       properties:
         CFBundleDisplayName: TypeCarrier
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        NSLocalNetworkUsageDescription: TypeCarrier uses the local network to send text to your nearby Mac.
+        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。
         NSBonjourServices:
           - _typecarrier._tcp
     settings:
@@ -74,8 +76,9 @@ targets:
       path: Apps/macOS/Info.plist
       properties:
         CFBundleDisplayName: TypeCarrier
-        LSUIElement: true
-        NSLocalNetworkUsageDescription: TypeCarrier uses the local network to receive text from your nearby iPhone.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，接收附近 iPhone 发来的文本。
         NSBonjourServices:
           - _typecarrier._tcp
     entitlements:
@@ -85,6 +88,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac
+      configs:
+        Release:
+          ENABLE_HARDENED_RUNTIME: YES
 schemes:
   TypeCarrierCore:
     build:

@@ -12,18 +12,19 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
 
-    let carrierService: MultipeerCarrierService
+    @Published private(set) var carrierService: MultipeerCarrierService
     let connectionDiagnosticLogFileURL: URL?
+    private let receiverDisplayName: String
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
     private let permissionChecker = AccessibilityPermissionChecker()
-    private var cancellables: Set<AnyCancellable> = []
+    private var carrierServiceCancellable: AnyCancellable?
 
     init() {
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
-        carrierService = MultipeerCarrierService(
-            role: .receiver,
-            displayName: Host.current().localizedName ?? "TypeCarrier Mac",
+        receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
+        carrierService = Self.makeCarrierService(
+            displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         do {
@@ -34,23 +35,12 @@ final class MacCarrierStore: ObservableObject {
         } catch {
             recordStore = nil
             records = []
-            lastPasteResult = PasteInjectionResult(status: "History storage unavailable: \(error.localizedDescription)", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
-        carrierService.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-
+        bindCarrierService()
         refreshAccessibilityStatus()
         start()
-    }
-
-    var menuBarSystemImage: String {
-        if receiverHealthWarning != nil {
-            return "exclamationmark.triangle"
-        }
-
-        return carrierService.connectionState.isConnected ? "keyboard.badge.ellipsis" : "keyboard"
     }
 
     var connectionState: ConnectionState {
@@ -59,7 +49,7 @@ final class MacCarrierStore: ObservableObject {
 
     var receiverHealthWarning: String? {
         if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
-            return "Connection issue. Try Restart Receiver."
+            return "连接异常，请尝试重启接收器。"
         }
 
         return nil
@@ -67,7 +57,7 @@ final class MacCarrierStore: ObservableObject {
 
     var lastPayloadPreview: String {
         guard !lastPayloadText.isEmpty else {
-            return "No payload received"
+            return "尚未收到内容"
         }
 
         return String(lastPayloadText.prefix(160))
@@ -84,8 +74,22 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func restart() {
+        rebuildReceiverService(rebuiltReason: "receiver.restart.rebuilt")
+    }
+
+    private func rebuildReceiverService(rebuiltReason: String) {
         carrierService.stop()
+        carrierServiceCancellable = nil
+        carrierService = Self.makeCarrierService(
+            displayName: receiverDisplayName,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
+        bindCarrierService()
         start()
+        carrierService.recordDiagnosticMarker(
+            rebuiltReason,
+            message: "Created a fresh receiver service after restart."
+        )
     }
 
     func restartFromUserAction() {
@@ -149,6 +153,22 @@ final class MacCarrierStore: ObservableObject {
         restart()
     }
 
+    private static func makeCarrierService(
+        displayName: String,
+        diagnosticLogFileURL: URL?
+    ) -> MultipeerCarrierService {
+        MultipeerCarrierService(
+            role: .receiver,
+            displayName: displayName,
+            diagnosticLogFileURL: diagnosticLogFileURL
+        )
+    }
+
+    private func bindCarrierService() {
+        carrierServiceCancellable = carrierService.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
     private static func formattedDuration(_ duration: TimeInterval) -> String {
         guard duration.isFinite, duration >= 0 else {
             return "unknown"
@@ -172,7 +192,7 @@ final class MacCarrierStore: ObservableObject {
 
     func pasteTestText() {
         refreshAccessibilityStatus()
-        lastPasteResult = pasteInjector.paste(text: "Hello from TypeCarrier")
+        lastPasteResult = pasteInjector.paste(text: "来自 TypeCarrier 的测试文本")
         recordPasteDiagnostic(lastPasteResult)
     }
 
@@ -187,10 +207,10 @@ final class MacCarrierStore: ObservableObject {
         var updated = record
         updated.text = text
         updated.updatedAt = Date()
-        updated.detail = "Edited received text"
+        updated.detail = "已编辑接收文本"
 
         guard let recordStore else {
-            lastPasteResult = PasteInjectionResult(status: "History storage unavailable", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用", succeeded: false)
             return
         }
 
@@ -198,13 +218,13 @@ final class MacCarrierStore: ObservableObject {
             try recordStore.upsert(updated)
             syncRecords()
         } catch {
-            lastPasteResult = PasteInjectionResult(status: "Failed to update history: \(error.localizedDescription)", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "更新历史记录失败：\(error.localizedDescription)", succeeded: false)
         }
     }
 
     func delete(_ record: CarrierRecord) {
         guard let recordStore else {
-            lastPasteResult = PasteInjectionResult(status: "History storage unavailable", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用", succeeded: false)
             return
         }
 
@@ -212,7 +232,7 @@ final class MacCarrierStore: ObservableObject {
             try recordStore.delete(id: record.id)
             syncRecords()
         } catch {
-            lastPasteResult = PasteInjectionResult(status: "Failed to delete history: \(error.localizedDescription)", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "删除历史记录失败：\(error.localizedDescription)", succeeded: false)
         }
     }
 
@@ -231,11 +251,11 @@ final class MacCarrierStore: ObservableObject {
             text: payload.text,
             createdAt: now,
             updatedAt: now,
-            detail: "Received from iPhone"
+            detail: "来自 iPhone"
         )
 
         guard let recordStore else {
-            let detail = "History storage unavailable"
+            let detail = "历史记录存储不可用"
             lastPasteResult = PasteInjectionResult(status: detail, succeeded: false)
             sendReceipt(payloadID: payload.id, pasteStatus: .failed, detail: detail)
             return
@@ -245,7 +265,7 @@ final class MacCarrierStore: ObservableObject {
             try recordStore.upsert(record)
             syncRecords()
         } catch {
-            let detail = "Failed to save received text: \(error.localizedDescription)"
+            let detail = "保存接收文本失败：\(error.localizedDescription)"
             lastPasteResult = PasteInjectionResult(status: detail, succeeded: false)
             sendReceipt(payloadID: payload.id, pasteStatus: .failed, detail: detail)
             return
@@ -268,7 +288,7 @@ final class MacCarrierStore: ObservableObject {
         updated.detail = result.fullDetail
 
         guard let recordStore else {
-            lastPasteResult = PasteInjectionResult(status: "History storage unavailable", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用", succeeded: false)
             return
         }
 
@@ -276,7 +296,7 @@ final class MacCarrierStore: ObservableObject {
             try recordStore.upsert(updated)
             syncRecords()
         } catch {
-            lastPasteResult = PasteInjectionResult(status: "Failed to update paste result: \(error.localizedDescription)", succeeded: false)
+            lastPasteResult = PasteInjectionResult(status: "更新粘贴结果失败：\(error.localizedDescription)", succeeded: false)
         }
     }
 

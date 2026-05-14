@@ -3,7 +3,7 @@ import ApplicationServices
 import TypeCarrierCore
 
 struct PasteInjectionResult: Equatable {
-    static let idle = PasteInjectionResult(status: "Not tested", succeeded: false)
+    static let idle = PasteInjectionResult(status: "尚未测试", succeeded: false)
 
     let status: String
     let diagnosticDetail: String
@@ -34,7 +34,7 @@ struct PasteInjector {
         guard accessibilityChecker.isTrusted(prompt: false) else {
             trace.add("accessibilityTrusted", "false")
             return PasteInjectionResult(
-                status: "Accessibility permission required",
+                status: "需要辅助功能权限",
                 diagnosticDetail: trace.summary,
                 succeeded: false
             )
@@ -49,7 +49,7 @@ struct PasteInjector {
         guard pasteboard.setString(text, forType: .string) else {
             trace.add("pasteboardWrite", "failed")
             return PasteInjectionResult(
-                status: "Failed to write clipboard",
+                status: "写入剪贴板失败",
                 diagnosticDetail: trace.summary,
                 succeeded: false
             )
@@ -61,7 +61,7 @@ struct PasteInjector {
         guard postCommandV() else {
             trace.add("commandVPosted", "false")
             return PasteInjectionResult(
-                status: "Failed to post Command-V",
+                status: "发送 Command-V 失败",
                 diagnosticDetail: trace.summary,
                 succeeded: false
             )
@@ -79,7 +79,7 @@ struct PasteInjector {
                     delay: restoreDelay
                 )
                 return PasteInjectionResult(
-                    status: "Inserted \(text.count) characters in \(focusedTextTarget.targetDescription)",
+                    status: "已插入 \(text.count) 个字符到 \(focusedTextTarget.targetDescription)",
                     diagnosticDetail: trace.summary,
                     succeeded: true
                 )
@@ -107,7 +107,7 @@ struct PasteInjector {
                     delay: restoreDelay
                 )
                 return PasteInjectionResult(
-                    status: "Focused \(focusedTextTarget.targetDescription) did not accept Command-V",
+                    status: "当前焦点 \(focusedTextTarget.targetDescription) 未接受 Command-V",
                     diagnosticDetail: trace.summary,
                     succeeded: false
                 )
@@ -122,7 +122,7 @@ struct PasteInjector {
 
         trace.add("verification", "unavailable")
         return PasteInjectionResult(
-            status: "Posted paste command for \(text.count) characters",
+            status: "已发送粘贴指令，共 \(text.count) 个字符",
             diagnosticDetail: trace.summary,
             succeeded: true
         )
@@ -296,7 +296,7 @@ private struct FocusedTextTarget {
         updateSelectionAfterInsertedText(text, trace: &trace)
         trace.add("accessibilityFallback", "succeeded")
         return PasteInjectionResult(
-            status: "Inserted \(text.count) characters via Accessibility fallback in \(targetDescription)",
+            status: "已插入 \(text.count) 个字符（通过辅助功能兜底）到 \(targetDescription)",
             succeeded: true
         )
     }
