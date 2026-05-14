@@ -12,6 +12,19 @@ final class ComposerStore: ObservableObject {
         case sending
         case sent
         case failed(String)
+
+        var diagnosticName: String {
+            switch self {
+            case .idle:
+                "idle"
+            case .sending:
+                "sending"
+            case .sent:
+                "sent"
+            case .failed:
+                "failed"
+            }
+        }
     }
 
     enum ConnectionStatus: Equatable {
@@ -49,7 +62,7 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var draftLimitErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
-    let connectionDiagnosticLogFileURL: URL?
+    let debugDiagnosticLogFileURL: URL?
     private let recordStore: CarrierRecordStore?
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
@@ -68,11 +81,11 @@ final class ComposerStore: ObservableObject {
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
         )
-        connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-connection-events.jsonl")
+        debugDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-debug-events.jsonl")
         carrierService = MultipeerCarrierService(
             role: .sender,
             displayName: UIDevice.current.name,
-            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+            diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
             recordStore = try CarrierRecordStore(
@@ -248,20 +261,52 @@ final class ComposerStore: ObservableObject {
         start()
     }
 
-    func makeConnectionDiagnosticExportURL(now: Date = Date()) throws -> URL {
-        guard let connectionDiagnosticLogFileURL else {
+    func makeDebugDiagnosticExportURL(now: Date = Date()) throws -> URL {
+        guard let debugDiagnosticLogFileURL else {
             throw CarrierDiagnosticExportError.missingLogFile
         }
 
         carrierService.recordDiagnosticMarker(
             "diagnostic.exportPrepared",
-            message: "Prepared timestamped diagnostic export."
+            message: "Prepared timestamped debug diagnostic export."
         )
         return try CarrierDiagnosticExport.createTimestampedCopy(
-            sourceURL: connectionDiagnosticLogFileURL,
+            sourceURL: debugDiagnosticLogFileURL,
             directory: CarrierDiagnosticExport.defaultExportDirectory(),
-            prefix: "ios-connection-events",
+            prefix: "ios-debug-events",
             now: now
+        )
+    }
+
+    func recordEditorDiagnosticMarker(
+        _ name: String,
+        modelTextLength: Int,
+        visibleTextLength: Int,
+        visibleTextLengthAfterSync: Int? = nil,
+        isFocused: Bool,
+        isFirstResponder: Bool,
+        source: String
+    ) {
+        var parts = [
+            "source=\(source)",
+            "modelLength=\(modelTextLength)",
+            "visibleLength=\(visibleTextLength)",
+            "focused=\(isFocused)",
+            "firstResponder=\(isFirstResponder)",
+            "hasEditorText=\(hasEditorText)",
+            "canSend=\(canSend)",
+            "canSaveDraft=\(canSaveDraft)",
+            "sendState=\(sendState.diagnosticName)",
+            "editorResetGeneration=\(editorResetGeneration)"
+        ]
+
+        if let visibleTextLengthAfterSync {
+            parts.append("visibleLengthAfterSync=\(visibleTextLengthAfterSync)")
+        }
+
+        carrierService.recordDiagnosticMarker(
+            name,
+            message: parts.joined(separator: " ")
         )
     }
 
@@ -712,6 +757,7 @@ final class ComposerStore: ObservableObject {
         rebuildsEditorWhenEmptying: Bool = true
     ) {
         let previousText = text
+        let previousGeneration = editorResetGeneration
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
@@ -720,6 +766,14 @@ final class ComposerStore: ObservableObject {
             newText: newText,
             currentGeneration: editorResetGeneration,
             rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+        )
+        recordEditorTextReplacementDiagnostic(
+            source: "replaceEditorText",
+            previousTextLength: previousText.count,
+            newTextLength: newText.count,
+            previousGeneration: previousGeneration,
+            newGeneration: editorResetGeneration,
+            rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
         )
 
         if resetsHistory {
@@ -732,6 +786,7 @@ final class ComposerStore: ObservableObject {
         rebuildsEditorWhenEmptying: Bool = true
     ) {
         let previousText = text
+        let previousGeneration = editorResetGeneration
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
@@ -740,6 +795,39 @@ final class ComposerStore: ObservableObject {
             newText: newText,
             currentGeneration: editorResetGeneration,
             rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+        )
+        recordEditorTextReplacementDiagnostic(
+            source: "replaceEditorTextAfterUndoRedo",
+            previousTextLength: previousText.count,
+            newTextLength: newText.count,
+            previousGeneration: previousGeneration,
+            newGeneration: editorResetGeneration,
+            rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
+        )
+    }
+
+    private func recordEditorTextReplacementDiagnostic(
+        source: String,
+        previousTextLength: Int,
+        newTextLength: Int,
+        previousGeneration: Int,
+        newGeneration: Int,
+        rebuildsEditorWhenEmptying: Bool
+    ) {
+        carrierService.recordDiagnosticMarker(
+            "editor.modelTextReplaced",
+            message: [
+                "source=\(source)",
+                "previousLength=\(previousTextLength)",
+                "newLength=\(newTextLength)",
+                "previousGeneration=\(previousGeneration)",
+                "newGeneration=\(newGeneration)",
+                "rebuildsEditorWhenEmptying=\(rebuildsEditorWhenEmptying)",
+                "hasEditorText=\(hasEditorText)",
+                "canSend=\(canSend)",
+                "canSaveDraft=\(canSaveDraft)",
+                "sendState=\(sendState.diagnosticName)"
+            ].joined(separator: " ")
         )
     }
 }
