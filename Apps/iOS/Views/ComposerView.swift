@@ -106,13 +106,13 @@ struct ComposerView: View {
             let actionsY = expandedHeaderActionsY
 
             ZStack(alignment: .topLeading) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 27, weight: .semibold))
+                TypeCarrierHeaderLogoMark()
                     .frame(width: headerLogoSize, height: headerLogoSize)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .opacity(1 - progress)
                     .scaleEffect(interpolated(expanded: 1, compact: 0.88, progress: progress))
                     .offset(x: 0, y: logoY)
+                    .accessibilityHidden(true)
 
                 animatedHeaderTitle(progress: progress)
                     .frame(width: titleWidth, alignment: .topLeading)
@@ -636,6 +636,16 @@ struct ComposerView: View {
         48
     }
 
+}
+
+private struct TypeCarrierHeaderLogoMark: View {
+    var body: some View {
+        Image("TypeCarrierLogoMark")
+            .resizable()
+            .scaledToFit()
+            .padding(5)
+        .clipShape(Circle())
+    }
 }
 
 private struct HeaderHistoryButtonLabel: View {
