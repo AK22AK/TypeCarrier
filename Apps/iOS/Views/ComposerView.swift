@@ -644,7 +644,6 @@ private struct TypeCarrierHeaderLogoMark: View {
             .resizable()
             .scaledToFit()
             .padding(5)
-        .clipShape(Circle())
     }
 }
 

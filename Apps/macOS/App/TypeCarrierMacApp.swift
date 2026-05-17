@@ -153,9 +153,9 @@ private extension NSImage {
             ).fill()
         }
 
-        capsule(centerX: x(47), centerY: midY, width: 2.1 * unit, height: 12.3)
-        capsule(centerX: x(47), centerY: midY + 6.1, width: 7.0 * unit, height: 1.9)
-        capsule(centerX: x(47), centerY: midY - 6.1, width: 7.0 * unit, height: 1.9)
+        capsule(centerX: x(47), centerY: midY, width: 3.2 * unit, height: 10.6)
+        capsule(centerX: x(47), centerY: midY + 5.3, width: 7.2 * unit, height: 2.2)
+        capsule(centerX: x(47), centerY: midY - 5.3, width: 7.2 * unit, height: 2.2)
     }
 }
 
