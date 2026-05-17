@@ -12,6 +12,19 @@ final class ComposerStore: ObservableObject {
         case sending
         case sent
         case failed(String)
+
+        var diagnosticName: String {
+            switch self {
+            case .idle:
+                "idle"
+            case .sending:
+                "sending"
+            case .sent:
+                "sent"
+            case .failed:
+                "failed"
+            }
+        }
     }
 
     enum ConnectionStatus: Equatable {
@@ -49,10 +62,11 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var draftLimitErrorMessage: String?
 
     let carrierService: MultipeerCarrierService
-    let connectionDiagnosticLogFileURL: URL?
+    let debugDiagnosticLogFileURL: URL?
     private let recordStore: CarrierRecordStore?
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
+    private var pendingSendPreservesActiveInputSession = false
     private var hasStarted = false
     private let backgroundDisconnectGraceSeconds: TimeInterval
     private let resumeRecoverySearchTimeout: Duration = .seconds(25)
@@ -67,11 +81,11 @@ final class ComposerStore: ObservableObject {
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
         )
-        connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-connection-events.jsonl")
+        debugDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-debug-events.jsonl")
         carrierService = MultipeerCarrierService(
             role: .sender,
             displayName: UIDevice.current.name,
-            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+            diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
             recordStore = try CarrierRecordStore(
@@ -247,20 +261,52 @@ final class ComposerStore: ObservableObject {
         start()
     }
 
-    func makeConnectionDiagnosticExportURL(now: Date = Date()) throws -> URL {
-        guard let connectionDiagnosticLogFileURL else {
+    func makeDebugDiagnosticExportURL(now: Date = Date()) throws -> URL {
+        guard let debugDiagnosticLogFileURL else {
             throw CarrierDiagnosticExportError.missingLogFile
         }
 
         carrierService.recordDiagnosticMarker(
             "diagnostic.exportPrepared",
-            message: "Prepared timestamped diagnostic export."
+            message: "Prepared timestamped debug diagnostic export."
         )
         return try CarrierDiagnosticExport.createTimestampedCopy(
-            sourceURL: connectionDiagnosticLogFileURL,
+            sourceURL: debugDiagnosticLogFileURL,
             directory: CarrierDiagnosticExport.defaultExportDirectory(),
-            prefix: "ios-connection-events",
+            prefix: "ios-debug-events",
             now: now
+        )
+    }
+
+    func recordEditorDiagnosticMarker(
+        _ name: String,
+        modelTextLength: Int,
+        visibleTextLength: Int,
+        visibleTextLengthAfterSync: Int? = nil,
+        isFocused: Bool,
+        isFirstResponder: Bool,
+        source: String
+    ) {
+        var parts = [
+            "source=\(source)",
+            "modelLength=\(modelTextLength)",
+            "visibleLength=\(visibleTextLength)",
+            "focused=\(isFocused)",
+            "firstResponder=\(isFirstResponder)",
+            "hasEditorText=\(hasEditorText)",
+            "canSend=\(canSend)",
+            "canSaveDraft=\(canSaveDraft)",
+            "sendState=\(sendState.diagnosticName)",
+            "editorResetGeneration=\(editorResetGeneration)"
+        ]
+
+        if let visibleTextLengthAfterSync {
+            parts.append("visibleLengthAfterSync=\(visibleTextLengthAfterSync)")
+        }
+
+        carrierService.recordDiagnosticMarker(
+            name,
+            message: parts.joined(separator: " ")
         )
     }
 
@@ -395,7 +441,7 @@ final class ComposerStore: ObservableObject {
         backgroundStopTask = nil
     }
 
-    func send() {
+    func send(preservesActiveInputSession: Bool = false) {
         guard CarrierPayload.canSend(text) else {
             sendState = .failed("文本为空")
             return
@@ -429,6 +475,7 @@ final class ComposerStore: ObservableObject {
 
         pendingPayloadID = payload.id
         pendingRecordID = record.id
+        pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
 
         do {
@@ -441,6 +488,7 @@ final class ComposerStore: ObservableObject {
         } catch {
             pendingPayloadID = nil
             pendingRecordID = nil
+            pendingSendPreservesActiveInputSession = false
             updateRecord(
                 id: record.id,
                 status: .failed,
@@ -455,7 +503,7 @@ final class ComposerStore: ObservableObject {
         send()
     }
 
-    func saveDraft() {
+    func saveDraft(preservesActiveInputSession: Bool = false) {
         guard CarrierPayload.canSend(text) else {
             sendState = .failed("文本为空")
             return
@@ -486,7 +534,11 @@ final class ComposerStore: ObservableObject {
             syncRecords()
             sendState = .sent
             if EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded: true) {
-                replaceEditorText("", resetsHistory: true)
+                replaceEditorText(
+                    "",
+                    resetsHistory: true,
+                    rebuildsEditorWhenEmptying: !preservesActiveInputSession
+                )
             }
         } catch {
             sendState = .failed("保存草稿失败：\(error.localizedDescription)")
@@ -510,31 +562,37 @@ final class ComposerStore: ObservableObject {
         UIPasteboard.general.string = text
     }
 
-    func clearText() {
+    func clearText(preservesActiveInputSession: Bool = false) {
         guard hasEditorText else {
             return
         }
 
         textHistory.recordChange(from: text, to: "")
-        replaceEditorText("")
+        replaceEditorText("", rebuildsEditorWhenEmptying: !preservesActiveInputSession)
         sendState = .idle
     }
 
-    func undoTextChange() {
+    func undoTextChange(preservesActiveInputSession: Bool = false) {
         guard let previous = textHistory.undo(current: text) else {
             return
         }
 
-        replaceEditorTextAfterUndoRedo(previous)
+        replaceEditorTextAfterUndoRedo(
+            previous,
+            rebuildsEditorWhenEmptying: !preservesActiveInputSession
+        )
         sendState = .idle
     }
 
-    func redoTextChange() {
+    func redoTextChange(preservesActiveInputSession: Bool = false) {
         guard let next = textHistory.redo(current: text) else {
             return
         }
 
-        replaceEditorTextAfterUndoRedo(next)
+        replaceEditorTextAfterUndoRedo(
+            next,
+            rebuildsEditorWhenEmptying: !preservesActiveInputSession
+        )
         sendState = .idle
     }
 
@@ -655,7 +713,15 @@ final class ComposerStore: ObservableObject {
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
-            replaceEditorText("", resetsHistory: true)
+            let rebuildsEditorWhenEmptying = !pendingSendPreservesActiveInputSession
+            pendingSendPreservesActiveInputSession = false
+            replaceEditorText(
+                "",
+                resetsHistory: true,
+                rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
+            )
+        } else {
+            pendingSendPreservesActiveInputSession = false
         }
     }
 
@@ -687,16 +753,27 @@ final class ComposerStore: ObservableObject {
 
     private func replaceEditorText(
         _ newText: String,
-        resetsHistory: Bool = false
+        resetsHistory: Bool = false,
+        rebuildsEditorWhenEmptying: Bool = true
     ) {
         let previousText = text
+        let previousGeneration = editorResetGeneration
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGeneration(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+        )
+        recordEditorTextReplacementDiagnostic(
+            source: "replaceEditorText",
+            previousTextLength: previousText.count,
+            newTextLength: newText.count,
+            previousGeneration: previousGeneration,
+            newGeneration: editorResetGeneration,
+            rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
         )
 
         if resetsHistory {
@@ -704,15 +781,53 @@ final class ComposerStore: ObservableObject {
         }
     }
 
-    private func replaceEditorTextAfterUndoRedo(_ newText: String) {
+    private func replaceEditorTextAfterUndoRedo(
+        _ newText: String,
+        rebuildsEditorWhenEmptying: Bool = true
+    ) {
         let previousText = text
+        let previousGeneration = editorResetGeneration
         shouldRecordTextChange = false
         text = newText
         shouldRecordTextChange = true
         editorResetGeneration = EditorTextReplacementPolicy.nextEditorGenerationAfterUndoRedo(
             currentText: previousText,
             newText: newText,
-            currentGeneration: editorResetGeneration
+            currentGeneration: editorResetGeneration,
+            rebuildsWhenEmptying: rebuildsEditorWhenEmptying
+        )
+        recordEditorTextReplacementDiagnostic(
+            source: "replaceEditorTextAfterUndoRedo",
+            previousTextLength: previousText.count,
+            newTextLength: newText.count,
+            previousGeneration: previousGeneration,
+            newGeneration: editorResetGeneration,
+            rebuildsEditorWhenEmptying: rebuildsEditorWhenEmptying
+        )
+    }
+
+    private func recordEditorTextReplacementDiagnostic(
+        source: String,
+        previousTextLength: Int,
+        newTextLength: Int,
+        previousGeneration: Int,
+        newGeneration: Int,
+        rebuildsEditorWhenEmptying: Bool
+    ) {
+        carrierService.recordDiagnosticMarker(
+            "editor.modelTextReplaced",
+            message: [
+                "source=\(source)",
+                "previousLength=\(previousTextLength)",
+                "newLength=\(newTextLength)",
+                "previousGeneration=\(previousGeneration)",
+                "newGeneration=\(newGeneration)",
+                "rebuildsEditorWhenEmptying=\(rebuildsEditorWhenEmptying)",
+                "hasEditorText=\(hasEditorText)",
+                "canSend=\(canSend)",
+                "canSaveDraft=\(canSaveDraft)",
+                "sendState=\(sendState.diagnosticName)"
+            ].joined(separator: " ")
         )
     }
 }

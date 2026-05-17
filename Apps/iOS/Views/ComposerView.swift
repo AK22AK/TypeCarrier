@@ -10,7 +10,7 @@ struct ComposerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @StateObject private var store = ComposerStore()
-    @FocusState private var isEditorFocused: Bool
+    @State private var isEditorFocused = false
     @State private var showsDebugFeatures = false
     @State private var showsHistory = false
     @State private var showsSettings = false
@@ -81,6 +81,13 @@ struct ComposerView: View {
                 restoreHeaderAfterEditing()
             }
         }
+        .onChange(of: store.editorResetGeneration) { oldValue, newValue in
+            guard oldValue != newValue, isEditorFocused || pendingEditorRefocus else {
+                return
+            }
+
+            restoreEditorFocusAfterRebuild()
+        }
     }
 
     private var header: some View {
@@ -99,13 +106,13 @@ struct ComposerView: View {
             let actionsY = expandedHeaderActionsY
 
             ZStack(alignment: .topLeading) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 27, weight: .semibold))
+                TypeCarrierHeaderLogoMark()
                     .frame(width: headerLogoSize, height: headerLogoSize)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .opacity(1 - progress)
                     .scaleEffect(interpolated(expanded: 1, compact: 0.88, progress: progress))
                     .offset(x: 0, y: logoY)
+                    .accessibilityHidden(true)
 
                 animatedHeaderTitle(progress: progress)
                     .frame(width: titleWidth, alignment: .topLeading)
@@ -157,6 +164,7 @@ struct ComposerView: View {
             }
 
             Button {
+                prepareForChildNavigation()
                 showsHistory = true
             } label: {
                 HeaderHistoryButtonLabel(
@@ -170,12 +178,14 @@ struct ComposerView: View {
 
             Menu {
                 Button {
+                    prepareForChildNavigation()
                     showsSettings = true
                 } label: {
                     Label("设置", systemImage: "gearshape")
                 }
 
                 Button {
+                    prepareForChildNavigation()
                     showsDebugFeatures = true
                 } label: {
                     Label("调试功能", systemImage: "wrench.and.screwdriver")
@@ -251,21 +261,36 @@ struct ComposerView: View {
 
     private var editor: some View {
         ZStack(alignment: .bottom) {
-            TextField("输入或语音输入", text: $store.text, axis: .vertical)
-                .font(.system(.body, design: .rounded))
-                .lineLimit(1...10)
-                .submitLabel(.send)
-                .focused($isEditorFocused)
-                .onSubmit {
-                    if store.canSend {
+            ZStack(alignment: .topLeading) {
+                ComposerTextView(
+                    text: $store.text,
+                    isFocused: $isEditorFocused,
+                    onDiagnostic: recordEditorDiagnostic,
+                    onSubmit: {
+                        guard store.canSend else {
+                            return
+                        }
+
                         performEditorActionPreservingFocus {
-                            store.send()
+                            store.send(preservesActiveInputSession: true)
                         }
                     }
+                )
+
+                if store.text.isEmpty {
+                    Text("输入或语音输入")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                        .allowsHitTesting(false)
                 }
-                .padding(.bottom, editorAccessoryReservedHeight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .id(store.editorResetGeneration)
+            }
+            .padding(.bottom, editorAccessoryReservedHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .accessibilityLabel("输入或语音输入")
+            .accessibilityValue(store.text)
+            .accessibilityAction {
+                focusEditor()
+            }
 
             editorAccessoryBar
                 .padding(.horizontal, 4)
@@ -318,7 +343,7 @@ struct ComposerView: View {
                             accessibilityLabel: "撤销文本编辑",
                             isEnabled: store.canUndo
                         ) {
-                            store.undoTextChange()
+                            store.undoTextChange(preservesActiveInputSession: true)
                         }
 
                         editorToolButton(
@@ -326,7 +351,7 @@ struct ComposerView: View {
                             accessibilityLabel: "重做文本编辑",
                             isEnabled: store.canRedo
                         ) {
-                            store.redoTextChange()
+                            store.redoTextChange(preservesActiveInputSession: true)
                         }
                     }
                 }
@@ -346,7 +371,7 @@ struct ComposerView: View {
                     accessibilityLabel: "清空文本",
                     isEnabled: store.hasEditorText
                 ) {
-                    store.clearText()
+                    store.clearText(preservesActiveInputSession: true)
                 }
             }
         }
@@ -411,7 +436,7 @@ struct ComposerView: View {
 
                 Button {
                     performEditorActionPreservingFocus {
-                        store.saveDraft()
+                        store.saveDraft(preservesActiveInputSession: true)
                     }
                 } label: {
                     Image(systemName: "tray.and.arrow.down")
@@ -426,7 +451,7 @@ struct ComposerView: View {
 
                 Button {
                     performEditorActionPreservingFocus {
-                        store.send()
+                        store.send(preservesActiveInputSession: true)
                     }
                 } label: {
                     HStack(spacing: 8) {
@@ -505,6 +530,24 @@ struct ComposerView: View {
         isEditorFocused = true
     }
 
+    private func recordEditorDiagnostic(
+        _ name: String,
+        visibleTextLength: Int,
+        visibleTextLengthAfterSync: Int?,
+        isFirstResponder: Bool,
+        source: String
+    ) {
+        store.recordEditorDiagnosticMarker(
+            name,
+            modelTextLength: store.text.count,
+            visibleTextLength: visibleTextLength,
+            visibleTextLengthAfterSync: visibleTextLengthAfterSync,
+            isFocused: isEditorFocused,
+            isFirstResponder: isFirstResponder,
+            source: source
+        )
+    }
+
     @MainActor
     private func requestInitialEditorFocusIfNeeded() async {
         guard launchesIntoInputMode, !hasRequestedInitialEditorFocus else {
@@ -528,16 +571,29 @@ struct ComposerView: View {
     }
 
     private func restoreEditorFocusAfterRebuild() {
+        guard !pendingEditorRefocus else {
+            return
+        }
+
         pendingEditorRefocus = true
         collapseHeaderForEditing()
 
         Task { @MainActor in
             await Task.yield()
-            isEditorFocused = false
+            focusEditor()
             await Task.yield()
             pendingEditorRefocus = false
-            focusEditor()
         }
+    }
+
+    private func prepareForChildNavigation() {
+        guard isHeaderCollapsed || isEditorFocused || pendingEditorRefocus else {
+            return
+        }
+
+        pendingEditorRefocus = false
+        isEditorFocused = false
+        restoreHeaderAfterEditing()
     }
 
     private func collapseHeaderForEditing() {
@@ -580,6 +636,15 @@ struct ComposerView: View {
         48
     }
 
+}
+
+private struct TypeCarrierHeaderLogoMark: View {
+    var body: some View {
+        Image("TypeCarrierLogoMark")
+            .resizable()
+            .scaledToFit()
+            .padding(5)
+    }
 }
 
 private struct HeaderHistoryButtonLabel: View {
@@ -687,12 +752,12 @@ private struct DebugFeaturesView: View {
         List {
             Section {
                 NavigationLink {
-                    ConnectionDiagnosticsView(store: store)
+                    DebugDiagnosticsView(store: store)
                 } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("连接诊断")
-                            Text("查看连接状态、最近事件并导出诊断日志")
+                            Text("调试日志")
+                            Text("查看连接、输入框等调试事件并导出日志")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -707,7 +772,7 @@ private struct DebugFeaturesView: View {
     }
 }
 
-private struct ConnectionDiagnosticsView: View {
+private struct DebugDiagnosticsView: View {
     @ObservedObject var store: ComposerStore
     @State private var diagnosticExportShareItem: DiagnosticExportShareItem?
     @State private var diagnosticExportErrorMessage: String?
@@ -727,22 +792,22 @@ private struct ConnectionDiagnosticsView: View {
                     diagnosticRow("最近错误", error.localizedDiagnosticMessageText)
                 }
 
-                if let logURL = store.connectionDiagnosticLogFileURL {
+                if let logURL = store.debugDiagnosticLogFileURL {
                     diagnosticRow("日志文件", logURL.lastPathComponent)
                 }
             }
 
-            Section("最近事件") {
+            Section("最近调试事件") {
                 ForEach(Array(store.diagnostics.events.suffix(20).reversed())) { event in
                     DiagnosticEventRow(event: event)
                 }
             }
         }
-        .navigationTitle("连接诊断")
+        .navigationTitle("调试日志")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if store.connectionDiagnosticLogFileURL != nil {
+                if store.debugDiagnosticLogFileURL != nil {
                     Button {
                         exportLog()
                     } label: {
@@ -784,7 +849,7 @@ private struct ConnectionDiagnosticsView: View {
 
     private func exportLog() {
         do {
-            let exportURL = try store.makeConnectionDiagnosticExportURL()
+            let exportURL = try store.makeDebugDiagnosticExportURL()
             diagnosticExportShareItem = DiagnosticExportShareItem(url: exportURL)
         } catch {
             diagnosticExportErrorMessage = error.localizedDescription
@@ -1228,6 +1293,129 @@ private struct CarrierRecordDetailView: View {
         copy.text = editedText
         copy.updatedAt = Date()
         return copy
+    }
+}
+
+private struct ComposerTextView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    let onDiagnostic: (
+        _ name: String,
+        _ visibleTextLength: Int,
+        _ visibleTextLengthAfterSync: Int?,
+        _ isFirstResponder: Bool,
+        _ source: String
+    ) -> Void
+    let onSubmit: () -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.font = Self.editorFont
+        textView.textColor = .label
+        textView.tintColor = .systemBlue
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textContainerInset = .zero
+        textView.textContainer.lineFragmentPadding = 0
+        textView.keyboardDismissMode = .interactive
+        textView.returnKeyType = .send
+        textView.isScrollEnabled = true
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        return textView
+    }
+
+    func updateUIView(_ textView: UITextView, context: Context) {
+        context.coordinator.parent = self
+
+        if textView.text != text {
+            let visibleTextLength = textView.text.count
+            textView.text = text
+            onDiagnostic(
+                "editor.textSync",
+                visibleTextLength,
+                textView.text.count,
+                textView.isFirstResponder,
+                "updateUIView"
+            )
+        }
+
+        textView.font = Self.editorFont
+        textView.textColor = .label
+
+        if isFocused, !textView.isFirstResponder {
+            textView.becomeFirstResponder()
+        } else if !isFocused, textView.isFirstResponder {
+            textView.resignFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    private static var editorFont: UIFont {
+        let descriptor = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .body)
+        return UIFont(descriptor: descriptor.withDesign(.rounded) ?? descriptor, size: 0)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ComposerTextView
+
+        init(parent: ComposerTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent.isFocused = true
+            parent.onDiagnostic(
+                "editor.focusChanged",
+                textView.text.count,
+                nil,
+                textView.isFirstResponder,
+                "didBeginEditing"
+            )
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.isFocused = false
+            parent.onDiagnostic(
+                "editor.focusChanged",
+                textView.text.count,
+                nil,
+                textView.isFirstResponder,
+                "didEndEditing"
+            )
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            guard parent.text != textView.text else {
+                return
+            }
+
+            parent.text = textView.text
+        }
+
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText text: String
+        ) -> Bool {
+            guard text == "\n" else {
+                return true
+            }
+
+            parent.onDiagnostic(
+                "editor.submitKey",
+                textView.text.count,
+                nil,
+                textView.isFirstResponder,
+                "shouldChangeText"
+            )
+            parent.onSubmit()
+            return false
+        }
     }
 }
 
