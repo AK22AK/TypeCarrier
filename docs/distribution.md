@@ -1,5 +1,7 @@
 # 发行说明
 
+[English](distribution.en.md)
+
 TypeCarrier 将公开源码构建和官方签名发布分开处理。
 
 ## 本地开发
@@ -44,8 +46,9 @@ DEVELOPMENT_TEAM = YOURTEAMID
 首个 0.1 Beta 可以按 GitHub prerelease 处理：
 
 - iOS 端只发布源码和说明，不在 GitHub Release 上传可直接安装的 iOS 构建产物。
-- macOS 端可以上传 `.zip` 包，但面向公开下载时应使用 Developer ID Application 签名、开启 Hardened Runtime，并完成 notarization。
-- 如果只是给自己或非常小范围测试，可以先只发布源码 tag，或上传带明确说明的开发签名包；不要把它描述成对普通用户即开即用的正式安装包。
+- macOS 端随 release 上传 Apple Development / Personal Team 签名的测试包。
+- 这个 macOS 测试包不是 Developer ID notarized 正式包，Gatekeeper 可能拦截。
+- 不要把 0.1 Beta 的 macOS zip 描述成对普通用户即开即用的正式安装包。
 
 建议 tag 命名：
 
@@ -63,10 +66,10 @@ gh release create v0.1.0-beta.1 \
   --prerelease
 ```
 
-如果已经准备好 macOS zip，可以一并上传：
+如果已经准备好 macOS development zip，可以一并上传：
 
 ```sh
-gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1.zip
+gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1-development.zip
 ```
 
 ## macOS 本地打包
@@ -77,9 +80,17 @@ gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1.zip
 script/package_macos_release.sh
 ```
 
-脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>.zip` 及 SHA-256。
+脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>-development.zip` 及 SHA-256。
 
-当前公开仓库不提交真实签名材料。公开分发前，本机需要在 `Configs/Signing.local.xcconfig` 中配置发布签名，例如：
+0.1 默认生成 development 测试包：
+
+- 文件名：`TypeCarrierMac-0.1-1-development.zip`。
+- 签名：Apple Development / Personal Team。
+- Gatekeeper assessment 可能失败；脚本会输出 warning，但不会把它当作 0.1 development 包的构建失败。
+
+## 未来正式 macOS 包
+
+当前公开仓库不提交真实签名材料。未来要发布 Developer ID notarized 包时，本机需要在 `Configs/Signing.local.xcconfig` 中配置发布签名，例如：
 
 ```xcconfig
 TYPECARRIER_BUNDLE_PREFIX = ak22ak.typecarrier
@@ -87,10 +98,10 @@ DEVELOPMENT_TEAM = YOURTEAMID
 CODE_SIGN_IDENTITY[sdk=macosx*] = Developer ID Application
 ```
 
-如果 `spctl --assess` 仍然拒绝产物，通常说明还没有使用 Developer ID 签名，或 zip 内 app 尚未 notarize/staple。
+正式包还需要 Apple Developer Program、Developer ID Application 证书、notarytool 凭据、notarization、staple，并最终通过 `spctl --assess`。
 
 ## GitHub Actions
 
-公开 CI 只负责构建和测试验证，不负责正式商店发布。
+公开 CI 负责构建和测试验证。Release workflow 可以创建 GitHub prerelease draft，但不在 GitHub hosted runner 上保存签名私钥，也不生成正式签名包。
 
 如果后续要自动发布，建议优先考虑 Xcode Cloud 或 self-hosted Mac runner，并把签名材料和 App Store Connect key 放在受控的私有环境中。

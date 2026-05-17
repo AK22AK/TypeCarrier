@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to prepare"
+        required: true
+        default: "v0.1.0-beta.1"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-prerelease:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_tag="${{ inputs.tag }}"
+          fi
+
+          case "$release_tag" in
+            v0.1.0-beta.1)
+              release_title="TypeCarrier 0.1 Beta 1"
+              notes_file="docs/releases/0.1-beta.1.md"
+              ;;
+            *)
+              release_title="TypeCarrier ${release_tag#v}"
+              notes_file="docs/releases/0.1-beta.1.md"
+              ;;
+          esac
+
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "RELEASE_TITLE=$release_title" >> "$GITHUB_ENV"
+          echo "NOTES_FILE=$notes_file" >> "$GITHUB_ENV"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run project sanity checks
+        run: script/ci_sanity.sh
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Check Xcode compatibility
+        id: xcode
+        run: |
+          xcodebuild -version
+          version="$(xcodebuild -version | awk '/Xcode/ { print $2 }')"
+          major="${version%%.*}"
+          if [ "${major:-0}" -ge 26 ]; then
+            echo "supports_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "supports_build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping Xcode builds because this runner has Xcode $version. TypeCarrier currently targets iOS 26.0 and macOS 26.0."
+          fi
+
+      - name: Test core package
+        if: steps.xcode.outputs.supports_build == 'true'
+        run: |
+          xcodebuild \
+            -project TypeCarrier.xcodeproj \
+            -scheme TypeCarrierCore \
+            -destination 'platform=macOS' \
+            test
+
+      - name: Build macOS app
+        if: steps.xcode.outputs.supports_build == 'true'
+        run: |
+          xcodebuild \
+            -project TypeCarrier.xcodeproj \
+            -scheme TypeCarrierMac \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Build iOS app
+        if: steps.xcode.outputs.supports_build == 'true'
+        run: |
+          xcodebuild \
+            -project TypeCarrier.xcodeproj \
+            -scheme TypeCarrieriOS \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Create or update draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$NOTES_FILE" \
+              --prerelease \
+              --draft
+          else
+            gh release create "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$NOTES_FILE" \
+              --prerelease \
+              --draft \
+              --verify-tag
+          fi
+
+          echo "::notice::Draft prerelease is ready. Upload the local Personal Team macOS development zip manually if this release includes a binary asset."
