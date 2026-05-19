@@ -68,6 +68,18 @@ Upload the local macOS development zip when ready:
 gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1-development.zip
 ```
 
+### Post-Release Checks
+
+After publishing, verify in this order:
+
+1. The GitHub Release is marked as a prerelease, not a stable release.
+2. The Release page shows the macOS development zip and the matching `.sha256` file.
+3. The `.sha256` content matches `shasum -a 256 dist/TypeCarrierMac-0.1-1-development.zip`.
+4. The Release body keeps the beta positioning, iOS source-only note, macOS development signing limitation, and Gatekeeper risk.
+5. The tag points at the intended release commit, not a temporary local commit.
+6. If GitHub Actions skipped builds because of the runner Xcode version, rerun the release note verification commands locally before publishing.
+7. Download the GitHub asset once after publishing, unzip it, and confirm the app bundle version matches the release tag.
+
 ## macOS Local Packaging
 
 Generate a local macOS Release zip:

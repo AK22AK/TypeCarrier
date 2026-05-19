@@ -72,6 +72,18 @@ gh release create v0.1.0-beta.1 \
 gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1-development.zip
 ```
 
+### 发布后核对
+
+发布后按下面顺序确认：
+
+1. GitHub Release 标记为 prerelease，不是正式 stable release。
+2. Release 页面显示 macOS development zip 和对应 `.sha256` 文件。
+3. `.sha256` 内容与本地 `shasum -a 256 dist/TypeCarrierMac-0.1-1-development.zip` 输出一致。
+4. Release body 保留 beta 定位、iOS source-only 说明、macOS development 签名限制和 Gatekeeper 风险。
+5. 当前 tag 指向预期的发布 commit，而不是临时本地 commit。
+6. 如果 GitHub Actions 因 runner Xcode 版本跳过 build，发布前必须使用本机 Xcode 重新跑完 release note 里的验证命令。
+7. 发布后下载一次 GitHub asset，确认 zip 可以解压，app bundle 版本号与 release tag 对应。
+
 ## macOS 本地打包
 
 本地生成 macOS Release zip：
