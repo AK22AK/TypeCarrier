@@ -107,15 +107,17 @@ private struct ReceivedRecordRow: View {
                 Text(record.text)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Text(record.status.localizedDisplayText)
-                    Text(record.updatedAt, style: .time)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text(updatedTimestampText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private var updatedTimestampText: String {
+        CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
     }
 }
 
