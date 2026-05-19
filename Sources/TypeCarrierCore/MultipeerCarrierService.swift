@@ -6,6 +6,12 @@ import os
 extension MCPeerID: @unchecked @retroactive Sendable {}
 extension MCSessionState: @unchecked @retroactive Sendable {}
 
+private enum ReceiverDiscoveryInfo {
+    static let availabilityKey = "receiverAvailability"
+    static let availableValue = "available"
+    static let busyValue = "busy"
+}
+
 public struct CarrierDiagnosticEvent: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let timestamp: Date
@@ -85,12 +91,15 @@ public struct CarrierDiagnostics: Equatable, Sendable {
 
     public var connectionRecoverySuggestion: String? {
         guard role == "sender",
-              connectionState.isFailed,
-              !discoveredPeers.isEmpty else {
+              connectionState.isFailed else {
             return nil
         }
 
-        return "Try Restart Receiver on the Mac, then retry here."
+        if events.contains(where: { $0.name == "browser.foundBusyPeer" }) {
+            return "Disconnect the other iPhone or simulator from this Mac, then retry here."
+        }
+
+        return nil
     }
 
     fileprivate func updating(
@@ -151,6 +160,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private var envelopeHandler: ((CarrierEnvelope, MCPeerID) -> Void)?
     private let logger = Logger(subsystem: "ak22ak.typecarrier", category: "MultipeerCarrierService")
     private let maxDiagnosticEventCount = 50
+#if DEBUG
+    private var usesSimulatedDiscoveryForTesting = false
+#endif
 
     public init(
         role: Role,
@@ -264,10 +276,16 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     private func startAdvertising() {
         stopAdvertising()
-        let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: nil, serviceType: Self.serviceType)
+        let advertiser = MCNearbyServiceAdvertiser(
+            peer: peerID,
+            discoveryInfo: receiverDiscoveryInfo,
+            serviceType: Self.serviceType
+        )
         advertiser.delegate = self
         self.advertiser = advertiser
-        connectionState = .advertising
+        if !connectionState.isConnected {
+            connectionState = .advertising
+        }
         advertiser.startAdvertisingPeer()
         recordDiagnosticEvent("advertiser.start", message: "Advertising \(Self.serviceType)")
         logger.info("Started advertising peer")
@@ -303,7 +321,37 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         )
     }
 
-    private func rememberAndInvite(_ peerID: MCPeerID) {
+    private var receiverDiscoveryInfo: [String: String]? {
+        guard case .receiver = role else {
+            return nil
+        }
+
+        return [
+            ReceiverDiscoveryInfo.availabilityKey: receiverAvailabilityDiscoveryValue
+        ]
+    }
+
+    private var receiverAvailabilityDiscoveryValue: String {
+        isReceiverBusyForDiscovery ? ReceiverDiscoveryInfo.busyValue : ReceiverDiscoveryInfo.availableValue
+    }
+
+    private var isReceiverBusyForDiscovery: Bool {
+        !connectedPeerNames().isEmpty || activeReceiverPeerName != nil
+    }
+
+    private func refreshReceiverDiscoveryInfoIfAdvertising() {
+        guard case .receiver = role, advertiser != nil else {
+            return
+        }
+
+        startAdvertising()
+        recordDiagnosticEvent(
+            "advertiser.discoveryInfo.updated",
+            message: "availability=\(receiverAvailabilityDiscoveryValue)"
+        )
+    }
+
+    private func rememberDiscoveredPeer(_ peerID: MCPeerID) {
         let key = peerID.displayName
         knownPeerIDs[key] = peerID
 
@@ -311,6 +359,11 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             discoveredPeers.append(CarrierPeer(peerID: peerID))
             updateDiagnostics()
         }
+    }
+
+    private func rememberAndInvite(_ peerID: MCPeerID) {
+        let key = peerID.displayName
+        rememberDiscoveredPeer(peerID)
 
         guard !invitedPeerIDs.contains(key), session.connectedPeers.isEmpty else {
             logger.debug("Skipping invite peer=\(key, privacy: .public) alreadyInvited=\(self.invitedPeerIDs.contains(key), privacy: .public) connectedCount=\(self.session.connectedPeers.count, privacy: .public)")
@@ -330,6 +383,24 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         logger.info("Invited peer=\(key, privacy: .public)")
     }
 
+    private func handleBusyDiscoveredPeer(_ peerID: MCPeerID) {
+        let peerName = peerID.displayName
+        rememberDiscoveredPeer(peerID)
+        cancelSearchTimeout()
+        cancelConnectionTimeout()
+        cancelConnectionRetry()
+        stopBrowsing()
+        invitedPeerIDs.remove(peerName)
+        connectingPeerName = nil
+        lastErrorMessage = "\(peerName) is already connected to another device."
+        connectionState = .failed(lastErrorMessage ?? "Could not connect.")
+        recordDiagnosticEvent(
+            "browser.foundBusyPeer",
+            message: "Receiver advertised busy availability",
+            peerName: peerName
+        )
+    }
+
     private func handleSessionState(_ state: MCSessionState, peerID: MCPeerID) {
         logger.info("Session state peer=\(peerID.displayName, privacy: .public) state=\(self.sessionStateName(state), privacy: .public)")
 
@@ -345,6 +416,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             connectionState = .connected(peerID.displayName)
             if case .receiver = role {
                 activeReceiverPeerName = peerID.displayName
+                refreshReceiverDiscoveryInfoIfAdvertising()
             }
             recordDiagnosticEvent("session.connected", message: "Session connected", peerName: peerID.displayName)
         case .connecting:
@@ -366,6 +438,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
                     activeReceiverPeerName = nil
                 }
                 connectionState = .advertising
+                refreshReceiverDiscoveryInfoIfAdvertising()
             } else if case .connected = previousState {
                 replaceSession(reason: "session.resetAfterNotConnected", peerName: peerID.displayName)
                 returnToSearchingAfterConnectionAttempt()
@@ -479,8 +552,21 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             return
         }
 
-        recordDiagnosticEvent("browser.retryKnownPeer", message: "Retrying known peer", peerName: peerID.displayName)
-        rememberAndInvite(peerID)
+        let peerName = peerID.displayName
+        knownPeerIDs[peerName] = nil
+        invitedPeerIDs.remove(peerName)
+        discoveredPeers.removeAll { $0.id == peerName }
+        updateDiagnostics()
+        recordDiagnosticEvent("browser.retryKnownPeer", message: "Refreshing known peer discovery before retry", peerName: peerName)
+#if DEBUG
+        if usesSimulatedDiscoveryForTesting {
+            connectionState = .searching
+            scheduleSearchTimeout()
+            updateDiagnostics()
+            return
+        }
+#endif
+        startBrowsing()
     }
 
     private func finishConnectionRetryDelay() {
@@ -563,13 +649,22 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         scheduleSearchTimeout()
     }
 
-    func simulateFoundPeerForTesting(_ peerID: MCPeerID) {
+    func simulateFoundPeerForTesting(_ peerID: MCPeerID, discoveryInfo: [String: String]? = nil) {
+        usesSimulatedDiscoveryForTesting = true
         recordDiagnosticEvent("browser.foundPeer", message: "Found peer", peerName: peerID.displayName)
-        rememberAndInvite(peerID)
+        if Self.isBusyReceiverDiscoveryInfo(discoveryInfo) {
+            handleBusyDiscoveredPeer(peerID)
+        } else {
+            rememberAndInvite(peerID)
+        }
     }
 
     func simulateSessionStateForTesting(_ state: MCSessionState, peerID: MCPeerID) {
         handleSessionState(state, peerID: peerID)
+    }
+
+    var discoveryInfoForTesting: [String: String]? {
+        receiverDiscoveryInfo
     }
 #endif
 
@@ -654,6 +749,10 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private func isCurrentBrowser(_ browser: MCNearbyServiceBrowser) -> Bool {
         self.browser === browser
     }
+
+    private static func isBusyReceiverDiscoveryInfo(_ info: [String: String]?) -> Bool {
+        info?[ReceiverDiscoveryInfo.availabilityKey] == ReceiverDiscoveryInfo.busyValue
+    }
 }
 
 public enum CarrierServiceError: LocalizedError, Equatable, Sendable {
@@ -692,7 +791,11 @@ extension MultipeerCarrierService: MCNearbyServiceBrowserDelegate {
 
             self.logger.info("Found peer=\(peerID.displayName, privacy: .public)")
             self.recordDiagnosticEvent("browser.foundPeer", message: "Found peer", peerName: peerID.displayName)
-            self.rememberAndInvite(peerID)
+            if Self.isBusyReceiverDiscoveryInfo(info) {
+                self.handleBusyDiscoveredPeer(peerID)
+            } else {
+                self.rememberAndInvite(peerID)
+            }
         }
     }
 

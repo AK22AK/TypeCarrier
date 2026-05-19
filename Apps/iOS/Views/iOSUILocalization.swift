@@ -43,6 +43,11 @@ extension String {
     var localizedDiagnosticMessageText: String {
         self
             .replacingOccurrences(of: "Try Restart Receiver on the Mac, then retry here.", with: "请先在 Mac 上重启接收器，然后在这里重试。")
+            .replacingOccurrences(
+                of: "Disconnect the other iPhone or simulator from this Mac, then retry here.",
+                with: "请先断开另一台 iPhone 或模拟器与这台 Mac 的连接，然后在这里重试。"
+            )
+            .replacingOccurrences(of: " is already connected to another device.", with: " 已连接到另一台设备。")
             .replacingOccurrences(of: "Connection issue", with: "连接异常")
             .replacingOccurrences(of: "History storage unavailable", with: "历史记录存储不可用")
             .replacingOccurrences(of: "Failed to save history", with: "保存历史记录失败")

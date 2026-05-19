@@ -1332,12 +1332,12 @@ private struct ComposerTextView: UIViewRepresentable {
         if textView.text != text {
             let visibleTextLength = textView.text.count
             textView.text = text
-            onDiagnostic(
-                "editor.textSync",
-                visibleTextLength,
-                textView.text.count,
-                textView.isFirstResponder,
-                "updateUIView"
+            context.coordinator.recordDiagnosticAfterViewUpdate(
+                name: "editor.textSync",
+                visibleTextLength: visibleTextLength,
+                visibleTextLengthAfterSync: textView.text.count,
+                isFirstResponder: textView.isFirstResponder,
+                source: "updateUIView"
             )
         }
 
@@ -1368,24 +1368,24 @@ private struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFocused = true
-            parent.onDiagnostic(
-                "editor.focusChanged",
-                textView.text.count,
-                nil,
-                textView.isFirstResponder,
-                "didBeginEditing"
+            setFocusAfterViewUpdate(true)
+            recordDiagnosticAfterViewUpdate(
+                name: "editor.focusChanged",
+                visibleTextLength: textView.text.count,
+                visibleTextLengthAfterSync: nil,
+                isFirstResponder: textView.isFirstResponder,
+                source: "didBeginEditing"
             )
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFocused = false
-            parent.onDiagnostic(
-                "editor.focusChanged",
-                textView.text.count,
-                nil,
-                textView.isFirstResponder,
-                "didEndEditing"
+            setFocusAfterViewUpdate(false)
+            recordDiagnosticAfterViewUpdate(
+                name: "editor.focusChanged",
+                visibleTextLength: textView.text.count,
+                visibleTextLengthAfterSync: nil,
+                isFirstResponder: textView.isFirstResponder,
+                source: "didEndEditing"
             )
         }
 
@@ -1415,6 +1415,34 @@ private struct ComposerTextView: UIViewRepresentable {
             )
             parent.onSubmit()
             return false
+        }
+
+        func recordDiagnosticAfterViewUpdate(
+            name: String,
+            visibleTextLength: Int,
+            visibleTextLengthAfterSync: Int?,
+            isFirstResponder: Bool,
+            source: String
+        ) {
+            Task { @MainActor [weak self] in
+                self?.parent.onDiagnostic(
+                    name,
+                    visibleTextLength,
+                    visibleTextLengthAfterSync,
+                    isFirstResponder,
+                    source
+                )
+            }
+        }
+
+        private func setFocusAfterViewUpdate(_ isFocused: Bool) {
+            Task { @MainActor [weak self] in
+                guard let self, self.parent.isFocused != isFocused else {
+                    return
+                }
+
+                self.parent.isFocused = isFocused
+            }
         }
     }
 }

@@ -27,7 +27,7 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertEqual(ConnectionState.connected("MacBook Pro").peerName, "MacBook Pro")
     }
 
-    func testSenderFailureSuggestionExplainsMacReceiverRestartWhenPeerWasFound() {
+    func testSenderFailureSuggestionIsHiddenWhenPeerWasFoundWithoutConfirmedCause() {
         let diagnostics = CarrierDiagnostics(
             role: "sender",
             localPeerName: "iPhone",
@@ -37,9 +37,31 @@ final class ConnectionStateTests: XCTestCase {
             lastErrorMessage: "Could not connect to MacBook Pro."
         )
 
+        XCTAssertNil(diagnostics.connectionRecoverySuggestion)
+    }
+
+    func testSenderFailureSuggestionExplainsConfirmedBusyReceiver() {
+        let diagnostics = CarrierDiagnostics(
+            role: "sender",
+            localPeerName: "iPhone",
+            serviceType: "typecarrier",
+            connectionState: .failed("MacBook Pro is already connected to another device."),
+            discoveredPeers: ["MacBook Pro"],
+            lastErrorMessage: "MacBook Pro is already connected to another device.",
+            events: [
+                CarrierDiagnosticEvent(
+                    name: "browser.foundBusyPeer",
+                    message: "Receiver advertised busy availability",
+                    peerName: "MacBook Pro",
+                    connectionState: .failed("MacBook Pro is already connected to another device."),
+                    connectedPeers: []
+                )
+            ]
+        )
+
         XCTAssertEqual(
             diagnostics.connectionRecoverySuggestion,
-            "Try Restart Receiver on the Mac, then retry here."
+            "Disconnect the other iPhone or simulator from this Mac, then retry here."
         )
     }
 
