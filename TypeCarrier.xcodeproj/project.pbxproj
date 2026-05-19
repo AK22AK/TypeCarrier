@@ -40,12 +40,14 @@
 		83944AC0357B36329DC743F4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
+		9FF5E28E4BE80DFFCB1A42BE /* PasteFailureGuidance.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */; };
 		A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */; };
 		B1C2036907E336791A66DC4D /* TextInsertionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */; };
 		B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */; };
 		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
 		BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */; };
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
+		C02533A2C136AC2F4E2E56FC /* PasteFailureGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */; };
 		C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */; };
 		C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */; };
 		C523232758A6D1BFE48E6EFA /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -131,6 +133,7 @@
 		57CD706CDE712B3914E65FEB /* CarrierPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPayload.swift; sourceTree = "<group>"; };
 		57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecord.swift; sourceTree = "<group>"; };
 		61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
+		65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteFailureGuidanceTests.swift; sourceTree = "<group>"; };
 		6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteInjector.swift; sourceTree = "<group>"; };
 		6BEA6EDEDEE872D07FB2C5B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		708D83E7B24F1C9D10F184CC /* CarrierRecordTimestampFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordTimestampFormatter.swift; sourceTree = "<group>"; };
@@ -164,6 +167,7 @@
 		FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
 		FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacCarrierStore.swift; sourceTree = "<group>"; };
 		FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistory.swift; sourceTree = "<group>"; };
+		FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteFailureGuidance.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -205,6 +209,7 @@
 				C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */,
 				7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */,
 				23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */,
+				65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */,
 				1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */,
 				A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */,
 			);
@@ -286,6 +291,7 @@
 				CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */,
 				CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */,
 				0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */,
+				FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */,
 				FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */,
 				D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */,
 			);
@@ -556,6 +562,7 @@
 				A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */,
 				2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */,
 				70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */,
+				9FF5E28E4BE80DFFCB1A42BE /* PasteFailureGuidance.swift in Sources */,
 				B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */,
 				F1205DF3E291DA2763CDFB6D /* TextInsertionPolicy.swift in Sources */,
 			);
@@ -573,6 +580,7 @@
 				54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */,
 				61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */,
 				472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */,
+				C02533A2C136AC2F4E2E56FC /* PasteFailureGuidanceTests.swift in Sources */,
 				30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */,
 				B1C2036907E336791A66DC4D /* TextInsertionPolicyTests.swift in Sources */,
 			);

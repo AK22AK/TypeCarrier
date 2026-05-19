@@ -55,6 +55,10 @@ final class MacCarrierStore: ObservableObject {
         return nil
     }
 
+    var lastPasteRecoverySuggestion: String? {
+        lastPasteResult.recoverySuggestion
+    }
+
     var lastPayloadPreview: String {
         guard !lastPayloadText.isEmpty else {
             return "尚未收到内容"

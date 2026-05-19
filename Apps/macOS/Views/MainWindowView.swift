@@ -148,6 +148,9 @@ private struct ReceivedRecordDetail: View {
                 if let detail = record.detail {
                     detailRow("详情", detail.localizedPasteDetailText)
                 }
+                if let suggestion = record.pasteRecoverySuggestionText {
+                    detailRow("建议", suggestion)
+                }
             }
 
             HStack {
@@ -328,6 +331,11 @@ private struct ReceiverStatusInspector: View {
                         .foregroundStyle(.orange)
                 }
 
+                if let suggestion = store.lastPasteRecoverySuggestion {
+                    Label(suggestion, systemImage: "lightbulb")
+                        .foregroundStyle(.secondary)
+                }
+
                 if let lastError = diagnostics.lastErrorMessage {
                     statusLine("最近错误", lastError)
                 }
@@ -419,6 +427,17 @@ private extension CarrierRecord {
         default:
             status.localizedDisplayText
         }
+    }
+
+    var pasteRecoverySuggestionText: String? {
+        guard status == .pasteFailed else {
+            return nil
+        }
+
+        return PasteFailureGuidance.suggestion(
+            status: detail ?? pasteSummaryText,
+            detail: detail
+        )
     }
 }
 

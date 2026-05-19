@@ -24,6 +24,17 @@ struct PasteInjectionResult: Equatable {
 
         return "\(status) | \(diagnosticDetail)"
     }
+
+    var recoverySuggestion: String? {
+        guard !succeeded else {
+            return nil
+        }
+
+        return PasteFailureGuidance.suggestion(
+            status: status,
+            detail: diagnosticDetail
+        )
+    }
 }
 
 struct PasteInjector {
