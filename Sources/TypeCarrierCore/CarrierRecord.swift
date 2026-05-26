@@ -13,6 +13,7 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         case sent
         case received
         case pastePosted
+        case pasteUnverified
         case pasteFailed
         case failed
     }

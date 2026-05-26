@@ -675,28 +675,17 @@ final class ComposerStore: ObservableObject {
 
     private func handle(_ envelope: CarrierEnvelope) {
         if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
-            finishPendingSend(status: .sent, detail: "Mac 已确认收到")
+            finishPendingSend(
+                status: .received,
+                detail: "Mac 已确认收到",
+                pasteStatus: .received
+            )
         } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
-            switch receipt.pasteStatus {
-            case .received:
-                finishPendingSend(
-                    status: .received,
-                    detail: receipt.detail ?? "Mac 已接收并保存文本",
-                    pasteStatus: receipt.pasteStatus
-                )
-            case .posted:
-                finishPendingSend(
-                    status: .pastePosted,
-                    detail: receipt.detail ?? "Mac 已插入文本",
-                    pasteStatus: receipt.pasteStatus
-                )
-            case .failed:
-                finishPendingSend(
-                    status: .pasteFailed,
-                    detail: receipt.detail ?? "Mac 粘贴失败",
-                    pasteStatus: receipt.pasteStatus
-                )
-            }
+            finishPendingSend(
+                status: .received,
+                detail: receipt.detail ?? "Mac 已接收文本",
+                pasteStatus: receipt.pasteStatus
+            )
         }
     }
 

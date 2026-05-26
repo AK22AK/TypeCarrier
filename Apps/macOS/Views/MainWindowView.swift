@@ -146,12 +146,8 @@ private struct ReceivedRecordDetail: View {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                 detailRow("状态", record.status.localizedDisplayText)
                 detailRow("更新时间", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                detailRow("粘贴", record.pasteSummaryText)
                 if let detail = record.detail {
                     detailRow("详情", detail.localizedPasteDetailText)
-                }
-                if let suggestion = record.pasteRecoverySuggestionText {
-                    detailRow("建议", suggestion)
                 }
             }
 
@@ -333,11 +329,6 @@ private struct ReceiverStatusInspector: View {
                         .foregroundStyle(.orange)
                 }
 
-                if let suggestion = store.lastPasteRecoverySuggestion {
-                    Label(suggestion, systemImage: "lightbulb")
-                        .foregroundStyle(.secondary)
-                }
-
                 if let lastError = diagnostics.lastErrorMessage {
                     statusLine("最近错误", lastError)
                 }
@@ -417,32 +408,6 @@ private struct ReceiverStatusInspector: View {
     }
 }
 
-private extension CarrierRecord {
-    var pasteSummaryText: String {
-        switch status {
-        case .pastePosted:
-            "粘贴已提交"
-        case .pasteFailed:
-            "粘贴失败"
-        case .received:
-            "已接收"
-        default:
-            status.localizedDisplayText
-        }
-    }
-
-    var pasteRecoverySuggestionText: String? {
-        guard status == .pasteFailed else {
-            return nil
-        }
-
-        return PasteFailureGuidance.suggestion(
-            status: detail ?? pasteSummaryText,
-            detail: detail
-        )
-    }
-}
-
 private extension CarrierRecord.Status {
     var localizedDisplayText: String {
         switch self {
@@ -454,10 +419,8 @@ private extension CarrierRecord.Status {
             "已发送"
         case .received:
             "已接收"
-        case .pastePosted:
-            "粘贴已提交"
-        case .pasteFailed:
-            "粘贴失败"
+        case .pastePosted, .pasteUnverified, .pasteFailed:
+            "已接收"
         case .failed:
             "失败"
         }
@@ -471,20 +434,18 @@ private extension CarrierRecord.Status {
             "clock"
         case .sent:
             "paperplane"
-        case .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             "checkmark.circle"
-        case .pastePosted:
-            "checkmark.circle.fill"
-        case .pasteFailed, .failed:
+        case .failed:
             "exclamationmark.triangle.fill"
         }
     }
 
     var tint: Color {
         switch self {
-        case .pasteFailed, .failed:
+        case .failed:
             .red
-        case .pastePosted, .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             .green
         case .queued:
             .orange

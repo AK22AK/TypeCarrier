@@ -24,13 +24,6 @@ struct MenuBarContentView: View {
                     .lineLimit(2)
             }
 
-            if let suggestion = store.lastPasteRecoverySuggestion {
-                Text(suggestion)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-
             Divider()
 
             Button("打开 TypeCarrier") {

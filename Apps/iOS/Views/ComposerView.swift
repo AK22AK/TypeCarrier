@@ -1480,10 +1480,8 @@ private extension CarrierRecord.Status {
             "已发送"
         case .received:
             "已接收"
-        case .pastePosted:
-            "粘贴已提交"
-        case .pasteFailed:
-            "粘贴失败"
+        case .pastePosted, .pasteUnverified, .pasteFailed:
+            "已接收"
         case .failed:
             "失败"
         }
@@ -1497,23 +1495,19 @@ private extension CarrierRecord.Status {
             "clock"
         case .sent:
             "paperplane"
-        case .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             "checkmark.circle"
-        case .pastePosted:
-            "paperplane.circle"
-        case .pasteFailed, .failed:
+        case .failed:
             "exclamationmark.triangle.fill"
         }
     }
 
     var tint: Color {
         switch self {
-        case .pasteFailed, .failed:
+        case .failed:
             .red
-        case .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             .green
-        case .pastePosted:
-            .orange
         case .queued:
             .orange
         default:

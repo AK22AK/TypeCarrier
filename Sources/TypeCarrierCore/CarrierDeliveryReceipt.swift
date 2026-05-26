@@ -4,6 +4,7 @@ public struct CarrierDeliveryReceipt: Codable, Equatable, Sendable {
     public enum PasteStatus: String, Codable, Sendable {
         case received
         case posted
+        case unverifiedPosted
         case failed
     }
 

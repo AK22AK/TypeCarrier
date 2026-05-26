@@ -15,12 +15,7 @@ public enum EditorTextReplacementPolicy {
     public static func shouldClearEditorAfterDeliveryReceipt(
         _ pasteStatus: CarrierDeliveryReceipt.PasteStatus
     ) -> Bool {
-        switch pasteStatus {
-        case .posted:
-            true
-        case .received, .failed:
-            false
-        }
+        true
     }
 
     public static func shouldClearEditorAfterDraftSave(succeeded: Bool) -> Bool {

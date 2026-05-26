@@ -45,6 +45,22 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertNil(decoded.payload)
     }
 
+    func testReceiptEnvelopeRoundTripsUnverifiedPostedPasteResult() throws {
+        let payloadID = UUID(uuidString: "B5F45AA9-675D-4742-A189-19CF4DB34D8B")!
+        let receipt = CarrierDeliveryReceipt(
+            payloadID: payloadID,
+            receivedAt: Date(timeIntervalSince1970: 1_777_889_111),
+            pasteStatus: .unverifiedPosted,
+            detail: "Command-V posted, but target insertion could not be verified"
+        )
+        let envelope = CarrierEnvelope.receipt(receipt)
+
+        let decoded = try CarrierCodec.decode(try CarrierCodec.encode(envelope))
+
+        XCTAssertEqual(decoded.kind, .receipt)
+        XCTAssertEqual(decoded.receipt, receipt)
+    }
+
     func testBlankTextIsRejectedBeforeSending() {
         XCTAssertFalse(CarrierPayload.canSend(""))
         XCTAssertFalse(CarrierPayload.canSend(" \n\t "))

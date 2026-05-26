@@ -23,6 +23,16 @@ struct PasteFailureGuidanceTests {
         #expect(guidance == "确认 Mac 光标停在可输入文本框内；如果目标 App 不接受模拟粘贴，先手动粘贴剪贴板内容。")
     }
 
+    @Test("Unverified focus failures tell the user to use a text input or manual paste")
+    func unverifiedFocusFailureGuidance() {
+        let guidance = PasteFailureGuidance.suggestion(
+            status: "当前焦点不是可验证的文本输入框",
+            detail: "verification=unavailable"
+        )
+
+        #expect(guidance == "确认 Mac 光标停在可输入文本框内；如果目标 App 不接受模拟粘贴，先手动粘贴剪贴板内容。")
+    }
+
     @Test("Clipboard failures tell the user to retry after checking clipboard access")
     func clipboardFailureGuidance() {
         let guidance = PasteFailureGuidance.suggestion(

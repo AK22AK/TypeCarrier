@@ -12,6 +12,8 @@ public enum PasteFailureGuidance {
 
         if text.contains("未接受 Command-V")
             || text.contains("did not accept Command-V")
+            || text.contains("不是可验证的文本输入框")
+            || text.contains("verification=unavailable")
             || text.contains("发送 Command-V 失败")
             || text.contains("Failed to post Command-V") {
             return "确认 Mac 光标停在可输入文本框内；如果目标 App 不接受模拟粘贴，先手动粘贴剪贴板内容。"
