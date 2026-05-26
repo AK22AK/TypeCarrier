@@ -98,22 +98,17 @@ private struct ReceivedRecordRow: View {
     let record: CarrierRecord
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: record.status.systemImage)
-                .foregroundStyle(record.status.tint)
-                .frame(width: 16)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(record.text)
+                .lineLimit(1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(record.text)
-                    .lineLimit(1)
-
-                Text(updatedTimestampText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
+            Text(updatedTimestampText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
         }
         .padding(.vertical, 2)
+        .padding(.horizontal, 4)
     }
 
     private var updatedTimestampText: String {
@@ -144,7 +139,6 @@ private struct ReceivedRecordDetail: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 12))
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                detailRow("状态", record.status.localizedDisplayText)
                 detailRow("更新时间", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
                 if let detail = record.detail {
                     detailRow("详情", detail.localizedPasteDetailText)
@@ -196,18 +190,11 @@ private struct ReceivedRecordDetail: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("已接收文本")
-                    .font(.title2.weight(.semibold))
-                Text(record.updatedAt, style: .date)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Label(record.status.localizedDisplayText, systemImage: record.status.systemImage)
-                .foregroundStyle(record.status.tint)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("已接收文本")
+                .font(.title2.weight(.semibold))
+            Text(record.updatedAt, style: .date)
+                .foregroundStyle(.secondary)
         }
     }
 
