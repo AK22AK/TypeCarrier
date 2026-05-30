@@ -35,9 +35,9 @@ struct MainWindowView: View {
             }
         }
         .frame(
-            minWidth: 980,
-            idealWidth: 1_120,
-            maxWidth: 1_260,
+            minWidth: 860,
+            idealWidth: 980,
+            maxWidth: 1_160,
             minHeight: 600,
             idealHeight: 700
         )
@@ -159,18 +159,76 @@ private struct ReceivedRecordsListPane: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
-                ForEach(records) { record in
-                    ReceivedRecordRow(record: record)
-                        .tag(record.id)
-                }
-                .onDelete { offsets in
-                    for index in offsets {
-                        store.delete(records[index])
+                ForEach(groupedRecords) { group in
+                    Section {
+                        ForEach(group.records) { record in
+                            ReceivedRecordRow(record: record)
+                                .tag(record.id)
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                store.delete(group.records[index])
+                            }
+                        }
+                    } header: {
+                        Text(group.title)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .textCase(nil)
+                            .padding(.top, group.isFirst ? 0 : 18)
+                            .padding(.bottom, 6)
                     }
                 }
             }
         }
         .listStyle(.plain)
+    }
+
+    private var groupedRecords: [ReceivedRecordTimeGroup] {
+        ReceivedRecordTimeGroup.group(records)
+    }
+}
+
+private struct ReceivedRecordTimeGroup: Identifiable {
+    let id: String
+    let title: String
+    let records: [CarrierRecord]
+    let isFirst: Bool
+
+    static func group(_ records: [CarrierRecord], calendar: Calendar = .current, now: Date = Date()) -> [Self] {
+        let todayStart = calendar.startOfDay(for: now)
+        let weekStart = calendar.date(byAdding: .day, value: -7, to: todayStart) ?? todayStart
+        let monthStart = calendar.date(byAdding: .month, value: -1, to: todayStart) ?? todayStart
+
+        var today: [CarrierRecord] = []
+        var pastWeek: [CarrierRecord] = []
+        var pastMonth: [CarrierRecord] = []
+        var older: [CarrierRecord] = []
+
+        for record in records {
+            let timestamp = record.updatedAt
+            if calendar.isDate(timestamp, inSameDayAs: now) {
+                today.append(record)
+            } else if timestamp >= weekStart {
+                pastWeek.append(record)
+            } else if timestamp >= monthStart {
+                pastMonth.append(record)
+            } else {
+                older.append(record)
+            }
+        }
+
+        return [
+            ("today", "今天", today),
+            ("pastWeek", "过去一周", pastWeek),
+            ("pastMonth", "过去一个月", pastMonth),
+            ("older", "更早", older)
+        ]
+        .filter { !$0.2.isEmpty }
+        .enumerated()
+        .map { index, bucket in
+            Self(id: bucket.0, title: bucket.1, records: bucket.2, isFirst: index == 0)
+        }
     }
 }
 
@@ -210,9 +268,9 @@ private struct ReceivedRecordDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            editableText
-
             timestampMetadata
+
+            editableText
 
             if let detail = PasteFailureGuidance.userFacingRecordDetail(
                 status: record.status,
