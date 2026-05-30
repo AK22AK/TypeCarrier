@@ -14,13 +14,15 @@ final class CarrierRecordStoreTests: XCTestCase {
             text: "important dictated text",
             createdAt: Date(timeIntervalSince1970: 1_777_777_001),
             updatedAt: Date(timeIntervalSince1970: 1_777_777_001),
-            detail: nil
+            detail: nil,
+            sourceDeviceName: "jzj iPhone"
         )
 
         try store.upsert(record)
 
         let reloaded = try CarrierRecordStore(fileURL: url, limit: 200)
         XCTAssertEqual(reloaded.records, [record])
+        XCTAssertEqual(reloaded.records.first?.sourceDeviceName, "jzj iPhone")
     }
 
     func testStoreUpdatesDeletesAndPrunesNewestRecords() throws {

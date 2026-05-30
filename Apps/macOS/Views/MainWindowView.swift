@@ -13,7 +13,7 @@ struct MainWindowView: View {
             AppSidebar(
                 selectedSection: $selectedSection,
                 receivedCount: store.receivedHistory.count,
-                connectionStateText: store.connectionState.localizedDisplayText,
+                connectionState: store.connectionState,
                 hasConnectionWarning: store.receiverHealthWarning != nil
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
@@ -117,7 +117,7 @@ private enum MainWindowSection: String, Hashable, Identifiable {
 private struct AppSidebar: View {
     @Binding var selectedSection: MainWindowSection?
     let receivedCount: Int
-    let connectionStateText: String
+    let connectionState: ConnectionState
     let hasConnectionWarning: Bool
 
     var body: some View {
@@ -126,8 +126,17 @@ private struct AppSidebar: View {
                 .badge(receivedCount)
                 .tag(MainWindowSection.received)
 
-            Label("连接状态", systemImage: hasConnectionWarning ? "exclamationmark.triangle" : "antenna.radiowaves.left.and.right")
-                .badge(Text(connectionStateText))
+            HStack(spacing: 8) {
+                Label("连接状态", systemImage: "antenna.radiowaves.left.and.right")
+
+                Spacer(minLength: 8)
+
+                Image(systemName: connectionStatusImage)
+                    .imageScale(.small)
+                    .foregroundStyle(connectionStatusTint)
+                    .accessibilityLabel(connectionState.localizedDisplayText)
+            }
+            .help(connectionState.localizedDisplayText)
                 .tag(MainWindowSection.connectionStatus)
 
             Label("设置", systemImage: "gearshape")
@@ -143,6 +152,40 @@ private struct AppSidebar: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 18)
                 .padding(.bottom, 8)
+        }
+    }
+
+    private var connectionStatusImage: String {
+        if hasConnectionWarning {
+            return "exclamationmark.triangle.fill"
+        }
+
+        switch connectionState {
+        case .connected:
+            return "checkmark.circle.fill"
+        case .connecting, .reconnecting, .searching, .advertising:
+            return "dot.radiowaves.left.and.right"
+        case .idle:
+            return "circle"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var connectionStatusTint: Color {
+        if hasConnectionWarning {
+            return .orange
+        }
+
+        switch connectionState {
+        case .connected:
+            return .green
+        case .connecting, .reconnecting, .searching, .advertising:
+            return .orange
+        case .failed:
+            return .orange
+        case .idle:
+            return .secondary
         }
     }
 }
@@ -240,7 +283,7 @@ private struct ReceivedRecordRow: View {
             Text(record.text)
                 .lineLimit(1)
 
-            Text(updatedTimestampText)
+            Text(recordMetadataText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -249,8 +292,13 @@ private struct ReceivedRecordRow: View {
         .padding(.horizontal, 4)
     }
 
-    private var updatedTimestampText: String {
-        CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
+    private var recordMetadataText: String {
+        let timestamp = CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
+        guard let sourceDeviceName = record.sourceDeviceName, !sourceDeviceName.isEmpty else {
+            return timestamp
+        }
+
+        return "\(timestamp) · 来自 \(sourceDeviceName)"
     }
 }
 
@@ -284,7 +332,7 @@ private struct ReceivedRecordDetail: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 48)
-        .padding(.top, 28)
+        .padding(.top, 12)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .toolbar {
@@ -340,7 +388,7 @@ private struct ReceivedRecordDetail: View {
 
     private var timestampMetadata: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("接收于 \(CarrierRecordTimestampFormatter.historyListText(for: record.createdAt))")
+            Text(receivedMetadataText)
 
             if hasVisibleModificationTimestamp {
                 Text("修改于 \(CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt))")
@@ -353,6 +401,15 @@ private struct ReceivedRecordDetail: View {
 
     private var hasVisibleModificationTimestamp: Bool {
         abs(record.updatedAt.timeIntervalSince(record.createdAt)) >= 1
+    }
+
+    private var receivedMetadataText: String {
+        let timestamp = CarrierRecordTimestampFormatter.historyListText(for: record.createdAt)
+        guard let sourceDeviceName = record.sourceDeviceName, !sourceDeviceName.isEmpty else {
+            return "接收于 \(timestamp)"
+        }
+
+        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)"
     }
 
     private var editableText: some View {

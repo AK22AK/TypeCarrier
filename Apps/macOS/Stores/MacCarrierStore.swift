@@ -68,8 +68,8 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func start() {
-        carrierService.start { [weak self] envelope, _ in
-            self?.handle(envelope)
+        carrierService.start { [weak self] envelope, peerID in
+            self?.handle(envelope, from: peerID.displayName)
         }
     }
 
@@ -235,7 +235,7 @@ final class MacCarrierStore: ObservableObject {
         }
     }
 
-    private func handle(_ envelope: CarrierEnvelope) {
+    private func handle(_ envelope: CarrierEnvelope, from peerDisplayName: String) {
         guard envelope.kind == .text, let payload = envelope.payload else {
             return
         }
@@ -243,6 +243,7 @@ final class MacCarrierStore: ObservableObject {
         refreshAccessibilityStatus()
         lastPayloadText = payload.text
         let now = Date()
+        let sourceDeviceName = envelope.sender?.displayName ?? peerDisplayName
         let record = CarrierRecord(
             payloadID: payload.id,
             kind: .incoming,
@@ -250,7 +251,8 @@ final class MacCarrierStore: ObservableObject {
             text: payload.text,
             createdAt: now,
             updatedAt: now,
-            detail: "来自 iPhone"
+            detail: "来自 \(sourceDeviceName)",
+            sourceDeviceName: sourceDeviceName
         )
 
         guard let recordStore else {
@@ -271,7 +273,7 @@ final class MacCarrierStore: ObservableObject {
         sendReceipt(
             payloadID: payload.id,
             pasteStatus: .received,
-            detail: "Mac 已接收文本"
+            detail: "Mac 已接收来自 \(sourceDeviceName) 的文本"
         )
         lastPasteResult = pasteInjector.paste(text: payload.text)
         recordPasteDiagnostic(lastPasteResult)

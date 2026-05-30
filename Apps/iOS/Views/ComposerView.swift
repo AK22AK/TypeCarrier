@@ -2,8 +2,9 @@ import SwiftUI
 import TypeCarrierCore
 import UIKit
 
-private enum ComposerPreferenceKeys {
+enum ComposerPreferenceKeys {
     static let launchesIntoInputMode = "launchesIntoInputMode"
+    static let senderDisplayName = "senderDisplayName"
 }
 
 struct ComposerView: View {
@@ -46,7 +47,7 @@ struct ComposerView: View {
                 CarrierHistoryView(store: store)
             }
             .navigationDestination(isPresented: $showsSettings) {
-                ComposerSettingsView()
+                ComposerSettingsView(store: store)
             }
             .navigationDestination(isPresented: $showsDebugFeatures) {
                 DebugFeaturesView(store: store)
@@ -730,10 +731,40 @@ private extension ComposerStore.ConnectionStatus {
 }
 
 private struct ComposerSettingsView: View {
+    @ObservedObject var store: ComposerStore
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+    @State private var senderDisplayNameDraft: String
+
+    init(store: ComposerStore) {
+        self.store = store
+        _senderDisplayNameDraft = State(initialValue: store.customSenderDisplayName)
+    }
 
     var body: some View {
         List {
+            Section {
+                TextField("设备显示名称", text: $senderDisplayNameDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button("保存名称") {
+                    store.setCustomSenderDisplayName(senderDisplayNameDraft)
+                    senderDisplayNameDraft = store.customSenderDisplayName
+                }
+                .disabled(store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+
+                if !store.customSenderDisplayName.isEmpty {
+                    Button("使用系统名称", role: .destructive) {
+                        senderDisplayNameDraft = ""
+                        store.setCustomSenderDisplayName("")
+                    }
+                }
+            } header: {
+                Text("发送端名称")
+            } footer: {
+                Text("Mac 会显示为 \(store.senderDisplayName)。留空时使用系统提供的设备名称。")
+            }
+
             Section {
                 Toggle("启动时进入输入状态", isOn: $launchesIntoInputMode)
             } footer: {
