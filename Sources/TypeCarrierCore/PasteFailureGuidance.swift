@@ -1,6 +1,14 @@
 import Foundation
 
 public enum PasteFailureGuidance {
+    public static func userFacingRecordDetail(status _: CarrierRecord.Status, detail: String?) -> String? {
+        guard let detail, !detail.isEmpty else {
+            return nil
+        }
+
+        return suggestion(status: detail, detail: detail)
+    }
+
     public static func suggestion(status: String, detail: String? = nil) -> String? {
         let text = [status, detail].compactMap { $0 }.joined(separator: " ")
 

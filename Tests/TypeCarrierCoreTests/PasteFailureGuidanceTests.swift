@@ -52,4 +52,24 @@ struct PasteFailureGuidanceTests {
 
         #expect(guidance == nil)
     }
+
+    @Test("Successful paste diagnostics are hidden from record detail")
+    func successfulPasteDiagnosticsAreHiddenFromRecordDetail() {
+        let detail = PasteFailureGuidance.userFacingRecordDetail(
+            status: .received,
+            detail: "已发送粘贴指令，但无法验证目标输入框 | textChars=256; pasteboardWrite=success; commandVPosted=true"
+        )
+
+        #expect(detail == nil)
+    }
+
+    @Test("Failure diagnostics become recovery guidance in record detail")
+    func failureDiagnosticsBecomeRecoveryGuidanceInRecordDetail() {
+        let detail = PasteFailureGuidance.userFacingRecordDetail(
+            status: .pasteFailed,
+            detail: "已接收文本，但需要辅助功能权限才能自动粘贴 | accessibilityTrusted=false"
+        )
+
+        #expect(detail == "在系统设置中为 TypeCarrier 开启辅助功能权限，然后回到 Mac 端再测试粘贴。")
+    }
 }

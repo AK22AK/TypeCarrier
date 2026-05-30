@@ -5,38 +5,41 @@ import TypeCarrierCore
 struct MainWindowView: View {
     @ObservedObject var store: MacCarrierStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var isStatusInspectorPresented = false
+    @State private var selectedSection: MainWindowSection? = .received
     @State private var selectedRecordID: UUID?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            sidebar
-        } detail: {
-            DetailContainer(
-                selectedRecord: selectedRecord,
-                store: store,
-                isStatusInspectorPresented: $isStatusInspectorPresented
+            AppSidebar(
+                selectedSection: $selectedSection,
+                receivedCount: store.receivedHistory.count,
+                connectionStateText: store.connectionState.localizedDisplayText,
+                hasConnectionWarning: store.receiverHealthWarning != nil
             )
-        }
-        .inspector(isPresented: $isStatusInspectorPresented) {
-            ReceiverStatusInspector(store: store)
-                .inspectorColumnWidth(min: 220, ideal: 240, max: 260)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+        } content: {
+            contentColumn
+        } detail: {
+            detailColumn
         }
         .onAppear {
             store.refreshAccessibilityStatus()
-            selectedRecordID = selectedRecordID ?? store.receivedHistory.first?.id
+            ensureSelectedRecord()
         }
         .onChange(of: store.records) { _, _ in
-            if selectedRecordID == nil || selectedRecord == nil {
-                selectedRecordID = store.receivedHistory.first?.id
+            ensureSelectedRecord()
+        }
+        .onChange(of: selectedSection) { _, newValue in
+            if newValue == .received {
+                ensureSelectedRecord()
             }
         }
         .frame(
-            minWidth: 900,
-            idealWidth: 980,
-            maxWidth: 1_040,
-            minHeight: 560,
-            idealHeight: 620
+            minWidth: 980,
+            idealWidth: 1_120,
+            maxWidth: 1_260,
+            minHeight: 600,
+            idealHeight: 700
         )
     }
 
@@ -44,36 +47,37 @@ struct MainWindowView: View {
         store.receivedHistory.first { $0.id == selectedRecordID }
     }
 
-    private var sidebar: some View {
-        List(selection: $selectedRecordID) {
-            Section("已接收") {
-                if store.receivedHistory.isEmpty {
-                    Text("暂无接收文本")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.receivedHistory) { record in
-                        ReceivedRecordRow(record: record)
-                            .tag(record.id)
-                    }
-                    .onDelete { offsets in
-                        for index in offsets {
-                            store.delete(store.receivedHistory[index])
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.sidebar)
+    private var activeSection: MainWindowSection {
+        selectedSection ?? .received
     }
-}
 
-private struct DetailContainer: View {
-    let selectedRecord: CarrierRecord?
-    @ObservedObject var store: MacCarrierStore
-    @Binding var isStatusInspectorPresented: Bool
+    @ViewBuilder
+    private var contentColumn: some View {
+        switch activeSection {
+        case .received:
+            ReceivedRecordsListPane(
+                records: store.receivedHistory,
+                selectedRecordID: $selectedRecordID,
+                store: store
+            )
+            .navigationTitle("已接收文本")
+            .navigationSubtitle("\(store.receivedHistory.count) 个文本")
+            .navigationSplitViewColumnWidth(min: 270, ideal: 320, max: 380)
+        case .connectionStatus:
+            ContentUnavailableView("连接状态", systemImage: "antenna.radiowaves.left.and.right")
+                .navigationTitle("连接状态")
+                .navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 340)
+        case .settings:
+            ContentUnavailableView("设置", systemImage: "gearshape")
+                .navigationTitle("设置")
+                .navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 340)
+        }
+    }
 
-    var body: some View {
-        Group {
+    @ViewBuilder
+    private var detailColumn: some View {
+        switch activeSection {
+        case .received:
             if let selectedRecord {
                 ReceivedRecordDetail(record: selectedRecord, store: store)
                     .id(selectedRecord.id)
@@ -81,16 +85,83 @@ private struct DetailContainer: View {
                 ContentUnavailableView("选择一条接收记录", systemImage: "text.page")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        case .connectionStatus:
+            ReceiverStatusPage(store: store)
+        case .settings:
+            SettingsPlaceholderPage()
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                ReceiverStatusToolbarButton(
-                    store: store,
-                    isPresented: $isStatusInspectorPresented
-                )
+    }
+
+    private func ensureSelectedRecord() {
+        guard !store.receivedHistory.isEmpty else {
+            selectedRecordID = nil
+            return
+        }
+
+        if selectedRecordID == nil || selectedRecord == nil {
+            selectedRecordID = store.receivedHistory.first?.id
+        }
+    }
+}
+
+private enum MainWindowSection: String, Hashable, Identifiable {
+    case received
+    case connectionStatus
+    case settings
+
+    var id: Self {
+        self
+    }
+}
+
+private struct AppSidebar: View {
+    @Binding var selectedSection: MainWindowSection?
+    let receivedCount: Int
+    let connectionStateText: String
+    let hasConnectionWarning: Bool
+
+    var body: some View {
+        List(selection: $selectedSection) {
+            Label("接收列表", systemImage: "tray.and.arrow.down")
+                .badge(receivedCount)
+                .tag(MainWindowSection.received)
+
+            Label("连接状态", systemImage: hasConnectionWarning ? "exclamationmark.triangle" : "antenna.radiowaves.left.and.right")
+                .badge(Text(connectionStateText))
+                .tag(MainWindowSection.connectionStatus)
+
+            Label("设置", systemImage: "gearshape")
+                .tag(MainWindowSection.settings)
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("TypeCarrier")
+    }
+}
+
+private struct ReceivedRecordsListPane: View {
+    let records: [CarrierRecord]
+    @Binding var selectedRecordID: UUID?
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        List(selection: $selectedRecordID) {
+            if records.isEmpty {
+                Text("暂无接收文本")
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(records) { record in
+                    ReceivedRecordRow(record: record)
+                        .tag(record.id)
+                }
+                .onDelete { offsets in
+                    for index in offsets {
+                        store.delete(records[index])
+                    }
+                }
             }
-            .sharedBackgroundVisibility(.hidden)
         }
+        .listStyle(.plain)
     }
 }
 
@@ -120,6 +191,7 @@ private struct ReceivedRecordDetail: View {
     let record: CarrierRecord
     @ObservedObject var store: MacCarrierStore
     @State private var editedText: String
+    @State private var isDeleting = false
 
     init(record: CarrierRecord, store: MacCarrierStore) {
         self.record = record
@@ -129,176 +201,137 @@ private struct ReceivedRecordDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            header
+            editableText
 
-            TextEditor(text: $editedText)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 220)
-                .textEditorStyle(.plain)
-                .padding(8)
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            timestampMetadata
 
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                detailRow("更新时间", record.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                if let detail = record.detail {
-                    detailRow("详情", detail.localizedPasteDetailText)
-                }
+            if let detail = PasteFailureGuidance.userFacingRecordDetail(
+                status: record.status,
+                detail: record.detail
+            ) {
+                Label(detail, systemImage: "lightbulb")
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
-            HStack {
-                Button {
-                    store.updateText(for: record, text: editedText)
-                } label: {
-                    Label("保存修改", systemImage: "checkmark")
-                }
-
-                Button {
-                    var editedRecord = record
-                    editedRecord.text = editedText
-                    store.updateText(for: record, text: editedText)
-                    store.paste(record: editedRecord)
-                } label: {
-                    Label("再次粘贴", systemImage: "text.insert")
-                }
-
-                Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(editedText, forType: .string)
-                } label: {
-                    Label("复制", systemImage: "doc.on.doc")
-                }
-
-                if !store.accessibilityTrusted {
-                    Button {
-                        store.requestAccessibilityAccess()
-                    } label: {
-                        Label("请求辅助功能权限", systemImage: "lock.open")
-                    }
-                }
-
-                Spacer()
-
-                Button(role: .destructive) {
-                    store.delete(record)
-                } label: {
-                    Label("删除", systemImage: "trash")
-                }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 48)
+        .padding(.top, 28)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                recordActionButtons
             }
-            .buttonStyle(.glass)
+            .sharedBackgroundVisibility(.visible)
         }
-        .padding(24)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("已接收文本")
-                .font(.title2.weight(.semibold))
-            Text(record.updatedAt, style: .date)
-                .foregroundStyle(.secondary)
+        .toolbar(removing: .title)
+        .onDisappear {
+            saveEditedText()
         }
     }
 
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        GridRow {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .textSelection(.enabled)
-                .lineLimit(3)
-        }
-    }
-}
-
-private struct ReceiverStatusToolbarButton: View {
-    @ObservedObject var store: MacCarrierStore
-    @Binding var isPresented: Bool
-
-    var body: some View {
+    @ViewBuilder
+    private var recordActionButtons: some View {
         Button {
-            isPresented.toggle()
+            pasteEditedText()
         } label: {
-            Label {
-                Text(statusLabelText)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(statusTextTint)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } icon: {
-                Image(systemName: statusSystemImage)
-                    .foregroundStyle(statusTint)
-                    .imageScale(.medium)
+            Label("再次粘贴", systemImage: "text.insert")
+        }
+        .labelStyle(.iconOnly)
+        .help("再次粘贴")
+
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(editedText, forType: .string)
+        } label: {
+            Label("复制", systemImage: "doc.on.doc")
+        }
+        .labelStyle(.iconOnly)
+        .help("复制")
+
+        if !store.accessibilityTrusted {
+            Button {
+                store.requestAccessibilityAccess()
+            } label: {
+                Label("请求辅助功能权限", systemImage: "lock.open")
             }
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .frame(maxWidth: 180)
-            .contentShape(.capsule)
+            .labelStyle(.iconOnly)
+            .help("请求辅助功能权限")
         }
-        .buttonStyle(.accessoryBar)
-        .controlSize(.regular)
-        .help(statusTitle)
-        .accessibilityLabel(statusTitle)
+
+        Button(role: .destructive) {
+            isDeleting = true
+            store.delete(record)
+        } label: {
+            Label("删除", systemImage: "trash")
+        }
+        .labelStyle(.iconOnly)
+        .help("删除")
     }
 
-    private var statusTitle: String {
-        if store.receiverHealthWarning != nil {
-            return "接收器异常"
-        }
+    private var timestampMetadata: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("接收于 \(CarrierRecordTimestampFormatter.historyListText(for: record.createdAt))")
 
-        switch store.connectionState {
-        case .connected(let peerName):
-            return "已连接到 \(peerName)"
-        default:
-            return "接收器空闲"
+            if hasVisibleModificationTimestamp {
+                Text("修改于 \(CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt))")
+            }
         }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
     }
 
-    private var statusLabelText: String {
-        if store.receiverHealthWarning != nil {
-            return "连接异常"
-        }
-
-        switch store.connectionState {
-        case .connected(let peerName):
-            return peerName
-        default:
-            return "空闲"
-        }
+    private var hasVisibleModificationTimestamp: Bool {
+        abs(record.updatedAt.timeIntervalSince(record.createdAt)) >= 1
     }
 
-    private var statusSystemImage: String {
-        if store.receiverHealthWarning != nil {
-            return "exclamationmark.triangle.fill"
-        }
-
-        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
+    private var editableText: some View {
+        TextField("", text: $editedText, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(.system(size: 15.5, weight: .regular))
+            .lineSpacing(3)
+            .lineLimit(1...24)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private var statusTint: Color {
-        if store.receiverHealthWarning != nil {
-            return .orange
-        }
-
-        return store.connectionState.isConnected ? .green : .secondary
+    private var hasUnsavedChanges: Bool {
+        editedText != record.text
     }
 
-    private var statusTextTint: Color {
-        if store.receiverHealthWarning != nil {
-            return .orange
+    private func saveEditedText() {
+        guard !isDeleting else {
+            return
         }
 
-        return store.connectionState.isConnected ? .primary : .secondary
+        guard hasUnsavedChanges else {
+            return
+        }
+
+        store.updateText(for: record, text: editedText)
+    }
+
+    private func pasteEditedText() {
+        if hasUnsavedChanges {
+            store.updateText(for: record, text: editedText)
+        }
+
+        var editedRecord = record
+        editedRecord.text = editedText
+        store.paste(record: editedRecord)
     }
 }
 
-private struct ReceiverStatusInspector: View {
+private struct ReceiverStatusPage: View {
     @ObservedObject var store: MacCarrierStore
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 Text("连接状态")
-                    .font(.title3.weight(.semibold))
+                    .font(.title2.weight(.semibold))
 
                 VStack(alignment: .leading, spacing: 10) {
                     statusLine("状态", store.connectionState.localizedDisplayText)
@@ -369,9 +402,12 @@ private struct ReceiverStatusInspector: View {
                     }
                 }
             }
+            .frame(maxWidth: 640, alignment: .leading)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 48)
+        .padding(.top, 44)
+        .padding(.bottom, 28)
     }
 
     private var diagnostics: CarrierDiagnostics {
@@ -392,6 +428,13 @@ private struct ReceiverStatusInspector: View {
                 .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SettingsPlaceholderPage: View {
+    var body: some View {
+        ContentUnavailableView("设置", systemImage: "gearshape", description: Text("设置项稍后添加"))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
