@@ -134,7 +134,16 @@ private struct AppSidebar: View {
                 .tag(MainWindowSection.settings)
         }
         .listStyle(.sidebar)
-        .navigationTitle("TypeCarrier")
+        .navigationTitle("")
+        .safeAreaInset(edge: .top, spacing: 10) {
+            Text("TypeCarrier")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+        }
     }
 }
 
