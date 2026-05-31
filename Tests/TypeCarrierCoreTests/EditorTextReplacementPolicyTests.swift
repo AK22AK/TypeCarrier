@@ -38,11 +38,12 @@ struct EditorTextReplacementPolicyTests {
         #expect(generation == 4)
     }
 
-    @Test("Delivery receipts clear only after verified target insertion")
-    func deliveryReceiptsClearOnlyAfterVerifiedTargetInsertion() {
-        #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.received))
+    @Test("Delivery receipts clear after Mac receives the payload")
+    func deliveryReceiptsClearAfterMacReceivesThePayload() {
+        #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.received))
         #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.posted))
-        #expect(!EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.failed))
+        #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.unverifiedPosted))
+        #expect(EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(.failed))
     }
 
     @Test("Draft save clears editor only after local persistence succeeds")

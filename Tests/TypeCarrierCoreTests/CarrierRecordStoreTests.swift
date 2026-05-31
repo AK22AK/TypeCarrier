@@ -14,13 +14,15 @@ final class CarrierRecordStoreTests: XCTestCase {
             text: "important dictated text",
             createdAt: Date(timeIntervalSince1970: 1_777_777_001),
             updatedAt: Date(timeIntervalSince1970: 1_777_777_001),
-            detail: nil
+            detail: nil,
+            sourceDeviceName: "jzj iPhone"
         )
 
         try store.upsert(record)
 
         let reloaded = try CarrierRecordStore(fileURL: url, limit: 200)
         XCTAssertEqual(reloaded.records, [record])
+        XCTAssertEqual(reloaded.records.first?.sourceDeviceName, "jzj iPhone")
     }
 
     func testStoreUpdatesDeletesAndPrunesNewestRecords() throws {
@@ -43,14 +45,14 @@ final class CarrierRecordStoreTests: XCTestCase {
         XCTAssertEqual(store.records.map(\.text), ["message 4", "message 3", "message 2"])
 
         var updated = store.records[1]
-        updated.status = .pastePosted
-        updated.detail = "Pasted 9 characters"
+        updated.status = .pasteUnverified
+        updated.detail = "Command-V posted, but target insertion could not be verified"
         updated.updatedAt = baseDate.addingTimeInterval(10)
         try store.upsert(updated)
 
         XCTAssertEqual(store.records[0].id, updated.id)
-        XCTAssertEqual(store.records[0].status, .pastePosted)
-        XCTAssertEqual(store.records[0].detail, "Pasted 9 characters")
+        XCTAssertEqual(store.records[0].status, .pasteUnverified)
+        XCTAssertEqual(store.records[0].detail, "Command-V posted, but target insertion could not be verified")
 
         try store.delete(id: updated.id)
 

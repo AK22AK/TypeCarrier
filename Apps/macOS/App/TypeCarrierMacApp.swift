@@ -9,7 +9,7 @@ struct TypeCarrierMacApp: App {
         WindowGroup("TypeCarrier", id: "main") {
             MainWindowView(store: coordinator.store)
         }
-        .defaultSize(width: 980, height: 620)
+        .defaultSize(width: 900, height: 620)
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.presented)
 

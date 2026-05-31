@@ -1,5 +1,27 @@
 import Foundation
 
+public struct CarrierDeviceIdentity: Codable, Equatable, Sendable {
+    public let displayName: String
+
+    public init(displayName: String) {
+        self.displayName = Self.normalizedDisplayName(displayName)
+    }
+
+    public static func preferredDisplayName(customName: String?, systemName: String) -> String {
+        let customDisplayName = normalizedDisplayName(customName ?? "")
+        if !customDisplayName.isEmpty {
+            return customDisplayName
+        }
+
+        let systemDisplayName = normalizedDisplayName(systemName)
+        return systemDisplayName.isEmpty ? "iPhone" : systemDisplayName
+    }
+
+    private static func normalizedDisplayName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 public struct CarrierEnvelope: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
         case text
@@ -14,6 +36,7 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
     public let ackID: UUID?
     public let receipt: CarrierDeliveryReceipt?
     public let message: String?
+    public let sender: CarrierDeviceIdentity?
 
     public init(
         version: Int = 1,
@@ -21,7 +44,8 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
         payload: CarrierPayload? = nil,
         ackID: UUID? = nil,
         receipt: CarrierDeliveryReceipt? = nil,
-        message: String? = nil
+        message: String? = nil,
+        sender: CarrierDeviceIdentity? = nil
     ) {
         self.version = version
         self.kind = kind
@@ -29,10 +53,11 @@ public struct CarrierEnvelope: Codable, Equatable, Sendable {
         self.ackID = ackID
         self.receipt = receipt
         self.message = message
+        self.sender = sender
     }
 
-    public static func text(_ payload: CarrierPayload) -> CarrierEnvelope {
-        CarrierEnvelope(kind: .text, payload: payload)
+    public static func text(_ payload: CarrierPayload, sender: CarrierDeviceIdentity? = nil) -> CarrierEnvelope {
+        CarrierEnvelope(kind: .text, payload: payload, sender: sender)
     }
 
     public static func ack(_ id: UUID) -> CarrierEnvelope {

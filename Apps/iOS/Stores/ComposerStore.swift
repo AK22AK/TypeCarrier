@@ -60,10 +60,13 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var editorResetGeneration = 0
     @Published private(set) var draftLimitErrorMessage: String?
+    @Published private(set) var customSenderDisplayName: String
 
-    let carrierService: MultipeerCarrierService
+    @Published private(set) var carrierService: MultipeerCarrierService
     let debugDiagnosticLogFileURL: URL?
     private let recordStore: CarrierRecordStore?
+    private let systemDeviceName: String
+    private let userDefaults: UserDefaults
     private var pendingPayloadID: UUID?
     private var pendingRecordID: UUID?
     private var pendingSendPreservesActiveInputSession = false
@@ -74,17 +77,28 @@ final class ComposerStore: ObservableObject {
     private var foregroundRecovery: ForegroundConnectionRecovery
     private var textHistory = TextEditHistory()
     private var shouldRecordTextChange = true
+    private var carrierServiceCancellables: Set<AnyCancellable> = []
     private var cancellables: Set<AnyCancellable> = []
 
-    init(backgroundDisconnectGraceSeconds: TimeInterval = 12) {
+    init(
+        backgroundDisconnectGraceSeconds: TimeInterval = 12,
+        userDefaults: UserDefaults = .standard,
+        systemDeviceName: String = UIDevice.current.name
+    ) {
+        let storedCustomSenderDisplayName = userDefaults.string(forKey: ComposerPreferenceKeys.senderDisplayName) ?? ""
         self.backgroundDisconnectGraceSeconds = backgroundDisconnectGraceSeconds
+        self.userDefaults = userDefaults
+        self.systemDeviceName = systemDeviceName
+        customSenderDisplayName = storedCustomSenderDisplayName
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
         )
         debugDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "ios-debug-events.jsonl")
-        carrierService = MultipeerCarrierService(
-            role: .sender,
-            displayName: UIDevice.current.name,
+        carrierService = Self.makeCarrierService(
+            displayName: CarrierDeviceIdentity.preferredDisplayName(
+                customName: storedCustomSenderDisplayName,
+                systemName: systemDeviceName
+            ),
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
@@ -98,17 +112,7 @@ final class ComposerStore: ObservableObject {
             sendState = .failed("历史记录存储不可用：\(error.localizedDescription)")
         }
 
-        carrierService.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-
-        carrierService.$connectionState
-            .sink { [weak self] state in
-                Task { @MainActor [weak self] in
-                    self?.handleConnectionStateChanged(state)
-                }
-            }
-            .store(in: &cancellables)
+        bindCarrierService()
 
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
@@ -141,6 +145,13 @@ final class ComposerStore: ObservableObject {
 
     var diagnostics: CarrierDiagnostics {
         carrierService.diagnostics
+    }
+
+    var senderDisplayName: String {
+        CarrierDeviceIdentity.preferredDisplayName(
+            customName: customSenderDisplayName,
+            systemName: systemDeviceName
+        )
     }
 
     var canSend: Bool {
@@ -261,6 +272,24 @@ final class ComposerStore: ObservableObject {
         start()
     }
 
+    func setCustomSenderDisplayName(_ name: String) {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let oldDisplayName = senderDisplayName
+        customSenderDisplayName = normalizedName
+
+        if normalizedName.isEmpty {
+            userDefaults.removeObject(forKey: ComposerPreferenceKeys.senderDisplayName)
+        } else {
+            userDefaults.set(normalizedName, forKey: ComposerPreferenceKeys.senderDisplayName)
+        }
+
+        guard senderDisplayName != oldDisplayName else {
+            return
+        }
+
+        rebuildSenderService(rebuiltReason: "sender.displayName.updated")
+    }
+
     func makeDebugDiagnosticExportURL(now: Date = Date()) throws -> URL {
         guard let debugDiagnosticLogFileURL else {
             throw CarrierDiagnosticExportError.missingLogFile
@@ -276,6 +305,56 @@ final class ComposerStore: ObservableObject {
             prefix: "ios-debug-events",
             now: now
         )
+    }
+
+    private static func makeCarrierService(
+        displayName: String,
+        diagnosticLogFileURL: URL?
+    ) -> MultipeerCarrierService {
+        MultipeerCarrierService(
+            role: .sender,
+            displayName: displayName,
+            diagnosticLogFileURL: diagnosticLogFileURL
+        )
+    }
+
+    private func rebuildSenderService(rebuiltReason: String) {
+        let shouldRestart = hasStarted
+        carrierService.stop()
+        carrierServiceCancellables.removeAll()
+        carrierService = Self.makeCarrierService(
+            displayName: senderDisplayName,
+            diagnosticLogFileURL: debugDiagnosticLogFileURL
+        )
+        bindCarrierService()
+        hasStarted = false
+
+        guard shouldRestart else {
+            return
+        }
+
+        sendState = .idle
+        start()
+        carrierService.recordDiagnosticMarker(
+            rebuiltReason,
+            message: "Created a fresh sender service with displayName=\(senderDisplayName)."
+        )
+    }
+
+    private func bindCarrierService() {
+        carrierServiceCancellables.removeAll()
+
+        carrierService.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &carrierServiceCancellables)
+
+        carrierService.$connectionState
+            .sink { [weak self] state in
+                Task { @MainActor [weak self] in
+                    self?.handleConnectionStateChanged(state)
+                }
+            }
+            .store(in: &carrierServiceCancellables)
     }
 
     func recordEditorDiagnosticMarker(
@@ -479,7 +558,10 @@ final class ComposerStore: ObservableObject {
         sendState = .sending
 
         do {
-            try carrierService.send(.text(payload))
+            try carrierService.send(.text(
+                payload,
+                sender: CarrierDeviceIdentity(displayName: senderDisplayName)
+            ))
             updateRecord(
                 id: record.id,
                 status: .sent,
@@ -675,28 +757,17 @@ final class ComposerStore: ObservableObject {
 
     private func handle(_ envelope: CarrierEnvelope) {
         if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
-            finishPendingSend(status: .sent, detail: "Mac 已确认收到")
+            finishPendingSend(
+                status: .received,
+                detail: "Mac 已确认收到",
+                pasteStatus: .received
+            )
         } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
-            switch receipt.pasteStatus {
-            case .received:
-                finishPendingSend(
-                    status: .received,
-                    detail: receipt.detail ?? "Mac 已接收并保存文本",
-                    pasteStatus: receipt.pasteStatus
-                )
-            case .posted:
-                finishPendingSend(
-                    status: .pastePosted,
-                    detail: receipt.detail ?? "Mac 已插入文本",
-                    pasteStatus: receipt.pasteStatus
-                )
-            case .failed:
-                finishPendingSend(
-                    status: .pasteFailed,
-                    detail: receipt.detail ?? "Mac 粘贴失败",
-                    pasteStatus: receipt.pasteStatus
-                )
-            }
+            finishPendingSend(
+                status: .received,
+                detail: receipt.detail ?? "Mac 已接收文本",
+                pasteStatus: receipt.pasteStatus
+            )
         }
     }
 

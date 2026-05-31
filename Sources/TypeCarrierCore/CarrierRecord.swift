@@ -13,6 +13,7 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         case sent
         case received
         case pastePosted
+        case pasteUnverified
         case pasteFailed
         case failed
     }
@@ -25,6 +26,7 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
     public let createdAt: Date
     public var updatedAt: Date
     public var detail: String?
+    public var sourceDeviceName: String?
 
     public init(
         id: UUID = UUID(),
@@ -34,7 +36,8 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         text: String,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        detail: String? = nil
+        detail: String? = nil,
+        sourceDeviceName: String? = nil
     ) {
         self.id = id
         self.payloadID = payloadID
@@ -44,5 +47,6 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.detail = detail
+        self.sourceDeviceName = sourceDeviceName
     }
 }

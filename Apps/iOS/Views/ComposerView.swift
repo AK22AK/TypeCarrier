@@ -2,8 +2,9 @@ import SwiftUI
 import TypeCarrierCore
 import UIKit
 
-private enum ComposerPreferenceKeys {
+enum ComposerPreferenceKeys {
     static let launchesIntoInputMode = "launchesIntoInputMode"
+    static let senderDisplayName = "senderDisplayName"
 }
 
 struct ComposerView: View {
@@ -46,7 +47,7 @@ struct ComposerView: View {
                 CarrierHistoryView(store: store)
             }
             .navigationDestination(isPresented: $showsSettings) {
-                ComposerSettingsView()
+                ComposerSettingsView(store: store)
             }
             .navigationDestination(isPresented: $showsDebugFeatures) {
                 DebugFeaturesView(store: store)
@@ -730,10 +731,40 @@ private extension ComposerStore.ConnectionStatus {
 }
 
 private struct ComposerSettingsView: View {
+    @ObservedObject var store: ComposerStore
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+    @State private var senderDisplayNameDraft: String
+
+    init(store: ComposerStore) {
+        self.store = store
+        _senderDisplayNameDraft = State(initialValue: store.customSenderDisplayName)
+    }
 
     var body: some View {
         List {
+            Section {
+                TextField("设备显示名称", text: $senderDisplayNameDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button("保存名称") {
+                    store.setCustomSenderDisplayName(senderDisplayNameDraft)
+                    senderDisplayNameDraft = store.customSenderDisplayName
+                }
+                .disabled(store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+
+                if !store.customSenderDisplayName.isEmpty {
+                    Button("使用系统名称", role: .destructive) {
+                        senderDisplayNameDraft = ""
+                        store.setCustomSenderDisplayName("")
+                    }
+                }
+            } header: {
+                Text("发送端名称")
+            } footer: {
+                Text("Mac 会显示为 \(store.senderDisplayName)。留空时使用系统提供的设备名称。")
+            }
+
             Section {
                 Toggle("启动时进入输入状态", isOn: $launchesIntoInputMode)
             } footer: {
@@ -1332,12 +1363,12 @@ private struct ComposerTextView: UIViewRepresentable {
         if textView.text != text {
             let visibleTextLength = textView.text.count
             textView.text = text
-            onDiagnostic(
-                "editor.textSync",
-                visibleTextLength,
-                textView.text.count,
-                textView.isFirstResponder,
-                "updateUIView"
+            context.coordinator.recordDiagnosticAfterViewUpdate(
+                name: "editor.textSync",
+                visibleTextLength: visibleTextLength,
+                visibleTextLengthAfterSync: textView.text.count,
+                isFirstResponder: textView.isFirstResponder,
+                source: "updateUIView"
             )
         }
 
@@ -1368,24 +1399,24 @@ private struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            parent.isFocused = true
-            parent.onDiagnostic(
-                "editor.focusChanged",
-                textView.text.count,
-                nil,
-                textView.isFirstResponder,
-                "didBeginEditing"
+            setFocusAfterViewUpdate(true)
+            recordDiagnosticAfterViewUpdate(
+                name: "editor.focusChanged",
+                visibleTextLength: textView.text.count,
+                visibleTextLengthAfterSync: nil,
+                isFirstResponder: textView.isFirstResponder,
+                source: "didBeginEditing"
             )
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            parent.isFocused = false
-            parent.onDiagnostic(
-                "editor.focusChanged",
-                textView.text.count,
-                nil,
-                textView.isFirstResponder,
-                "didEndEditing"
+            setFocusAfterViewUpdate(false)
+            recordDiagnosticAfterViewUpdate(
+                name: "editor.focusChanged",
+                visibleTextLength: textView.text.count,
+                visibleTextLengthAfterSync: nil,
+                isFirstResponder: textView.isFirstResponder,
+                source: "didEndEditing"
             )
         }
 
@@ -1415,6 +1446,34 @@ private struct ComposerTextView: UIViewRepresentable {
             )
             parent.onSubmit()
             return false
+        }
+
+        func recordDiagnosticAfterViewUpdate(
+            name: String,
+            visibleTextLength: Int,
+            visibleTextLengthAfterSync: Int?,
+            isFirstResponder: Bool,
+            source: String
+        ) {
+            Task { @MainActor [weak self] in
+                self?.parent.onDiagnostic(
+                    name,
+                    visibleTextLength,
+                    visibleTextLengthAfterSync,
+                    isFirstResponder,
+                    source
+                )
+            }
+        }
+
+        private func setFocusAfterViewUpdate(_ isFocused: Bool) {
+            Task { @MainActor [weak self] in
+                guard let self, self.parent.isFocused != isFocused else {
+                    return
+                }
+
+                self.parent.isFocused = isFocused
+            }
         }
     }
 }
@@ -1452,10 +1511,8 @@ private extension CarrierRecord.Status {
             "已发送"
         case .received:
             "已接收"
-        case .pastePosted:
-            "粘贴已提交"
-        case .pasteFailed:
-            "粘贴失败"
+        case .pastePosted, .pasteUnverified, .pasteFailed:
+            "已接收"
         case .failed:
             "失败"
         }
@@ -1469,23 +1526,19 @@ private extension CarrierRecord.Status {
             "clock"
         case .sent:
             "paperplane"
-        case .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             "checkmark.circle"
-        case .pastePosted:
-            "paperplane.circle"
-        case .pasteFailed, .failed:
+        case .failed:
             "exclamationmark.triangle.fill"
         }
     }
 
     var tint: Color {
         switch self {
-        case .pasteFailed, .failed:
+        case .failed:
             .red
-        case .received:
+        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
             .green
-        case .pastePosted:
-            .orange
         case .queued:
             .orange
         default:

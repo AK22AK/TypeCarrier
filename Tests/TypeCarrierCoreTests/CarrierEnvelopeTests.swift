@@ -17,6 +17,53 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertEqual(decoded.payload?.text, payload.text)
     }
 
+    func testTextEnvelopeRoundTripsSenderDeviceName() throws {
+        let payload = CarrierPayload(
+            id: UUID(uuidString: "E74B7F27-84D1-4E37-82D9-20C48353F12A")!,
+            createdAt: Date(timeIntervalSince1970: 1_778_111_111),
+            text: "from a named device"
+        )
+        let sender = CarrierDeviceIdentity(displayName: "jzj iPhone")
+        let envelope = CarrierEnvelope.text(payload, sender: sender)
+
+        let decoded = try CarrierCodec.decode(try CarrierCodec.encode(envelope))
+
+        XCTAssertEqual(decoded.kind, .text)
+        XCTAssertEqual(decoded.payload, payload)
+        XCTAssertEqual(decoded.sender, sender)
+    }
+
+    func testLegacyTextEnvelopeDecodesWithoutSenderDeviceName() throws {
+        let data = """
+        {
+          "kind": "text",
+          "payload": {
+            "createdAt": "2026-05-30T08:00:00Z",
+            "id": "BA2F6F30-F78E-4F21-98AA-539C5E0B25FA",
+            "text": "legacy text"
+          },
+          "version": 1
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try CarrierCodec.decode(data)
+
+        XCTAssertEqual(decoded.kind, .text)
+        XCTAssertEqual(decoded.payload?.text, "legacy text")
+        XCTAssertNil(decoded.sender)
+    }
+
+    func testDeviceIdentityFallsBackToSystemNameWhenCustomNameIsBlank() {
+        XCTAssertEqual(
+            CarrierDeviceIdentity.preferredDisplayName(customName: "  ", systemName: "iPhone"),
+            "iPhone"
+        )
+        XCTAssertEqual(
+            CarrierDeviceIdentity.preferredDisplayName(customName: "  jzj iPhone  ", systemName: "iPhone"),
+            "jzj iPhone"
+        )
+    }
+
     func testAckEnvelopeRoundTripsPayloadIdentifier() throws {
         let id = UUID(uuidString: "BC796636-69B6-48AF-A65F-56A16B85BB31")!
         let envelope = CarrierEnvelope.ack(id)
@@ -43,6 +90,22 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertEqual(decoded.kind, .receipt)
         XCTAssertEqual(decoded.receipt, receipt)
         XCTAssertNil(decoded.payload)
+    }
+
+    func testReceiptEnvelopeRoundTripsUnverifiedPostedPasteResult() throws {
+        let payloadID = UUID(uuidString: "B5F45AA9-675D-4742-A189-19CF4DB34D8B")!
+        let receipt = CarrierDeliveryReceipt(
+            payloadID: payloadID,
+            receivedAt: Date(timeIntervalSince1970: 1_777_889_111),
+            pasteStatus: .unverifiedPosted,
+            detail: "Command-V posted, but target insertion could not be verified"
+        )
+        let envelope = CarrierEnvelope.receipt(receipt)
+
+        let decoded = try CarrierCodec.decode(try CarrierCodec.encode(envelope))
+
+        XCTAssertEqual(decoded.kind, .receipt)
+        XCTAssertEqual(decoded.receipt, receipt)
     }
 
     func testBlankTextIsRejectedBeforeSending() {
