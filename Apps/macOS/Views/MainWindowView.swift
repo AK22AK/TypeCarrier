@@ -218,8 +218,12 @@ private struct ReceivedRecordsListPane: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.primary)
                             .textCase(nil)
-                            .padding(.top, group.isFirst ? 0 : 18)
                             .padding(.bottom, 6)
+                    } footer: {
+                        if !group.isLast {
+                            Spacer(minLength: 0)
+                                .frame(height: 18)
+                        }
                     }
                 }
             }
@@ -237,6 +241,7 @@ private struct ReceivedRecordTimeGroup: Identifiable {
     let title: String
     let records: [CarrierRecord]
     let isFirst: Bool
+    let isLast: Bool
 
     static func group(_ records: [CarrierRecord], calendar: Calendar = .current, now: Date = Date()) -> [Self] {
         let todayStart = calendar.startOfDay(for: now)
@@ -261,16 +266,23 @@ private struct ReceivedRecordTimeGroup: Identifiable {
             }
         }
 
-        return [
+        let buckets = [
             ("today", "今天", today),
             ("pastWeek", "过去一周", pastWeek),
             ("pastMonth", "过去一个月", pastMonth),
             ("older", "更早", older)
         ]
         .filter { !$0.2.isEmpty }
-        .enumerated()
+
+        return buckets.enumerated()
         .map { index, bucket in
-            Self(id: bucket.0, title: bucket.1, records: bucket.2, isFirst: index == 0)
+            Self(
+                id: bucket.0,
+                title: bucket.1,
+                records: bucket.2,
+                isFirst: index == 0,
+                isLast: index == buckets.count - 1
+            )
         }
     }
 }
