@@ -13,12 +13,14 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
 
     @Published private(set) var carrierService: MultipeerCarrierService
+    @Published private(set) var androidBridge: AndroidCarrierBridge
     let connectionDiagnosticLogFileURL: URL?
     private let receiverDisplayName: String
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
     private let permissionChecker = AccessibilityPermissionChecker()
     private var carrierServiceCancellable: AnyCancellable?
+    private var androidBridgeCancellable: AnyCancellable?
 
     init() {
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
@@ -27,6 +29,7 @@ final class MacCarrierStore: ObservableObject {
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
+        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
@@ -39,6 +42,7 @@ final class MacCarrierStore: ObservableObject {
         }
 
         bindCarrierService()
+        bindAndroidBridge()
         refreshAccessibilityStatus()
         start()
     }
@@ -69,7 +73,12 @@ final class MacCarrierStore: ObservableObject {
 
     func start() {
         carrierService.start { [weak self] envelope, peerID in
-            self?.handle(envelope, from: peerID.displayName)
+            self?.handle(envelope, from: peerID.displayName) { receipt in
+                try? self?.carrierService.send(receipt)
+            }
+        }
+        androidBridge.start { [weak self] envelope, deviceName, reply in
+            self?.handle(envelope, from: deviceName, sendReceipt: reply)
         }
     }
 
@@ -84,7 +93,11 @@ final class MacCarrierStore: ObservableObject {
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
+        androidBridge.stop()
+        androidBridgeCancellable = nil
+        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
         bindCarrierService()
+        bindAndroidBridge()
         start()
         carrierService.recordDiagnosticMarker(
             rebuiltReason,
@@ -169,6 +182,11 @@ final class MacCarrierStore: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
+    private func bindAndroidBridge() {
+        androidBridgeCancellable = androidBridge.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
     private static func formattedDuration(_ duration: TimeInterval) -> String {
         guard duration.isFinite, duration >= 0 else {
             return "unknown"
@@ -235,7 +253,11 @@ final class MacCarrierStore: ObservableObject {
         }
     }
 
-    private func handle(_ envelope: CarrierEnvelope, from peerDisplayName: String) {
+    private func handle(
+        _ envelope: CarrierEnvelope,
+        from peerDisplayName: String,
+        sendReceipt: (CarrierEnvelope) -> Void
+    ) {
         guard envelope.kind == .text, let payload = envelope.payload else {
             return
         }
@@ -270,11 +292,11 @@ final class MacCarrierStore: ObservableObject {
             return
         }
 
-        sendReceipt(
+        sendReceipt(.receipt(CarrierDeliveryReceipt(
             payloadID: payload.id,
             pasteStatus: .received,
             detail: "Mac 已接收来自 \(sourceDeviceName) 的文本"
-        )
+        )))
         lastPasteResult = pasteInjector.paste(text: payload.text)
         recordPasteDiagnostic(lastPasteResult)
     }
@@ -284,15 +306,6 @@ final class MacCarrierStore: ObservableObject {
             result.diagnosticEventName,
             message: result.fullDetail
         )
-    }
-
-    private func sendReceipt(payloadID: UUID, pasteStatus: CarrierDeliveryReceipt.PasteStatus, detail: String) {
-        let receipt = CarrierDeliveryReceipt(
-            payloadID: payloadID,
-            pasteStatus: pasteStatus,
-            detail: detail
-        )
-        try? carrierService.send(.receipt(receipt))
     }
 
     private func syncRecords() {

@@ -362,14 +362,6 @@ private struct ReceivedRecordDetail: View {
     @ViewBuilder
     private var recordActionButtons: some View {
         Button {
-            pasteEditedText()
-        } label: {
-            Label("再次粘贴", systemImage: "text.insert")
-        }
-        .labelStyle(.iconOnly)
-        .help("再次粘贴")
-
-        Button {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(editedText, forType: .string)
         } label: {
@@ -448,16 +440,6 @@ private struct ReceivedRecordDetail: View {
 
         store.updateText(for: record, text: editedText)
     }
-
-    private func pasteEditedText() {
-        if hasUnsavedChanges {
-            store.updateText(for: record, text: editedText)
-        }
-
-        var editedRecord = record
-        editedRecord.text = editedText
-        store.paste(record: editedRecord)
-    }
 }
 
 private struct ReceiverStatusPage: View {
@@ -476,6 +458,9 @@ private struct ReceiverStatusPage: View {
                     statusLine("已邀请设备", diagnostics.invitedPeers.localizedPeerListText)
                     statusLine("本机设备", diagnostics.localPeerName)
                     statusLine("服务", diagnostics.serviceType)
+                    statusLine("Android Bridge", androidBridgeStatusText)
+                    statusLine("Android 手动连接", store.androidBridge.manualConnectionHints)
+                    statusLine("Android 配对码", store.androidBridge.pairingCode)
                     statusLine("辅助功能", accessibilityText)
                 }
 
@@ -552,6 +537,17 @@ private struct ReceiverStatusPage: View {
 
     private var accessibilityText: String {
         store.accessibilityTrusted ? "已启用" : "需要授权"
+    }
+
+    private var androidBridgeStatusText: String {
+        switch store.androidBridge.state {
+        case .stopped:
+            "未启动"
+        case .listening(let port):
+            port.map { "监听中：\($0)" } ?? "监听中"
+        case .failed(let message):
+            "失败：\(message)"
+        }
     }
 
     private func statusLine(_ title: String, _ value: String) -> some View {

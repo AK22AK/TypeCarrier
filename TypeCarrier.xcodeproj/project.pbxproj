@@ -23,22 +23,29 @@
 		353593F89E9DBA4C7C89C3FA /* CarrierRecordTimestampFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 708D83E7B24F1C9D10F184CC /* CarrierRecordTimestampFormatter.swift */; };
 		36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBC5EDEAA504D926640A76F /* ComposerView.swift */; };
 		3C4F9EA09CB90AA641F34D19 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
+		4146E2420C2748C0D766898E /* AndroidPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC933378CA1A7C808D756866 /* AndroidPairing.swift */; };
+		42FC298DADDF8B8A446D47F6 /* AndroidPairingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */; };
 		472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */; };
 		4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */; };
 		505D4CAB42A8B9CA3F1DB3E4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */; };
 		54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */; };
 		5DFD5368061DF274FDB68A05 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F96EC8B1DA9061B45D4C1C9F /* Assets.xcassets */; };
+		5EA973E759A1CA377B1DE165 /* AndroidBridgeProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D22EE83B8381EC979C3135 /* AndroidBridgeProtocol.swift */; };
+		5FA6D2DA1B56F2BE0AA3C078 /* AndroidCarrierBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */; };
 		61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */; };
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
 		6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */; };
 		6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */; };
 		70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */; };
+		7620C3B631E3102CE953C549 /* CarrierWireFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */; };
 		772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */; };
 		78173EFC23F647DACB89D979 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6BEA6EDEDEE872D07FB2C5B3 /* Assets.xcassets */; };
 		83944AC0357B36329DC743F4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */; };
+		939D5DF870F9EE336F73B9DF /* CarrierWireFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */; };
+		94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
 		9FF5E28E4BE80DFFCB1A42BE /* PasteFailureGuidance.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */; };
 		A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */; };
@@ -52,6 +59,7 @@
 		C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */; };
 		C523232758A6D1BFE48E6EFA /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */; };
+		D2F42D8A2332776B17522EDF /* AndroidBridgeProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */; };
 		E9B7C2500095F36E136F4110 /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F1205DF3E291DA2763CDFB6D /* TextInsertionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */; };
 		F334F55AE0BF13F3283F7520 /* CarrierEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */; };
@@ -123,8 +131,12 @@
 		08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionChecker.swift; sourceTree = "<group>"; };
 		0CBC5EDEAA504D926640A76F /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
 		1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistoryTests.swift; sourceTree = "<group>"; };
+		16D22EE83B8381EC979C3135 /* AndroidBridgeProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidBridgeProtocol.swift; sourceTree = "<group>"; };
 		18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
+		1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidTrustTokenStore.swift; sourceTree = "<group>"; };
+		1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrameTests.swift; sourceTree = "<group>"; };
 		23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierServiceTests.swift; sourceTree = "<group>"; };
+		2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidCarrierBridge.swift; sourceTree = "<group>"; };
 		32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordTimestampFormatterTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
 		3FDE61EFC232581E0D43F11A /* TypeCarrierMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TypeCarrierMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -142,12 +154,14 @@
 		7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecoveryTests.swift; sourceTree = "<group>"; };
 		829CC626F7A3C4147A40D809 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		847B0360AAB5F8E0004D0D1F /* TypeCarrierMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TypeCarrierMac.entitlements; sourceTree = "<group>"; };
+		86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrame.swift; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrierMacApp.swift; sourceTree = "<group>"; };
 		98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSUILocalization.swift; sourceTree = "<group>"; };
 		9BA8751B3877B14B54FCE73C /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeliveryReceipt.swift; sourceTree = "<group>"; };
 		A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInsertionPolicyTests.swift; sourceTree = "<group>"; };
+		AC933378CA1A7C808D756866 /* AndroidPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidPairing.swift; sourceTree = "<group>"; };
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		B1A98DAE35972ECE7A5C511F /* TypeCarrieriOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TypeCarrieriOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacUILocalization.swift; sourceTree = "<group>"; };
@@ -158,6 +172,8 @@
 		CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForegroundConnectionRecovery.swift; sourceTree = "<group>"; };
 		D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInsertionPolicy.swift; sourceTree = "<group>"; };
 		DBB85D30D093D2E61328806C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidPairingTests.swift; sourceTree = "<group>"; };
+		F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidBridgeProtocolTests.swift; sourceTree = "<group>"; };
 		F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStore.swift; sourceTree = "<group>"; };
 		F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppCoordinator.swift; sourceTree = "<group>"; };
 		F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPeer.swift; sourceTree = "<group>"; };
@@ -201,10 +217,13 @@
 		1C9827CC5304AB81DFDD1A55 /* TypeCarrierCoreTests */ = {
 			isa = PBXGroup;
 			children = (
+				F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */,
+				EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */,
 				CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */,
 				3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */,
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */,
+				1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
 				C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */,
 				7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */,
@@ -246,6 +265,8 @@
 			isa = PBXGroup;
 			children = (
 				08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */,
+				2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */,
+				1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */,
 				4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */,
 				6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */,
 			);
@@ -278,6 +299,8 @@
 		77AA3151611E4D023656AA61 /* TypeCarrierCore */ = {
 			isa = PBXGroup;
 			children = (
+				16D22EE83B8381EC979C3135 /* AndroidBridgeProtocol.swift */,
+				AC933378CA1A7C808D756866 /* AndroidPairing.swift */,
 				A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */,
 				075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */,
 				48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */,
@@ -287,6 +310,7 @@
 				57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */,
 				F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */,
 				708D83E7B24F1C9D10F184CC /* CarrierRecordTimestampFormatter.swift */,
+				86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */,
 				9BA8751B3877B14B54FCE73C /* ConnectionState.swift */,
 				CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */,
 				CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */,
@@ -534,6 +558,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */,
+				5FA6D2DA1B56F2BE0AA3C078 /* AndroidCarrierBridge.swift in Sources */,
+				94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */,
 				26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */,
 				33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */,
 				690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */,
@@ -549,6 +575,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EA973E759A1CA377B1DE165 /* AndroidBridgeProtocol.swift in Sources */,
+				4146E2420C2748C0D766898E /* AndroidPairing.swift in Sources */,
 				2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */,
 				6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */,
 				1591F23A5EE50FF3C61DC362 /* CarrierDiagnosticLogStore.swift in Sources */,
@@ -558,6 +586,7 @@
 				25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */,
 				969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */,
 				353593F89E9DBA4C7C89C3FA /* CarrierRecordTimestampFormatter.swift in Sources */,
+				939D5DF870F9EE336F73B9DF /* CarrierWireFrame.swift in Sources */,
 				074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */,
 				A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */,
 				2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */,
@@ -572,10 +601,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D2F42D8A2332776B17522EDF /* AndroidBridgeProtocolTests.swift in Sources */,
+				42FC298DADDF8B8A446D47F6 /* AndroidPairingTests.swift in Sources */,
 				039DC71ECCC2E4FEDC92499A /* CarrierDiagnosticExportTests.swift in Sources */,
 				C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */,
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */,
+				7620C3B631E3102CE953C549 /* CarrierWireFrameTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,
 				54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */,
 				61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */,
