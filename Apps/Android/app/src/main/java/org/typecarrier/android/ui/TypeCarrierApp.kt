@@ -6,13 +6,18 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -37,6 +42,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
@@ -45,6 +51,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
@@ -65,18 +73,27 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +110,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -103,6 +121,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.FileProvider
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -134,6 +153,9 @@ private enum class HistoryTab {
     History,
 }
 
+private const val NavigationEnterDurationMillis = 320
+private const val NavigationExitDurationMillis = 160
+
 @Composable
 fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
     val state by viewModel.uiState.collectAsState()
@@ -147,28 +169,38 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
             navController = navController,
             startDestination = AppRoutes.Home,
             enterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = androidx.compose.animation.core.tween(220),
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = NavigationEnterDurationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                ) + slideInHorizontally(
+                    animationSpec = tween(
+                        durationMillis = NavigationEnterDurationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                    initialOffsetX = { it / 12 },
                 )
             },
             exitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = androidx.compose.animation.core.tween(220),
-                )
+                fadeOut(animationSpec = tween(durationMillis = NavigationExitDurationMillis))
             },
             popEnterTransition = {
-                slideIntoContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = androidx.compose.animation.core.tween(220),
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = NavigationEnterDurationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                ) + slideInHorizontally(
+                    animationSpec = tween(
+                        durationMillis = NavigationEnterDurationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                    initialOffsetX = { -it / 12 },
                 )
             },
             popExitTransition = {
-                slideOutOfContainer(
-                    AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = androidx.compose.animation.core.tween(220),
-                )
+                fadeOut(animationSpec = tween(durationMillis = NavigationExitDurationMillis))
             },
         ) {
             composable(AppRoutes.Home) {
@@ -507,12 +539,11 @@ private fun HeaderActions(
     onOpenSettings: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         HeaderActionButton(onClick = onRetry) {
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = if (state.canConnect) "重试连接" else "刷新查找",
-                modifier = Modifier.size(25.dp),
             )
         }
 
@@ -524,38 +555,39 @@ private fun HeaderActions(
                     }
                 },
             ) {
-                Icon(Icons.Default.History, contentDescription = "历史和草稿", modifier = Modifier.size(25.dp))
+                Icon(Icons.Default.History, contentDescription = "历史和草稿")
             }
         }
 
         Box {
             HeaderActionButton(onClick = onOpenMenu) {
-                Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(25.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "更多")
             }
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = onDismissMenu,
-                modifier = Modifier.widthIn(min = 176.dp),
+                modifier = Modifier.widthIn(min = 164.dp),
+                properties = PopupProperties(focusable = false),
             ) {
-                DropdownMenuItem(
-                    text = { Text("连接 Mac", style = MaterialTheme.typography.bodyLarge) },
-                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(21.dp)) },
+                CompactMenuItem(
+                    icon = Icons.Default.Link,
+                    text = "连接 Mac",
                     onClick = {
                         onDismissMenu()
                         onOpenConnection()
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text("设置", style = MaterialTheme.typography.bodyLarge) },
-                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(21.dp)) },
+                CompactMenuItem(
+                    icon = Icons.Default.Settings,
+                    text = "设置",
                     onClick = {
                         onDismissMenu()
                         onOpenSettings()
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text("调试功能", style = MaterialTheme.typography.bodyLarge) },
-                    leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(21.dp)) },
+                CompactMenuItem(
+                    icon = Icons.Default.BugReport,
+                    text = "调试功能",
                     onClick = {
                         onDismissMenu()
                         onOpenDebug()
@@ -564,6 +596,19 @@ private fun HeaderActions(
             }
         }
     }
+}
+
+@Composable
+private fun CompactMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(text, style = MaterialTheme.typography.bodyLarge) },
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -596,13 +641,7 @@ private fun connectionDisplayText(state: AndroidComposerUiState): String =
 
 @Composable
 private fun HeaderActionButton(onClick: () -> Unit, content: @Composable () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
+    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
         content()
     }
 }
@@ -610,12 +649,12 @@ private fun HeaderActionButton(onClick: () -> Unit, content: @Composable () -> U
 @Composable
 private fun HeaderBadgeActionButton(onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
-        modifier = Modifier
-            .size(width = 44.dp, height = 40.dp)
-            .clickable(onClick = onClick),
+        modifier = Modifier.size(48.dp),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+            content()
+        }
     }
 }
 
@@ -631,8 +670,7 @@ private fun ConnectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
+        confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("关闭")
             }
@@ -733,12 +771,10 @@ private fun ConnectionPanel(
         state.trustedMacs.any { it.id == selected.id }
     } == true
 
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.WifiTethering, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Text("连接 Mac", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -820,7 +856,11 @@ private fun ConnectionPanel(
             }
 
             TextButton(onClick = { showAdvanced = !showAdvanced }) {
-                Text(if (showAdvanced) "收起高级连接" else "高级连接")
+                Icon(
+                    if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                )
+                Text("高级连接")
             }
 
             if (showAdvanced) {
@@ -858,7 +898,6 @@ private fun ConnectionPanel(
                     },
                 )
             }
-        }
     }
 }
 
@@ -1027,6 +1066,7 @@ private fun Footer(state: AndroidComposerUiState, onSaveDraft: () -> Unit, onSen
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HistoryScreen(
     state: AndroidComposerUiState,
@@ -1039,31 +1079,67 @@ private fun HistoryScreen(
     var selectedTab by remember { mutableStateOf(if (state.drafts.isEmpty()) HistoryTab.History else HistoryTab.Drafts) }
     var confirmClear by remember { mutableStateOf(false) }
     val records = if (selectedTab == HistoryTab.Drafts) state.drafts else state.outgoingHistory
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
-    ScreenScaffold(title = if (selectedTab == HistoryTab.Drafts) "草稿" else "历史", onBack = onBack) {
-        TabRow(selectedTabIndex = if (selectedTab == HistoryTab.Drafts) 0 else 1) {
-            Tab(selected = selectedTab == HistoryTab.Drafts, onClick = { selectedTab = HistoryTab.Drafts }, text = { Text("草稿") })
-            Tab(selected = selectedTab == HistoryTab.History, onClick = { selectedTab = HistoryTab.History }, text = { Text("历史") })
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (selectedTab == HistoryTab.Drafts) "${state.draftCount} 条草稿" else "${state.outgoingHistory.size} 条发送记录",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            TypeCarrierTopAppBar(
+                title = if (selectedTab == HistoryTab.Drafts) "草稿" else "历史",
+                onBack = onBack,
+                scrollBehavior = scrollBehavior,
             )
-            TextButton(onClick = { confirmClear = true }, enabled = records.isNotEmpty()) {
-                Text(if (selectedTab == HistoryTab.Drafts) "清空草稿" else "清空历史")
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(start = 20.dp, top = 10.dp, end = 20.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                TabRow(selectedTabIndex = if (selectedTab == HistoryTab.Drafts) 0 else 1) {
+                    Tab(selected = selectedTab == HistoryTab.Drafts, onClick = { selectedTab = HistoryTab.Drafts }, text = { Text("草稿") })
+                    Tab(selected = selectedTab == HistoryTab.History, onClick = { selectedTab = HistoryTab.History }, text = { Text("历史") })
+                }
             }
-        }
 
-        if (records.isEmpty()) {
-            EmptyState(
-                icon = if (selectedTab == HistoryTab.Drafts) Icons.Default.Save else Icons.Default.History,
-                title = if (selectedTab == HistoryTab.Drafts) "暂无草稿" else "暂无发送记录",
-            )
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (selectedTab == HistoryTab.Drafts) "${state.draftCount} 条草稿" else "${state.outgoingHistory.size} 条发送记录",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { confirmClear = true }, enabled = records.isNotEmpty()) {
+                        Text(if (selectedTab == HistoryTab.Drafts) "清空草稿" else "清空历史")
+                    }
+                }
+            }
+
+            if (records.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = if (selectedTab == HistoryTab.Drafts) Icons.Default.Save else Icons.Default.History,
+                        title = if (selectedTab == HistoryTab.Drafts) "暂无草稿" else "暂无发送记录",
+                    )
+                }
+            } else {
                 items(records, key = { it.id }) { record ->
-                    RecordRow(record = record, onOpen = { onOpenRecord(record) }, onDelete = { onDelete(record) })
+                    RecordRow(
+                        record = record,
+                        onOpen = { onOpenRecord(record) },
+                        onDelete = { onDelete(record) },
+                    )
                 }
             }
         }
@@ -1089,32 +1165,55 @@ private fun HistoryScreen(
 
 @Composable
 private fun RecordRow(record: AndroidCarrierRecord, onOpen: () -> Unit, onDelete: () -> Unit) {
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onOpen),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        ListItem(
+            headlineContent = {
                 Text(record.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            },
+            supportingContent = {
                 Text(
                     "${record.status.localizedText()} · ${record.updatedAt.toDisplayTime()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "删除")
-            }
-        }
+            },
+            trailingContent = {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "删除")
+                }
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
     }
+}
+
+@Composable
+private fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    }
+}
+
+@Composable
+private fun SettingsListItem(
+    headline: String,
+    supporting: String? = null,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    ListItem(
+        headlineContent = { Text(headline) },
+        supportingContent = supporting?.let { { Text(it) } },
+        trailingContent = trailing,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 @Composable
@@ -1129,37 +1228,46 @@ private fun RecordDetailScreen(
     var editedText by remember(record.id) { mutableStateOf(record.text) }
 
     ScreenScaffold(title = if (record.kind == AndroidRecordKind.Draft) "草稿" else "已发送文本", onBack = onBack) {
-        OutlinedTextField(
-            value = editedText,
-            onValueChange = { editedText = it },
-            label = { Text("文本") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp),
-        )
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("类型：${record.kind.localizedText()}")
-                Text("状态：${record.status.localizedText()}")
-                Text("更新时间：${record.updatedAt.toDisplayTime()}")
-                record.detail?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        SectionCard {
+            OutlinedTextField(
+                value = editedText,
+                onValueChange = { editedText = it },
+                label = { Text("文本") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp),
+            )
+        }
+
+        SectionCard {
+            SettingsListItem("类型", record.kind.localizedText())
+            HorizontalDivider()
+            SettingsListItem("状态", record.status.localizedText())
+            HorizontalDivider()
+            SettingsListItem("更新时间", record.updatedAt.toDisplayTime())
+            record.detail?.let {
+                HorizontalDivider()
+                SettingsListItem("详情", it)
             }
         }
-        Button(onClick = { onLoadIntoEditor(editedText) }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Edit, contentDescription = null)
-            Text("载入编辑器")
-        }
-        Button(onClick = { onSendAgain(editedText) }, enabled = editedText.trim().isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
-            Text("再次发送")
-        }
-        OutlinedButton(onClick = { onCopy(editedText) }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.ContentCopy, contentDescription = null)
-            Text("复制")
-        }
-        OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Delete, contentDescription = null)
-            Text("删除")
+
+        SectionCard {
+            Button(onClick = { onLoadIntoEditor(editedText) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Edit, contentDescription = null)
+                Text("载入编辑器")
+            }
+            Button(onClick = { onSendAgain(editedText) }, enabled = editedText.trim().isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                Text("再次发送")
+            }
+            OutlinedButton(onClick = { onCopy(editedText) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.ContentCopy, contentDescription = null)
+                Text("复制")
+            }
+            OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Text("删除")
+            }
         }
     }
 }
@@ -1174,31 +1282,42 @@ private fun SettingsScreen(
     var draftName by remember(state.senderDisplayName) { mutableStateOf(state.senderDisplayName) }
 
     ScreenScaffold(title = "设置", onBack = onBack) {
-        OutlinedTextField(
-            value = draftName,
-            onValueChange = { draftName = it },
-            label = { Text("设备显示名称") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Button(
-            onClick = { onSenderDisplayNameChange(draftName) },
-            enabled = draftName.trim() != state.senderDisplayName,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("保存名称")
+        SectionCard {
+            Text("发送端", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(
+                value = draftName,
+                onValueChange = { draftName = it },
+                label = { Text("设备显示名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Mac 会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = { onSenderDisplayNameChange(draftName) },
+                enabled = draftName.trim() != state.senderDisplayName,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("保存名称")
+            }
         }
-        Text(
-            "Mac 会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("启动时进入输入状态", modifier = Modifier.weight(1f))
-            Switch(checked = state.launchesIntoInputMode, onCheckedChange = onLaunchesIntoInputModeChange)
+
+        SectionCard {
+            SettingsListItem(
+                headline = "启动时进入输入状态",
+                supporting = "打开应用后自动聚焦主输入框。",
+                trailing = {
+                    Switch(checked = state.launchesIntoInputMode, onCheckedChange = onLaunchesIntoInputModeChange)
+                },
+            )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DebugScreen(
     state: AndroidComposerUiState,
@@ -1207,28 +1326,77 @@ private fun DebugScreen(
     onCopyDiagnostics: () -> Unit,
     onExportDiagnostics: () -> Unit,
 ) {
-    ScreenScaffold(title = "调试日志", onBack = onBack) {
-        DebugRow("状态", state.connectionStatus.name)
-        DebugRow("本机设备", state.deviceName)
-        DebugRow("目标 Mac", state.selectedMac?.name ?: "无")
-        DebugRow("发现设备", if (state.services.isEmpty()) "无" else state.services.joinToString { it.name })
-        state.connectionFailureMessage?.let { DebugRow("最近错误", it) }
-        Button(onClick = onExportDiagnostics, enabled = diagnosticsText.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Share, contentDescription = null)
-            Text("导出日志文件")
-        }
-        OutlinedButton(onClick = onCopyDiagnostics, enabled = diagnosticsText.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.ContentCopy, contentDescription = null)
-            Text("复制日志文本")
-        }
-        Text("最近调试事件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(state.diagnostics, key = { it.id }) { event ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(event.name, fontWeight = FontWeight.SemiBold)
-                        Text(event.message, style = MaterialTheme.typography.bodySmall)
-                        Text(event.timestamp.toDisplayTime(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Scaffold(
+        topBar = {
+            TypeCarrierTopAppBar(title = "调试日志", onBack = onBack)
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize(),
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .navigationBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SectionCard {
+                    Text("连接", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    SettingsListItem("状态", state.connectionStatus.name)
+                    HorizontalDivider()
+                    SettingsListItem("本机设备", state.deviceName)
+                    HorizontalDivider()
+                    SettingsListItem("目标 Mac", state.selectedMac?.name ?: "无")
+                    HorizontalDivider()
+                    SettingsListItem("发现设备", if (state.services.isEmpty()) "无" else state.services.joinToString { it.name })
+                    state.connectionFailureMessage?.let {
+                        HorizontalDivider()
+                        SettingsListItem("最近错误", it)
+                    }
+                }
+            }
+
+            item {
+                SectionCard {
+                    Text("日志", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Button(onClick = onExportDiagnostics, enabled = diagnosticsText.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Share, contentDescription = null)
+                        Text("导出日志文件")
+                    }
+                    OutlinedButton(onClick = onCopyDiagnostics, enabled = diagnosticsText.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                        Text("复制日志文本")
+                    }
+                }
+            }
+
+            item {
+                Text("最近调试事件", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+
+            if (state.diagnostics.isEmpty()) {
+                item {
+                    EmptyState(icon = Icons.Default.BugReport, title = "暂无调试事件")
+                }
+            } else {
+                items(state.diagnostics, key = { it.id }) { event ->
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp,
+                    ) {
+                        ListItem(
+                            headlineContent = { Text(event.name, fontWeight = FontWeight.SemiBold) },
+                            supportingContent = {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(event.message)
+                                    Text(event.timestamp.toDisplayTime())
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        )
                     }
                 }
             }
@@ -1236,30 +1404,53 @@ private fun DebugScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DebugRow(title: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, modifier = Modifier.widthIn(max = 220.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-    }
+private fun TypeCarrierTopAppBar(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+) {
+    TopAppBar(
+        title = {
+            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            scrolledContainerColor = MaterialTheme.colorScheme.background,
+        ),
+        modifier = modifier,
+        scrollBehavior = scrollBehavior,
+    )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ScreenScaffold(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(horizontal = 20.dp)
-            .padding(top = 14.dp, bottom = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("返回") }
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    Scaffold(
+        topBar = {
+            TypeCarrierTopAppBar(title = title, onBack = onBack)
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize(),
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
     }
 }
 
