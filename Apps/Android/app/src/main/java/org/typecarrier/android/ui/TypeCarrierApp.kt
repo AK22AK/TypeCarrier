@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,12 +24,16 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BugReport
@@ -84,6 +89,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -319,44 +325,40 @@ private fun Header(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = if (isCompact) Alignment.CenterVertically else Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (isCompact) 9.dp else 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 10.dp),
         ) {
             if (!isCompact) {
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.Keyboard,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(27.dp),
+                            modifier = Modifier.size(21.dp),
                         )
                     }
                 }
-            } else {
-                ConnectionDot(state.connectionStatus)
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(if (isCompact) 1.dp else 3.dp)) {
                 Text(
                     "TypeCarrier",
-                    style = if (isCompact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineLarge,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    if (!isCompact) {
-                        ConnectionDot(state.connectionStatus)
-                    }
+                    ConnectionDot(state.connectionStatus)
                     Text(
                         state.headerStatusText,
                         style = if (isCompact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
@@ -368,14 +370,15 @@ private fun Header(
             }
         }
 
-        IconButton(onClick = onRetry) {
+        HeaderActionButton(onClick = onRetry) {
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = if (state.canConnect) "重试连接" else "刷新查找",
+                modifier = Modifier.size(25.dp),
             )
         }
 
-        IconButton(onClick = onOpenHistory) {
+        HeaderActionButton(onClick = onOpenHistory) {
             BadgedBox(
                 badge = {
                     if (state.draftCount > 0) {
@@ -383,34 +386,38 @@ private fun Header(
                     }
                 },
             ) {
-                Icon(Icons.Default.History, contentDescription = "历史和草稿")
+                Icon(Icons.Default.History, contentDescription = "历史和草稿", modifier = Modifier.size(25.dp))
             }
         }
 
         Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Default.MoreVert, contentDescription = "更多")
+            HeaderActionButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(25.dp))
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                modifier = Modifier.widthIn(min = 176.dp),
+            ) {
                 DropdownMenuItem(
-                    text = { Text("连接 Mac") },
-                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                    text = { Text("连接 Mac", style = MaterialTheme.typography.bodyLarge) },
+                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
                         menuOpen = false
                         onOpenConnection()
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("设置") },
-                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                    text = { Text("设置", style = MaterialTheme.typography.bodyLarge) },
+                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
                         menuOpen = false
                         onOpenSettings()
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("调试功能") },
-                    leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null) },
+                    text = { Text("调试功能", style = MaterialTheme.typography.bodyLarge) },
+                    leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
                         menuOpen = false
                         onOpenDebug()
@@ -418,6 +425,19 @@ private fun Header(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HeaderActionButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }
 
@@ -477,17 +497,28 @@ private fun ConnectionFailureNotice(message: String?) {
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF4F2)),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFC2410C))
-            Text(message, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF7C2D12))
+            Icon(
+                Icons.Default.Info,
+                contentDescription = null,
+                tint = Color(0xFFC2410C),
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF7C2D12),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -679,60 +710,96 @@ private fun EditorPanel(
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
+    val editorScrollState = rememberScrollState()
+    var isFocused by remember { mutableStateOf(false) }
     LaunchedEffect(state.launchesIntoInputMode) {
         if (state.launchesIntoInputMode) {
             focusRequester.requestFocus()
         }
     }
 
-    Card(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    Surface(
+        shape = RoundedCornerShape(26.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = if (isFocused) 2.dp else 1.dp,
+        shadowElevation = 1.dp,
+        border = BorderStroke(
+            width = if (isFocused) 2.dp else 1.dp,
+            color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
         modifier = modifier,
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            OutlinedTextField(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+        ) {
+            BasicTextField(
                 value = state.text,
                 onValueChange = onTextChange,
-                placeholder = { Text("输入或语音输入") },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp)
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(editorScrollState)
                     .focusRequester(focusRequester)
-                    .onFocusChanged { onFocusChanged(it.isFocused) },
-                minLines = 8,
+                    .onFocusChanged {
+                        isFocused = it.isFocused
+                        onFocusChanged(it.isFocused)
+                    },
+                decorationBox = { innerTextField ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        if (state.text.isEmpty()) {
+                            Text(
+                                "输入或语音输入",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
             )
 
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilledTonalIconButton(onClick = onUndo, enabled = state.canUndo) {
-                    Icon(Icons.Default.Undo, contentDescription = "撤销文本编辑")
+                EditorActionButton(onClick = onUndo, enabled = state.canUndo) {
+                    Icon(Icons.Default.Undo, contentDescription = "撤销文本编辑", modifier = Modifier.size(20.dp))
                 }
-                FilledTonalIconButton(onClick = onRedo, enabled = state.canRedo) {
-                    Icon(Icons.Default.Redo, contentDescription = "重做文本编辑")
+                Spacer(modifier = Modifier.width(8.dp))
+                EditorActionButton(onClick = onRedo, enabled = state.canRedo) {
+                    Icon(Icons.Default.Redo, contentDescription = "重做文本编辑", modifier = Modifier.size(20.dp))
                 }
-            }
-
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilledTonalIconButton(onClick = onCopy, enabled = state.text.isNotBlank()) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "复制文本")
+                Spacer(modifier = Modifier.weight(1f))
+                EditorActionButton(onClick = onCopy, enabled = state.text.isNotBlank()) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "复制文本", modifier = Modifier.size(20.dp))
                 }
-                FilledTonalIconButton(onClick = onClear, enabled = state.text.isNotBlank()) {
-                    Icon(Icons.Default.Close, contentDescription = "清空文本")
+                Spacer(modifier = Modifier.width(8.dp))
+                EditorActionButton(onClick = onClear, enabled = state.text.isNotBlank()) {
+                    Icon(Icons.Default.Close, contentDescription = "清空文本", modifier = Modifier.size(20.dp))
                 }
             }
         }
     }
+}
+
+@Composable
+private fun EditorActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    content: @Composable () -> Unit,
+) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(40.dp),
+        content = content,
+    )
 }
 
 @Composable
