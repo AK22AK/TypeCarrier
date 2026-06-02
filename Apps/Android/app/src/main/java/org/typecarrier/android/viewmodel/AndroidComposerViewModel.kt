@@ -408,6 +408,7 @@ class AndroidComposerViewModel(
         _uiState.update { it.copy(isBusy = true, sendState = AndroidSendState.Sending).withDerivedValues(repository) }
 
         runCatching {
+            refreshTrustedConnectionBeforeSend(state)
             repository.sendText(textToSend, state.senderDisplayName.ifBlank { state.deviceName })
         }.onSuccess { receipt ->
             val detail = receipt?.detail ?: "已发送"
@@ -450,6 +451,63 @@ class AndroidComposerViewModel(
             }
             recordDiagnostic("send.failed", message)
         }
+    }
+
+    private suspend fun refreshTrustedConnectionBeforeSend(state: AndroidComposerUiState) {
+        val service = state.selectedMac ?: connectedMac ?: manualService(state.manualHost, state.manualPort) ?: return
+        if (!repository.hasSavedTrustToken(service)) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                connectionStatus = AndroidConnectionStatus.Connecting,
+                headerStatusText = "正在连接",
+                connectionFailureMessage = null,
+                selectedMac = service,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic(
+            "connection.presendAttempt",
+            "target=${service.name} host=${service.host} port=${service.port} macID=${service.macID ?: "unknown"} auth=trustToken",
+        )
+
+        val response = repository.connect(service = service, pairingCode = null)
+        if (response.status != AndroidBridgeResponseStatus.Accepted) {
+            val message = response.message ?: response.status.name
+            if (response.status == AndroidBridgeResponseStatus.InvalidPairing) {
+                repository.forgetTrustedMac(service)
+            }
+            repository.closeConnection()
+            connectedMac = null
+            _uiState.update {
+                it.copy(
+                    connectionStatus = AndroidConnectionStatus.Idle,
+                    headerStatusText = "连接失败",
+                    connectionFailureMessage = message,
+                    trustedMacs = repository.trustedMacs,
+                ).withDerivedValues(repository)
+            }
+            recordDiagnostic("connection.rejected", message)
+            throw IllegalStateException(message)
+        }
+
+        val trustedMacs = repository.trustedMacs
+        val connectedService = trustedMacs.firstOrNull { trusted ->
+            response.macID?.let { trusted.macID == it } == true ||
+                (trusted.host == service.host && trusted.port == service.port)
+        } ?: service
+        connectedMac = connectedService
+        _uiState.update {
+            it.copy(
+                connectionStatus = AndroidConnectionStatus.Connected,
+                headerStatusText = connectedService.name,
+                connectionFailureMessage = null,
+                selectedMac = connectedService,
+                trustedMacs = trustedMacs,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic("connection.accepted", "Connected to ${connectedService.name}.")
     }
 
     fun saveDraft(): Job = scope.launch {

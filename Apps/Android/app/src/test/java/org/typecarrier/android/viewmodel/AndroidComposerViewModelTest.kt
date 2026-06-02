@@ -53,6 +53,25 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
+    fun sendRefreshesTrustedConnectionBeforeWritingText() = runBlocking {
+        val repository = FakeAndroidCarrierRepository().apply {
+            requiresReconnectBeforeSend = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+
+        viewModel.updateText("hello")
+        viewModel.send().join()
+
+        assertEquals(2, repository.connectAttempts)
+        assertEquals(1, repository.sendAttempts)
+        assertEquals("", viewModel.uiState.value.text)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+    }
+
+    @Test
     fun failedSendKeepsTextAndMarksFailure() = runBlocking {
         val repository = FakeAndroidCarrierRepository().apply {
             sendFailure = IllegalStateException("offline")
@@ -255,8 +274,10 @@ private class FakeAndroidCarrierRepository(
     var hasTrustToken = false
     var sendFailure: Throwable? = null
     var connectFailure: Throwable? = null
+    var requiresReconnectBeforeSend = false
     var lastPairingCode: String? = null
     var connectAttempts = 0
+    var sendAttempts = 0
     var nextConnectResponse = AndroidBridgeResponse(status = AndroidBridgeResponseStatus.Accepted, message = "connected")
 
     fun publishServices(services: List<MacService>) {
@@ -286,6 +307,10 @@ private class FakeAndroidCarrierRepository(
     }
 
     override suspend fun sendText(text: String, senderDisplayName: String): CarrierDeliveryReceipt {
+        sendAttempts += 1
+        if (requiresReconnectBeforeSend && connectAttempts < 2) {
+            throw IllegalStateException("stale socket")
+        }
         sendFailure?.let { throw it }
         return CarrierDeliveryReceipt(
             payloadID = "payload",
