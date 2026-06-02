@@ -251,7 +251,6 @@ class AndroidComposerViewModel(
         if (_uiState.value.text.isBlank()) {
             return
         }
-        _uiState.update { it.copy(headerStatusText = "已复制文本").withDerivedValues(repository) }
         recordDiagnostic("editor.copy", "Copied editor text.")
     }
 
@@ -424,7 +423,6 @@ class AndroidComposerViewModel(
                     text = if (receipt == null || EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(receipt.pasteStatus)) "" else it.text,
                     isBusy = false,
                     sendState = AndroidSendState.Sent,
-                    headerStatusText = detail,
                     connectionFailureMessage = null,
                 ).withDerivedValues(repository)
             }
@@ -481,7 +479,7 @@ class AndroidComposerViewModel(
         val nextText = if (EditorTextReplacementPolicy.shouldClearEditorAfterDraftSave(succeeded = true)) "" else state.text
         textHistory.reset()
         _uiState.update {
-            it.copy(text = nextText, sendState = AndroidSendState.Sent, headerStatusText = "已保存草稿")
+            it.copy(text = nextText, sendState = AndroidSendState.Sent).withDerivedValues(repository)
         }
         syncRecords()
         recordDiagnostic("draft.saved", "Saved draft.")

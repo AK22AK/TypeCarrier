@@ -6,7 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -37,6 +39,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -92,12 +95,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import java.io.File
 import org.typecarrier.android.domain.AndroidCarrierRecord
 import org.typecarrier.android.domain.AndroidRecordKind
@@ -108,12 +119,14 @@ import org.typecarrier.android.viewmodel.AndroidConnectionStatus
 import org.typecarrier.android.viewmodel.AndroidSendState
 import org.typecarrier.android.viewmodel.AndroidComposerViewModel
 
-private enum class AppScreen {
-    Home,
-    History,
-    Settings,
-    Debug,
-    Detail,
+private object AppRoutes {
+    const val Home = "home"
+    const val History = "history"
+    const val Settings = "settings"
+    const val Debug = "debug"
+    const val Detail = "detail/{recordId}"
+
+    fun detail(recordId: String): String = "detail/$recordId"
 }
 
 private enum class HistoryTab {
@@ -126,22 +139,47 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    var screen by remember { mutableStateOf(AppScreen.Home) }
-    var selectedRecordID by remember { mutableStateOf<String?>(null) }
-
-    BackHandler(screen != AppScreen.Home) {
-        screen = AppScreen.Home
-        selectedRecordID = null
-    }
+    val navController = rememberNavController()
+    var shouldApplyLaunchFocus by remember { mutableStateOf(true) }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        when (screen) {
-            AppScreen.Home -> HomeScreen(
+        NavHost(
+            navController = navController,
+            startDestination = AppRoutes.Home,
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = androidx.compose.animation.core.tween(220),
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = androidx.compose.animation.core.tween(220),
+                )
+            },
+            popEnterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = androidx.compose.animation.core.tween(220),
+                )
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = androidx.compose.animation.core.tween(220),
+                )
+            },
+        ) {
+            composable(AppRoutes.Home) {
+                HomeScreen(
                 state = state,
+                    shouldAutoFocusEditor = state.launchesIntoInputMode && shouldApplyLaunchFocus,
+                    onEditorAutoFocusConsumed = { shouldApplyLaunchFocus = false },
                 onRefresh = viewModel::refreshDiscovery,
-                onOpenHistory = { screen = AppScreen.History },
-                onOpenSettings = { screen = AppScreen.Settings },
-                onOpenDebug = { screen = AppScreen.Debug },
+                    onOpenHistory = { navController.navigate(AppRoutes.History) },
+                    onOpenSettings = { navController.navigate(AppRoutes.Settings) },
+                    onOpenDebug = { navController.navigate(AppRoutes.Debug) },
                 onSelectMac = viewModel::selectMac,
                 onManualHostChange = viewModel::updateManualHost,
                 onManualPortChange = viewModel::updateManualPort,
@@ -159,31 +197,36 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onClear = { viewModel.clearText() },
                 onSaveDraft = { viewModel.saveDraft() },
                 onSend = { viewModel.send() },
-            )
+                )
+            }
 
-            AppScreen.History -> HistoryScreen(
+            composable(AppRoutes.History) {
+                HistoryScreen(
                 state = state,
-                onBack = { screen = AppScreen.Home },
+                    onBack = { navController.popBackStack() },
                 onOpenRecord = {
-                    selectedRecordID = it.id
-                    screen = AppScreen.Detail
+                        navController.navigate(AppRoutes.detail(it.id))
                 },
                 onDelete = viewModel::delete,
                 onClearDrafts = viewModel::deleteAllDrafts,
                 onClearHistory = viewModel::deleteAllOutgoingHistory,
-            )
+                )
+            }
 
-            AppScreen.Settings -> SettingsScreen(
+            composable(AppRoutes.Settings) {
+                SettingsScreen(
                 state = state,
-                onBack = { screen = AppScreen.Home },
+                    onBack = { navController.popBackStack() },
                 onSenderDisplayNameChange = viewModel::updateSenderDisplayName,
                 onLaunchesIntoInputModeChange = viewModel::updateLaunchesIntoInputMode,
-            )
+                )
+            }
 
-            AppScreen.Debug -> DebugScreen(
+            composable(AppRoutes.Debug) {
+                DebugScreen(
                 state = state,
                 diagnosticsText = viewModel.exportDiagnosticsText(),
-                onBack = { screen = AppScreen.Home },
+                    onBack = { navController.popBackStack() },
                 onCopyDiagnostics = {
                     clipboard.setText(AnnotatedString(viewModel.exportDiagnosticsText()))
                     Toast.makeText(context, "日志文本已复制到剪贴板", Toast.LENGTH_SHORT).show()
@@ -191,30 +234,37 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onExportDiagnostics = {
                     shareDiagnosticsFile(context, viewModel.exportDiagnosticsFile(File(context.cacheDir, "diagnostics")))
                 },
-            )
+                )
+            }
 
-            AppScreen.Detail -> {
-                val record = state.records.firstOrNull { it.id == selectedRecordID }
+            composable(
+                route = AppRoutes.Detail,
+                arguments = listOf(navArgument("recordId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val recordID = backStackEntry.arguments?.getString("recordId")
+                val record = state.records.firstOrNull { it.id == recordID }
                 if (record == null) {
-                    screen = AppScreen.History
+                    LaunchedEffect(recordID) {
+                        navController.popBackStack()
+                    }
                 } else {
                     RecordDetailScreen(
                         record = record,
-                        onBack = { screen = AppScreen.History },
+                        onBack = { navController.popBackStack() },
                         onLoadIntoEditor = {
                             viewModel.updateText(forRecord = record, text = it)
                             viewModel.loadIntoEditor(record.copy(text = it))
-                            screen = AppScreen.Home
+                            navController.popBackStack(AppRoutes.Home, inclusive = false)
                         },
                         onSendAgain = {
                             viewModel.updateText(forRecord = record, text = it)
                             viewModel.send(record.copy(text = it))
-                            screen = AppScreen.Home
+                            navController.popBackStack(AppRoutes.Home, inclusive = false)
                         },
                         onCopy = { clipboard.setText(AnnotatedString(it)) },
                         onDelete = {
                             viewModel.delete(record)
-                            screen = AppScreen.History
+                            navController.popBackStack()
                         },
                     )
                 }
@@ -226,6 +276,8 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
 @Composable
 private fun HomeScreen(
     state: AndroidComposerUiState,
+    shouldAutoFocusEditor: Boolean,
+    onEditorAutoFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -243,8 +295,13 @@ private fun HomeScreen(
     onSaveDraft: () -> Unit,
     onSend: () -> Unit,
 ) {
-    var isEditorFocused by remember { mutableStateOf(false) }
     var showsConnectionDialog by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
+    val leaveInputMode = {
+        focusManager.clearFocus(force = true)
+    }
 
     Column(
         modifier = Modifier
@@ -258,7 +315,7 @@ private fun HomeScreen(
     ) {
         Header(
             state = state,
-            isCompact = isEditorFocused,
+            isCompact = isKeyboardVisible,
             onRetry = {
                 if (state.canConnect) {
                     onConnect()
@@ -266,10 +323,22 @@ private fun HomeScreen(
                     onRefresh()
                 }
             },
-            onOpenHistory = onOpenHistory,
-            onOpenConnection = { showsConnectionDialog = true },
-            onOpenSettings = onOpenSettings,
-            onOpenDebug = onOpenDebug,
+            onOpenHistory = {
+                leaveInputMode()
+                onOpenHistory()
+            },
+            onOpenConnection = {
+                leaveInputMode()
+                showsConnectionDialog = true
+            },
+            onOpenSettings = {
+                leaveInputMode()
+                onOpenSettings()
+            },
+            onOpenDebug = {
+                leaveInputMode()
+                onOpenDebug()
+            },
         )
 
         ConnectionFailureNotice(state.connectionFailureMessage)
@@ -281,7 +350,9 @@ private fun HomeScreen(
             onRedo = onRedo,
             onCopy = onCopy,
             onClear = onClear,
-            onFocusChanged = { isEditorFocused = it },
+            shouldAutoFocus = shouldAutoFocusEditor,
+            onAutoFocusConsumed = onEditorAutoFocusConsumed,
+            onFocusChanged = {},
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -321,35 +392,75 @@ private fun Header(
     onOpenDebug: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    var keepCompactForMenu by remember { mutableStateOf(false) }
+    val effectiveCompact = isCompact || keepCompactForMenu
+    val openMenu = {
+        keepCompactForMenu = isCompact
+        menuOpen = true
+    }
+    val dismissMenu = {
+        menuOpen = false
+        keepCompactForMenu = false
+    }
+
+    if (!effectiveCompact) {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                HeaderActions(
+                    state = state,
+                    menuOpen = menuOpen,
+                    onOpenMenu = openMenu,
+                    onDismissMenu = dismissMenu,
+                    onRetry = onRetry,
+                    onOpenHistory = onOpenHistory,
+                    onOpenConnection = onOpenConnection,
+                    onOpenSettings = onOpenSettings,
+                    onOpenDebug = onOpenDebug,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                LogoMark(size = 58.dp, iconSize = 31.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                    Text(
+                        "TypeCarrier",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ConnectionStatusMark(state.connectionStatus)
+                        Text(
+                            connectionDisplayText(state),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = if (isCompact) Alignment.CenterVertically else Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (isCompact) 8.dp else 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (!isCompact) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Keyboard,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(21.dp),
-                        )
-                    }
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(if (isCompact) 1.dp else 3.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     "TypeCarrier",
                     style = MaterialTheme.typography.titleLarge,
@@ -358,10 +469,10 @@ private fun Header(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    ConnectionDot(state.connectionStatus)
+                    ConnectionStatusMark(state.connectionStatus)
                     Text(
-                        state.headerStatusText,
-                        style = if (isCompact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                        connectionDisplayText(state),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -370,6 +481,33 @@ private fun Header(
             }
         }
 
+        HeaderActions(
+            state = state,
+            menuOpen = menuOpen,
+            onOpenMenu = openMenu,
+            onDismissMenu = dismissMenu,
+            onRetry = onRetry,
+            onOpenHistory = onOpenHistory,
+            onOpenConnection = onOpenConnection,
+            onOpenSettings = onOpenSettings,
+            onOpenDebug = onOpenDebug,
+        )
+    }
+}
+
+@Composable
+private fun HeaderActions(
+    state: AndroidComposerUiState,
+    menuOpen: Boolean,
+    onOpenMenu: () -> Unit,
+    onDismissMenu: () -> Unit,
+    onRetry: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenConnection: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenDebug: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         HeaderActionButton(onClick = onRetry) {
             Icon(
                 Icons.Default.Refresh,
@@ -378,7 +516,7 @@ private fun Header(
             )
         }
 
-        HeaderActionButton(onClick = onOpenHistory) {
+        HeaderBadgeActionButton(onClick = onOpenHistory) {
             BadgedBox(
                 badge = {
                     if (state.draftCount > 0) {
@@ -391,19 +529,19 @@ private fun Header(
         }
 
         Box {
-            HeaderActionButton(onClick = { menuOpen = true }) {
+            HeaderActionButton(onClick = onOpenMenu) {
                 Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(25.dp))
             }
             DropdownMenu(
                 expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
+                onDismissRequest = onDismissMenu,
                 modifier = Modifier.widthIn(min = 176.dp),
             ) {
                 DropdownMenuItem(
                     text = { Text("连接 Mac", style = MaterialTheme.typography.bodyLarge) },
                     leadingIcon = { Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
-                        menuOpen = false
+                        onDismissMenu()
                         onOpenConnection()
                     },
                 )
@@ -411,7 +549,7 @@ private fun Header(
                     text = { Text("设置", style = MaterialTheme.typography.bodyLarge) },
                     leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
-                        menuOpen = false
+                        onDismissMenu()
                         onOpenSettings()
                     },
                 )
@@ -419,7 +557,7 @@ private fun Header(
                     text = { Text("调试功能", style = MaterialTheme.typography.bodyLarge) },
                     leadingIcon = { Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(21.dp)) },
                     onClick = {
-                        menuOpen = false
+                        onDismissMenu()
                         onOpenDebug()
                     },
                 )
@@ -429,11 +567,51 @@ private fun Header(
 }
 
 @Composable
+private fun LogoMark(size: Dp, iconSize: Dp) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 4.dp,
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(size),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Default.Keyboard,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(iconSize),
+            )
+        }
+    }
+}
+
+private fun connectionDisplayText(state: AndroidComposerUiState): String =
+    when (state.connectionStatus) {
+        AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "Mac 已连接"
+        AndroidConnectionStatus.Connecting -> "正在连接"
+        AndroidConnectionStatus.Searching -> if (state.services.isEmpty()) "正在查找 Mac" else "发现 ${state.services.size} 台 Mac"
+        AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
+    }
+
+@Composable
 private fun HeaderActionButton(onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun HeaderBadgeActionButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(width = 44.dp, height = 40.dp)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -474,12 +652,30 @@ private fun ConnectionDialog(
 }
 
 @Composable
-private fun ConnectionDot(status: AndroidConnectionStatus) {
+private fun ConnectionStatusMark(status: AndroidConnectionStatus) {
+    if (status == AndroidConnectionStatus.Connected) {
+        Surface(
+            shape = CircleShape,
+            color = Color(0xFF22C55E),
+            modifier = Modifier.size(18.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
+        return
+    }
+
     val color = when (status) {
-        AndroidConnectionStatus.Connected -> Color(0xFF18845F)
         AndroidConnectionStatus.Connecting -> Color(0xFFD97706)
         AndroidConnectionStatus.Searching -> Color(0xFF2563EB)
         AndroidConnectionStatus.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
+        AndroidConnectionStatus.Connected -> Color(0xFF22C55E)
     }
     Box(
         modifier = Modifier
@@ -706,15 +902,26 @@ private fun EditorPanel(
     onRedo: () -> Unit,
     onCopy: () -> Unit,
     onClear: () -> Unit,
+    shouldAutoFocus: Boolean,
+    onAutoFocusConsumed: () -> Unit,
     onFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
     val editorScrollState = rememberScrollState()
+    var previousTextLength by remember { mutableStateOf(state.text.length) }
     var isFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(state.launchesIntoInputMode) {
-        if (state.launchesIntoInputMode) {
+    LaunchedEffect(shouldAutoFocus) {
+        if (shouldAutoFocus) {
             focusRequester.requestFocus()
+            onAutoFocusConsumed()
+        }
+    }
+    LaunchedEffect(state.text) {
+        val isAppending = state.text.length > previousTextLength
+        previousTextLength = state.text.length
+        if (isAppending) {
+            editorScrollState.animateScrollTo(editorScrollState.maxValue)
         }
     }
 

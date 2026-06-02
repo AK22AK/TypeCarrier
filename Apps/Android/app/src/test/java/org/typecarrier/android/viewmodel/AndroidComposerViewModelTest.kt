@@ -49,7 +49,7 @@ class AndroidComposerViewModelTest {
 
         assertEquals("", viewModel.uiState.value.text)
         assertEquals(1, viewModel.uiState.value.outgoingHistory.size)
-        assertEquals("Mac 已插入", viewModel.uiState.value.headerStatusText)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
     }
 
     @Test
