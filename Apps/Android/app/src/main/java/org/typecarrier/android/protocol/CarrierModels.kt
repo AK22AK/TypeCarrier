@@ -13,9 +13,13 @@ object CarrierJson {
 
     fun encode(envelope: CarrierEnvelope): String = json.encodeToString(envelope)
     fun encode(handshake: AndroidBridgeHandshake): String = json.encodeToString(handshake)
+    fun encode(request: AndroidPairingAssociationRequest): String = json.encodeToString(request)
+    fun encode(response: AndroidPairingAssociationResponse): String = json.encodeToString(response)
     fun decodeEnvelope(value: String): CarrierEnvelope = json.decodeFromString(value)
     fun decodeHandshake(value: String): AndroidBridgeHandshake = json.decodeFromString(value)
     fun decodeBridgeResponse(value: String): AndroidBridgeResponse = json.decodeFromString(value)
+    fun decodePairingAssociationRequest(value: String): AndroidPairingAssociationRequest = json.decodeFromString(value)
+    fun decodePairingAssociationResponse(value: String): AndroidPairingAssociationResponse = json.decodeFromString(value)
 }
 
 @Serializable
@@ -98,6 +102,25 @@ data class AndroidBridgeHandshake(
 data class AndroidBridgeResponse(
     val status: AndroidBridgeResponseStatus,
     val message: String? = null,
+    val trustToken: String? = null,
+    val macID: String? = null,
+    val macName: String? = null,
+)
+
+@Serializable
+data class AndroidPairingAssociationRequest(
+    val version: Int = 1,
+    val macID: String,
+    val macName: String,
+    val pairingCode: String,
+)
+
+@Serializable
+data class AndroidPairingAssociationResponse(
+    val status: AndroidBridgeResponseStatus,
+    val message: String,
+    val deviceID: String? = null,
+    val deviceName: String? = null,
     val trustToken: String? = null,
 )
 

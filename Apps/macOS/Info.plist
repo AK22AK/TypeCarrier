@@ -26,6 +26,6 @@
 		<string>_typecarrier-json._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>TypeCarrier 需要使用本地网络，接收附近 iPhone 发来的文本。</string>
+	<string>TypeCarrier 需要使用本地网络，接收附近手机发来的文本。</string>
 </dict>
 </plist>

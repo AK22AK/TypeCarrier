@@ -11,8 +11,9 @@ data class MacService(
     val name: String,
     val host: String,
     val port: Int,
+    val macID: String? = null,
 ) {
-    val id: String = "$name@$host:$port"
+    val id: String = macID ?: "$name@$host:$port"
 }
 
 class MacDiscovery(
@@ -48,8 +49,7 @@ class MacDiscovery(
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val keyPrefix = "${serviceInfo.serviceName}@"
-                val key = services.keys.firstOrNull { it.startsWith(keyPrefix) }
+                val key = services.values.firstOrNull { it.name == serviceInfo.serviceName }?.id
                 if (key != null) {
                     services.remove(key)
                     publishServices()
@@ -100,6 +100,7 @@ class MacDiscovery(
                         name = serviceInfo.serviceName,
                         host = host,
                         port = serviceInfo.port,
+                        macID = serviceInfo.attributes["macID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
                     )
                     services[service.id] = service
                     publishServices()

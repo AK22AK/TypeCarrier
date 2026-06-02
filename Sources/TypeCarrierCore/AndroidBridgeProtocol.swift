@@ -44,15 +44,55 @@ public struct AndroidBridgeResponse: Codable, Equatable, Sendable {
     public let status: Status
     public let message: String
     public let trustToken: String?
+    public let macID: String?
+    public let macName: String?
 
-    public init(status: Status, message: String, trustToken: String? = nil) {
+    public init(status: Status, message: String, trustToken: String? = nil, macID: String? = nil, macName: String? = nil) {
         self.status = status
         self.message = message
         self.trustToken = trustToken
+        self.macID = macID
+        self.macName = macName
     }
 
     public static func busy(_ message: String) -> AndroidBridgeResponse {
         AndroidBridgeResponse(status: .busy, message: message)
+    }
+}
+
+public struct AndroidPairingAssociationRequest: Codable, Equatable, Sendable {
+    public let version: Int
+    public let macID: String
+    public let macName: String
+    public let pairingCode: String
+
+    public init(version: Int = 1, macID: String, macName: String, pairingCode: String) {
+        self.version = version
+        self.macID = macID
+        self.macName = macName
+        self.pairingCode = pairingCode
+    }
+}
+
+public struct AndroidPairingAssociationResponse: Codable, Equatable, Sendable {
+    public let status: AndroidBridgeResponse.Status
+    public let message: String
+    public let deviceID: String?
+    public let deviceName: String?
+    public let trustToken: String?
+
+    public init(
+        status: AndroidBridgeResponse.Status,
+        message: String,
+        deviceID: String? = nil,
+        deviceName: String? = nil,
+        trustToken: String? = nil
+    ) {
+        self.status = status
+        self.message = message
+        self.deviceID = deviceID
+        self.deviceName = deviceName
+        self.trustToken = trustToken
     }
 }
 

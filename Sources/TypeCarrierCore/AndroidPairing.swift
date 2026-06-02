@@ -5,6 +5,10 @@ public enum AndroidPairingCode {
     public static func isValid(_ code: String) -> Bool {
         code.count == 6 && code.allSatisfy(\.isNumber)
     }
+
+    public static func generate(randomNumber: (Range<Int>) -> Int = { Int.random(in: $0) }) -> String {
+        String(format: "%06d", randomNumber(0..<1_000_000))
+    }
 }
 
 public struct AndroidTrustToken: Equatable, Sendable {

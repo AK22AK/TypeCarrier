@@ -1,6 +1,7 @@
 package org.typecarrier.android.protocol
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,6 +15,14 @@ class AndroidPairingTest {
         assertFalse(AndroidPairingCode.isValid("1234567"))
         assertFalse(AndroidPairingCode.isValid("12345a"))
         assertFalse(AndroidPairingCode.isValid(" 123456"))
+    }
+
+    @Test
+    fun pairingCodeGeneratesSixDigits() {
+        val code = AndroidPairingCode.generate { 42 }
+
+        assertEquals("000042", code)
+        assertTrue(AndroidPairingCode.isValid(code))
     }
 
     @Test

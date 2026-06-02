@@ -51,8 +51,25 @@ final class MacCarrierStore: ObservableObject {
         carrierService.connectionState
     }
 
+    var receiverDisplayConnectionState: ConnectionState {
+        if carrierService.connectionState.isConnected {
+            return carrierService.connectionState
+        }
+
+        if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
+            return .connected(androidDeviceName)
+        }
+
+        return carrierService.connectionState
+    }
+
+    var receiverConnectedDeviceNames: [String] {
+        let names = carrierService.diagnostics.connectedPeers + androidBridge.connectedAndroidDeviceNames
+        return names.isEmpty ? [] : names.sorted()
+    }
+
     var receiverHealthWarning: String? {
-        if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
+        if connectionState.isFailed || androidBridge.state.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
             return "连接异常，请尝试重启接收器。"
         }
 

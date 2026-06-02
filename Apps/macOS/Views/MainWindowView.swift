@@ -13,7 +13,7 @@ struct MainWindowView: View {
             AppSidebar(
                 selectedSection: $selectedSection,
                 receivedCount: store.receivedHistory.count,
-                connectionState: store.connectionState,
+                connectionState: store.receiverDisplayConnectionState,
                 hasConnectionWarning: store.receiverHealthWarning != nil
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
@@ -444,6 +444,7 @@ private struct ReceivedRecordDetail: View {
 
 private struct ReceiverStatusPage: View {
     @ObservedObject var store: MacCarrierStore
+    @State private var androidPairingCode = ""
 
     var body: some View {
         ScrollView {
@@ -452,16 +453,44 @@ private struct ReceiverStatusPage: View {
                     .font(.title2.weight(.semibold))
 
                 VStack(alignment: .leading, spacing: 10) {
-                    statusLine("状态", store.connectionState.localizedDisplayText)
-                    statusLine("已连接设备", diagnostics.connectedPeers.localizedPeerListText)
+                    statusLine("状态", store.receiverDisplayConnectionState.localizedDisplayText)
+                    statusLine("已连接设备", store.receiverConnectedDeviceNames.localizedPeerListText)
                     statusLine("已发现设备", diagnostics.discoveredPeers.localizedPeerListText)
                     statusLine("已邀请设备", diagnostics.invitedPeers.localizedPeerListText)
                     statusLine("本机设备", diagnostics.localPeerName)
                     statusLine("服务", diagnostics.serviceType)
                     statusLine("Android Bridge", androidBridgeStatusText)
                     statusLine("Android 手动连接", store.androidBridge.manualConnectionHints)
-                    statusLine("Android 配对码", store.androidBridge.pairingCode)
+                    statusLine("本机匹配码", store.androidBridge.pairingCode)
+                    statusLine("可关联 Android", androidPairingDevicesText)
                     statusLine("辅助功能", accessibilityText)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("关联 Android")
+                        .font(.headline)
+                    HStack(spacing: 10) {
+                        TextField("输入 Android 匹配码", text: $androidPairingCode)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 180)
+                            .onChange(of: androidPairingCode) { _, newValue in
+                                androidPairingCode = String(newValue.filter(\.isNumber).prefix(6))
+                            }
+                        Button {
+                            store.androidBridge.associateAndroidDevice(pairingCode: androidPairingCode)
+                        } label: {
+                            Label("关联设备", systemImage: "display.and.arrow.down")
+                        }
+                        .disabled(androidPairingCode.count != 6)
+                    }
+                    Text("也可以在 Android 上输入本机匹配码来关联这台 Mac。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let message = store.androidBridge.associationStatusMessage {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if let warning = store.receiverHealthWarning {
@@ -542,12 +571,25 @@ private struct ReceiverStatusPage: View {
     private var androidBridgeStatusText: String {
         switch store.androidBridge.state {
         case .stopped:
-            "未启动"
+            return "未启动"
         case .listening(let port):
-            port.map { "监听中：\($0)" } ?? "监听中"
+            let prefix = port.map { "监听中：\($0)" } ?? "监听中"
+            let devices = store.androidBridge.connectedAndroidDeviceNames
+            guard !devices.isEmpty else {
+                return prefix
+            }
+            return "\(prefix)，已连接 \(devices.joined(separator: "、"))"
         case .failed(let message):
-            "失败：\(message)"
+            return "失败：\(message)"
         }
+    }
+
+    private var androidPairingDevicesText: String {
+        let devices = store.androidBridge.discoveredAndroidPairingDevices
+        guard !devices.isEmpty else {
+            return "无"
+        }
+        return devices.map(\.name).joined(separator: "、")
     }
 
     private func statusLine(_ title: String, _ value: String) -> some View {

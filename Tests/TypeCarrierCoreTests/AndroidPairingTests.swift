@@ -11,6 +11,13 @@ final class AndroidPairingTests: XCTestCase {
         XCTAssertFalse(AndroidPairingCode.isValid(" 123456 "))
     }
 
+    func testPairingCodeGeneratesSixDigits() {
+        let code = AndroidPairingCode.generate(randomNumber: { _ in 42 })
+
+        XCTAssertEqual(code, "000042")
+        XCTAssertTrue(AndroidPairingCode.isValid(code))
+    }
+
     func testTrustTokenUsesUrlSafeBase64WithoutPadding() throws {
         let bytes = Data([0xFB, 0xFF, 0xEE, 0x00])
 

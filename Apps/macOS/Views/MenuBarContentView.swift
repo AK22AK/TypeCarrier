@@ -66,7 +66,7 @@ struct MenuBarContentView: View {
             return "接收器需要处理"
         }
 
-        return store.connectionState.localizedDisplayText
+        return store.receiverDisplayConnectionState.localizedDisplayText
     }
 
     private var statusSystemImage: String {
@@ -74,6 +74,6 @@ struct MenuBarContentView: View {
             return "exclamationmark.triangle.fill"
         }
 
-        return store.connectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
+        return store.receiverDisplayConnectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
     }
 }

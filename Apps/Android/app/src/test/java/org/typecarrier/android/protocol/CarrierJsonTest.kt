@@ -50,4 +50,34 @@ class CarrierJsonTest {
         )
         assertNull(CarrierJson.decodeHandshake(json).tokenProof)
     }
+
+    @Test
+    fun pairingAssociationRequestRoundTripsRemoteCode() {
+        val request = AndroidPairingAssociationRequest(
+            macID = "mac-1",
+            macName = "MacBook Pro",
+            pairingCode = "234567",
+        )
+
+        val json = CarrierJson.encode(request)
+        val decoded = CarrierJson.decodePairingAssociationRequest(json)
+
+        assertEquals(request, decoded)
+    }
+
+    @Test
+    fun pairingAssociationResponseRoundTripsTrustedDevice() {
+        val response = AndroidPairingAssociationResponse(
+            status = AndroidBridgeResponseStatus.Accepted,
+            message = "Associated.",
+            deviceID = "android-1",
+            deviceName = "OPPO PLJ110",
+            trustToken = "token",
+        )
+
+        val json = CarrierJson.encode(response)
+        val decoded = CarrierJson.decodePairingAssociationResponse(json)
+
+        assertEquals(response, decoded)
+    }
 }

@@ -35,7 +35,7 @@ private struct MenuBarStatusIcon: View {
             return .warning
         }
 
-        return store.connectionState.isConnected ? .connected : .idle
+        return store.receiverDisplayConnectionState.isConnected ? .connected : .idle
     }
 
     private var accessibilityLabel: String {
@@ -43,7 +43,7 @@ private struct MenuBarStatusIcon: View {
             return "TypeCarrier 接收器异常"
         }
 
-        return store.connectionState.isConnected ? "TypeCarrier 已连接" : "TypeCarrier 空闲"
+        return store.receiverDisplayConnectionState.isConnected ? "TypeCarrier 已连接" : "TypeCarrier 空闲"
     }
 }
 

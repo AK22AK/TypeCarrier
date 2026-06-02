@@ -7,6 +7,11 @@ import javax.crypto.spec.SecretKeySpec
 
 object AndroidPairingCode {
     fun isValid(value: String): Boolean = value.matches(Regex("\\d{6}"))
+
+    fun generate(randomNumber: (IntRange) -> Int = { secureRandom.nextInt(1_000_000) }): String =
+        randomNumber(0..999_999).toString().padStart(6, '0')
+
+    private val secureRandom = SecureRandom()
 }
 
 data class AndroidTrustToken(val rawValue: String) {
