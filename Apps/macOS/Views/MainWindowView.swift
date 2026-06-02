@@ -41,6 +41,7 @@ struct MainWindowView: View {
             minHeight: 600,
             idealHeight: 700
         )
+        .toolbar(removing: .sidebarToggle)
     }
 
     private var selectedRecord: CarrierRecord? {
