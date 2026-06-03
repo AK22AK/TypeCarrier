@@ -187,6 +187,17 @@ final class MacCarrierStore: ObservableObject {
         )
     }
 
+    func recentConnectionDiagnosticLogEntries(limit: Int) -> [CarrierDiagnosticLogEntry] {
+        guard let connectionDiagnosticLogFileURL else {
+            return []
+        }
+
+        return (try? CarrierDiagnosticLogStore.recentEntries(
+            fileURL: connectionDiagnosticLogFileURL,
+            limit: limit
+        )) ?? []
+    }
+
     func refreshAccessibilityStatus() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
     }

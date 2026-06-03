@@ -7,6 +7,7 @@ struct MainWindowView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedSection: MainWindowSection? = .received
     @State private var selectedRecordID: UUID?
+    @State private var selectedSettingsSection: SettingsSection? = .diagnostics
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -62,7 +63,9 @@ struct MainWindowView: View {
         switch activeSection {
         case .received:
             receivedListColumn
-        case .connectionStatus, .settings:
+        case .settings:
+            settingsListColumn
+        case .connectionStatus:
             Color.clear
                 .accessibilityHidden(true)
                 .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
@@ -78,6 +81,12 @@ struct MainWindowView: View {
         .navigationTitle("已接收文本")
         .navigationSubtitle("\(store.receivedHistory.count) 个文本")
         .navigationSplitViewColumnWidth(min: 270, ideal: 320, max: 380)
+    }
+
+    private var settingsListColumn: some View {
+        SettingsListPane(selectedSection: $selectedSettingsSection)
+            .navigationTitle("设置")
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
     }
 
     @ViewBuilder
@@ -100,8 +109,19 @@ struct MainWindowView: View {
             ReceiverStatusPage(store: store)
                 .navigationTitle("连接管理")
         case .settings:
-            SettingsPage(store: store)
-                .navigationTitle("设置")
+            settingsDetailColumn
+        }
+    }
+
+    @ViewBuilder
+    private var settingsDetailColumn: some View {
+        switch selectedSettingsSection {
+        case .diagnostics:
+            SettingsDiagnosticsPage(store: store)
+                .navigationTitle("诊断")
+        case nil:
+            ContentUnavailableView("选择一个设置项", systemImage: "gearshape")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -121,6 +141,14 @@ private enum MainWindowSection: String, Hashable, Identifiable {
     case received
     case connectionStatus
     case settings
+
+    var id: Self {
+        self
+    }
+}
+
+private enum SettingsSection: String, Hashable, Identifiable {
+    case diagnostics
 
     var id: Self {
         self
@@ -757,72 +785,87 @@ private struct ReceiverStatusPage: View {
     }
 }
 
-private struct SettingsPage: View {
+private struct SettingsListPane: View {
+    @Binding var selectedSection: SettingsSection?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("设置")
+                    .font(.title2.weight(.semibold))
+                    .padding(.horizontal, 22)
+                    .padding(.top, 26)
+                    .padding(.bottom, 10)
+
+                SettingsSidebarRow(
+                    title: "诊断",
+                    systemImage: "stethoscope",
+                    tint: .blue,
+                    isSelected: selectedSection == .diagnostics
+                ) {
+                    selectedSection = .diagnostics
+                }
+                .padding(.horizontal, 14)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct SettingsDiagnosticsPage: View {
     @ObservedObject var store: MacCarrierStore
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("设置")
-                    .font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: 26) {
+                Button {
+                    store.exportConnectionDiagnosticsToFinder()
+                } label: {
+                    Label("导出诊断", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
 
-                diagnosticsSection
-                recentEventsSection
-            }
-            .frame(maxWidth: 640, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 48)
-        .padding(.top, 44)
-        .padding(.bottom, 28)
-    }
+                if let exportError = store.lastDiagnosticExportErrorMessage {
+                    statusLine("导出错误", exportError)
+                } else if let exportURL = store.lastDiagnosticExportURL {
+                    statusLine("最近导出", exportURL.path)
+                }
 
-    private var diagnostics: CarrierDiagnostics {
-        store.carrierService.diagnostics
-    }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("最近事件")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
 
-    private var diagnosticsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sectionHeader("诊断")
-
-            Button {
-                store.exportConnectionDiagnosticsToFinder()
-            } label: {
-                Label("导出诊断", systemImage: "square.and.arrow.up")
-            }
-
-            if let exportError = store.lastDiagnosticExportErrorMessage {
-                statusLine("导出错误", exportError)
-            } else if let exportURL = store.lastDiagnosticExportURL {
-                statusLine("最近导出", exportURL.path)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var recentEventsSection: some View {
-        if !diagnostics.events.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                sectionHeader("最近事件")
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(diagnostics.events.suffix(5).reversed())) { event in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(event.name)
-                                .font(.caption.weight(.semibold))
-                            Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                    if recentEvents.isEmpty {
+                        Text("暂无事件")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(recentEvents) { event in
+                                DiagnosticEventListRow(event: event)
+                            }
                         }
                     }
                 }
             }
+            .frame(maxWidth: 760, alignment: .leading)
+            .padding(.horizontal, 42)
+            .padding(.top, 48)
+            .padding(.bottom, 28)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
+    private var recentEvents: [SettingsDiagnosticEvent] {
+        store.recentConnectionDiagnosticLogEntries(limit: 50).enumerated().map { offset, entry in
+            SettingsDiagnosticEvent(
+                id: offset,
+                timestamp: entry.timestamp,
+                name: entry.name,
+                message: entry.message
+            )
+        }
     }
 
     private func statusLine(_ title: String, _ value: String) -> some View {
@@ -835,6 +878,70 @@ private struct SettingsPage: View {
                 .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SettingsSidebarRow: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(tint.gradient)
+                    Image(systemName: systemImage)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 30, height: 30)
+                .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(isSelected ? .white : .primary)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.horizontal, 10)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.accentColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SettingsDiagnosticEvent: Identifiable {
+    let id: Int
+    let timestamp: Date
+    let name: String
+    let message: String
+}
+
+private struct DiagnosticEventListRow: View {
+    let event: SettingsDiagnosticEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(event.name)
+                .font(.caption.weight(.semibold))
+
+            Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 2)
     }
 }
 

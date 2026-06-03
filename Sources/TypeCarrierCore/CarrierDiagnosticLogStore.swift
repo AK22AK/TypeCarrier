@@ -21,6 +21,7 @@ public final class CarrierDiagnosticLogStore {
 
     private let logSessionID = UUID()
     private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
 
     public init(fileURL: URL) throws {
         self.fileURL = fileURL
@@ -29,6 +30,10 @@ public final class CarrierDiagnosticLogStore {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         self.encoder = encoder
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        self.decoder = decoder
 
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -75,5 +80,37 @@ public final class CarrierDiagnosticLogStore {
         }
         try handle.seekToEnd()
         try handle.write(contentsOf: data)
+    }
+
+    public func recentEntries(limit: Int) throws -> [CarrierDiagnosticLogEntry] {
+        try Self.recentEntries(fileURL: fileURL, limit: limit, decoder: decoder)
+    }
+
+    public static func recentEntries(fileURL: URL, limit: Int) throws -> [CarrierDiagnosticLogEntry] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try recentEntries(fileURL: fileURL, limit: limit, decoder: decoder)
+    }
+
+    private static func recentEntries(
+        fileURL: URL,
+        limit: Int,
+        decoder: JSONDecoder
+    ) throws -> [CarrierDiagnosticLogEntry] {
+        guard limit > 0 else {
+            return []
+        }
+
+        let contents = try String(contentsOf: fileURL, encoding: .utf8)
+        return contents
+            .split(whereSeparator: \.isNewline)
+            .suffix(limit)
+            .reversed()
+            .compactMap { line in
+                guard let data = line.data(using: .utf8) else {
+                    return nil
+                }
+                return try? decoder.decode(CarrierDiagnosticLogEntry.self, from: data)
+            }
     }
 }
