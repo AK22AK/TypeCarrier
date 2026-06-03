@@ -69,7 +69,7 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var receiverHealthWarning: String? {
-        if connectionState.isFailed || androidBridge.state.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
+        if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
             return "连接异常，请尝试重启接收器。"
         }
 
