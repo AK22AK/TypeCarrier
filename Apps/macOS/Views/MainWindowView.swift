@@ -9,22 +9,12 @@ struct MainWindowView: View {
     @State private var selectedRecordID: UUID?
 
     var body: some View {
-        Group {
-            if activeSection == .received {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    sidebar
-                } content: {
-                    receivedListColumn
-                } detail: {
-                    receivedDetailColumn
-                }
-            } else {
-                NavigationSplitView(columnVisibility: $columnVisibility) {
-                    sidebar
-                } detail: {
-                    singlePageContent
-                }
-            }
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
+        } content: {
+            contentColumn
+        } detail: {
+            detailColumn
         }
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -67,6 +57,18 @@ struct MainWindowView: View {
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
     }
 
+    @ViewBuilder
+    private var contentColumn: some View {
+        switch activeSection {
+        case .received:
+            receivedListColumn
+        case .connectionStatus, .settings:
+            Color.clear
+                .accessibilityHidden(true)
+                .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
+        }
+    }
+
     private var receivedListColumn: some View {
         ReceivedRecordsListPane(
             records: store.receivedHistory,
@@ -90,16 +92,16 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private var singlePageContent: some View {
+    private var detailColumn: some View {
         switch activeSection {
+        case .received:
+            receivedDetailColumn
         case .connectionStatus:
             ReceiverStatusPage(store: store)
                 .navigationTitle("连接管理")
         case .settings:
             SettingsPage(store: store)
                 .navigationTitle("设置")
-        case .received:
-            EmptyView()
         }
     }
 
