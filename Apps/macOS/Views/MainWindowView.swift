@@ -9,18 +9,22 @@ struct MainWindowView: View {
     @State private var selectedRecordID: UUID?
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            AppSidebar(
-                selectedSection: $selectedSection,
-                receivedCount: store.receivedHistory.count,
-                connectionState: store.receiverDisplayConnectionState,
-                hasConnectionWarning: store.receiverHealthWarning != nil
-            )
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
-        } content: {
-            contentColumn
-        } detail: {
-            detailColumn
+        Group {
+            if activeSection == .received {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebar
+                } content: {
+                    receivedListColumn
+                } detail: {
+                    receivedDetailColumn
+                }
+            } else {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebar
+                } detail: {
+                    singlePageContent
+                }
+            }
         }
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -53,43 +57,49 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private var contentColumn: some View {
-        switch activeSection {
-        case .received:
-            ReceivedRecordsListPane(
-                records: store.receivedHistory,
-                selectedRecordID: $selectedRecordID,
-                store: store
-            )
-            .navigationTitle("已接收文本")
-            .navigationSubtitle("\(store.receivedHistory.count) 个文本")
-            .navigationSplitViewColumnWidth(min: 270, ideal: 320, max: 380)
-        case .connectionStatus:
-            ContentUnavailableView("连接状态", systemImage: "antenna.radiowaves.left.and.right")
-                .navigationTitle("连接状态")
-                .navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 340)
-        case .settings:
-            ContentUnavailableView("设置", systemImage: "gearshape")
-                .navigationTitle("设置")
-                .navigationSplitViewColumnWidth(min: 270, ideal: 300, max: 340)
+    private var sidebar: some View {
+        AppSidebar(
+            selectedSection: $selectedSection,
+            receivedCount: store.receivedHistory.count,
+            connectionState: store.receiverDisplayConnectionState,
+            hasConnectionWarning: store.receiverHealthWarning != nil
+        )
+        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+    }
+
+    private var receivedListColumn: some View {
+        ReceivedRecordsListPane(
+            records: store.receivedHistory,
+            selectedRecordID: $selectedRecordID,
+            store: store
+        )
+        .navigationTitle("已接收文本")
+        .navigationSubtitle("\(store.receivedHistory.count) 个文本")
+        .navigationSplitViewColumnWidth(min: 270, ideal: 320, max: 380)
+    }
+
+    @ViewBuilder
+    private var receivedDetailColumn: some View {
+        if let selectedRecord {
+            ReceivedRecordDetail(record: selectedRecord, store: store)
+                .id(selectedRecord.id)
+        } else {
+            ContentUnavailableView("选择一条接收记录", systemImage: "text.page")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     @ViewBuilder
-    private var detailColumn: some View {
+    private var singlePageContent: some View {
         switch activeSection {
-        case .received:
-            if let selectedRecord {
-                ReceivedRecordDetail(record: selectedRecord, store: store)
-                    .id(selectedRecord.id)
-            } else {
-                ContentUnavailableView("选择一条接收记录", systemImage: "text.page")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
         case .connectionStatus:
             ReceiverStatusPage(store: store)
+                .navigationTitle("连接管理")
         case .settings:
             SettingsPlaceholderPage()
+                .navigationTitle("设置")
+        case .received:
+            EmptyView()
         }
     }
 
@@ -128,7 +138,7 @@ private struct AppSidebar: View {
                 .tag(MainWindowSection.received)
 
             HStack(spacing: 8) {
-                Label("连接状态", systemImage: "antenna.radiowaves.left.and.right")
+                Label("连接管理", systemImage: "antenna.radiowaves.left.and.right")
 
                 Spacer(minLength: 8)
 
@@ -445,113 +455,22 @@ private struct ReceivedRecordDetail: View {
 
 private struct ReceiverStatusPage: View {
     @ObservedObject var store: MacCarrierStore
-    @State private var androidPairingCode = ""
+    @State private var devicePairingCode = ""
+    @State private var showsAdvancedInfo = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("连接状态")
+            VStack(alignment: .leading, spacing: 22) {
+                Text("连接管理")
                     .font(.title2.weight(.semibold))
 
-                VStack(alignment: .leading, spacing: 10) {
-                    statusLine("状态", store.receiverDisplayConnectionState.localizedDisplayText)
-                    statusLine("已连接设备", store.receiverConnectedDeviceNames.localizedPeerListText)
-                    statusLine("已发现设备", diagnostics.discoveredPeers.localizedPeerListText)
-                    statusLine("已邀请设备", diagnostics.invitedPeers.localizedPeerListText)
-                    statusLine("本机设备", diagnostics.localPeerName)
-                    statusLine("服务", diagnostics.serviceType)
-                    statusLine("Android Bridge", androidBridgeStatusText)
-                    statusLine("Android 手动连接", store.androidBridge.manualConnectionHints)
-                    statusLine("本机匹配码", store.androidBridge.pairingCode)
-                    statusLine("可关联 Android", androidPairingDevicesText)
-                    statusLine("辅助功能", accessibilityText)
+                receiverReadinessSection
+                if !summary.issues.isEmpty {
+                    issuesSection
                 }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("关联 Android")
-                        .font(.headline)
-                    HStack(spacing: 10) {
-                        TextField("输入 Android 匹配码", text: $androidPairingCode)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 180)
-                            .onChange(of: androidPairingCode) { _, newValue in
-                                androidPairingCode = String(newValue.filter(\.isNumber).prefix(6))
-                            }
-                        Button {
-                            store.androidBridge.associateAndroidDevice(pairingCode: androidPairingCode)
-                        } label: {
-                            Label("关联设备", systemImage: "display.and.arrow.down")
-                        }
-                        .disabled(androidPairingCode.count != 6)
-                    }
-                    Text("也可以在 Android 上输入本机匹配码来关联这台 Mac。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let message = store.androidBridge.associationStatusMessage {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let warning = store.receiverHealthWarning {
-                    Divider()
-                    Label(warning, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
-
-                if let lastError = diagnostics.lastErrorMessage {
-                    statusLine("最近错误", lastError)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Button {
-                        store.restartFromUserAction()
-                    } label: {
-                        Label("重启接收器", systemImage: "arrow.clockwise")
-                    }
-
-                    Button {
-                        store.exportConnectionDiagnosticsToFinder()
-                    } label: {
-                        Label("导出诊断", systemImage: "square.and.arrow.up")
-                    }
-
-                    if !store.accessibilityTrusted {
-                        Button {
-                            store.requestAccessibilityAccess()
-                        } label: {
-                            Label("请求辅助功能权限", systemImage: "lock.open")
-                        }
-                    }
-                }
-
-                if let exportError = store.lastDiagnosticExportErrorMessage {
-                    statusLine("导出错误", exportError)
-                } else if let exportURL = store.lastDiagnosticExportURL {
-                    statusLine("最近导出", exportURL.path)
-                }
-
-                if !diagnostics.events.isEmpty {
-                    Divider()
-                    Text("最近事件")
-                        .font(.headline)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(diagnostics.events.suffix(5).reversed())) { event in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(event.name)
-                                    .font(.caption.weight(.semibold))
-                                Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                    }
-                }
+                connectedDevicesSection
+                connectNewDeviceSection
+                advancedInfoDisclosure
             }
             .frame(maxWidth: 640, alignment: .leading)
         }
@@ -565,8 +484,249 @@ private struct ReceiverStatusPage: View {
         store.carrierService.diagnostics
     }
 
-    private var accessibilityText: String {
-        store.accessibilityTrusted ? "已启用" : "需要授权"
+    private var summary: ReceiverStatusSummary {
+        store.receiverStatusSummary
+    }
+
+    private var receiverReadinessSection: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(receiverReadinessTitle)
+                    .font(.title3.weight(.semibold))
+                Text(receiverReadinessDetail)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: receiverHealthSystemImage)
+                .font(.title2)
+                .foregroundStyle(receiverHealthTint)
+        }
+    }
+
+    private var connectedDevicesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("已连接设备")
+
+            if summary.connectedDevices.isEmpty {
+                Text("暂无已连接设备")
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(summary.connectedDevices.enumerated()), id: \.offset) { _, device in
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(device.name)
+                                Text("已连接")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: device.platform.systemImageName)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var issuesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(summary.requiresGlobalAttention ? "需要处理" : "局部异常")
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(summary.issues.enumerated()), id: \.offset) { _, issue in
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(issue.message.localizedDiagnosticMessageText)
+                            Text(issue.impact.localizedManagementText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: issue.severity.systemImageName)
+                    }
+                    .foregroundStyle(issue.severity == .actionRequired ? .orange : .secondary)
+                }
+
+                if summary.requiresGlobalAttention {
+                    Button {
+                        store.restartFromUserAction()
+                    } label: {
+                        Label("重启接收器", systemImage: "arrow.clockwise")
+                    }
+                }
+            }
+        }
+    }
+
+    private var connectNewDeviceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("连接新设备")
+            Text("在手机端选择这台 Mac；如果没有看到它，可以使用匹配码连接。")
+                .foregroundStyle(.secondary)
+
+            statusLine("本机匹配码", store.androidBridge.pairingCode)
+
+            HStack(spacing: 10) {
+                TextField("输入手机匹配码", text: $devicePairingCode)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 180)
+                    .onChange(of: devicePairingCode) { _, newValue in
+                        devicePairingCode = String(newValue.filter(\.isNumber).prefix(6))
+                    }
+                Button {
+                    store.androidBridge.associateAndroidDevice(pairingCode: devicePairingCode)
+                } label: {
+                    Label("连接设备", systemImage: "display.and.arrow.down")
+                }
+                .disabled(devicePairingCode.count != 6)
+            }
+            Text("已信任设备会自动重连。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let message = store.androidBridge.associationStatusMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var advancedInfoDisclosure: some View {
+        DisclosureGroup(isExpanded: $showsAdvancedInfo) {
+            VStack(alignment: .leading, spacing: 18) {
+                technicalEntrancesSection
+                advancedDetailsSection
+                receiverActionsSection
+                recentEventsSection
+            }
+            .padding(.top, 8)
+        } label: {
+            sectionHeader("高级信息")
+        }
+    }
+
+    private var technicalEntrancesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("接收入口状态")
+            endpointRow(
+                title: "iPhone / iPad",
+                subtitle: "Multipeer Connectivity",
+                value: appleEndpointStatusText,
+                issue: issue(for: .appleMultipeer)
+            )
+            endpointRow(
+                title: "Android",
+                subtitle: "Android Bridge",
+                value: androidBridgeStatusText,
+                issue: issue(for: .androidBridge)
+            )
+        }
+    }
+
+    private var advancedDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            statusLine("本机设备", diagnostics.localPeerName)
+            statusLine("服务", diagnostics.serviceType)
+            statusLine("已发现设备", diagnostics.discoveredPeers.localizedPeerListText)
+            statusLine("已邀请设备", diagnostics.invitedPeers.localizedPeerListText)
+            statusLine("Android 手动连接", store.androidBridge.manualConnectionHints)
+            statusLine("可配对设备", androidPairingDevicesText)
+
+            if let lastError = diagnostics.lastErrorMessage {
+                statusLine("最近错误", lastError)
+            }
+        }
+    }
+
+    private var receiverActionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("操作")
+            Button {
+                store.exportConnectionDiagnosticsToFinder()
+            } label: {
+                Label("导出诊断", systemImage: "square.and.arrow.up")
+            }
+
+            if let exportError = store.lastDiagnosticExportErrorMessage {
+                statusLine("导出错误", exportError)
+            } else if let exportURL = store.lastDiagnosticExportURL {
+                statusLine("最近导出", exportURL.path)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentEventsSection: some View {
+        if !diagnostics.events.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionHeader("最近事件")
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(diagnostics.events.suffix(5).reversed())) { event in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.name)
+                                .font(.caption.weight(.semibold))
+                            Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var receiverReadinessTitle: String {
+        switch summary.overallHealth {
+        case .ok:
+            summary.connectedDevices.isEmpty ? "等待设备连接" : "可以接收"
+        case .degraded:
+            "部分入口异常"
+        case .actionRequired:
+            "接收器需要处理"
+        }
+    }
+
+    private var receiverReadinessDetail: String {
+        switch summary.overallHealth {
+        case .ok:
+            if summary.connectedDevices.isEmpty {
+                return "手机端 TypeCarrier 可以连接到这台 Mac。"
+            }
+            return "已连接设备可以发送到这台 Mac。"
+        case .degraded:
+            if summary.connectedDevices.isEmpty {
+                return "仍有连接方式可用；受影响范围见下方。"
+            }
+            return "已连接设备仍可发送；受影响范围见下方。"
+        case .actionRequired:
+            return "当前问题会影响接收能力，需要处理后再使用。"
+        }
+    }
+
+    private var receiverHealthSystemImage: String {
+        switch summary.overallHealth {
+        case .ok:
+            summary.connectedDevices.isEmpty ? "antenna.radiowaves.left.and.right" : "checkmark.circle.fill"
+        case .degraded:
+            "exclamationmark.triangle"
+        case .actionRequired:
+            "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var receiverHealthTint: Color {
+        switch summary.overallHealth {
+        case .ok:
+            summary.connectedDevices.isEmpty ? .secondary : .green
+        case .degraded, .actionRequired:
+            .orange
+        }
+    }
+
+    private var appleEndpointStatusText: String {
+        store.carrierService.connectionState.localizedDisplayText
     }
 
     private var androidBridgeStatusText: String {
@@ -591,6 +751,42 @@ private struct ReceiverStatusPage: View {
             return "无"
         }
         return devices.map(\.name).joined(separator: "、")
+    }
+
+    private func issue(for endpoint: ReceiverEndpoint) -> ReceiverStatusIssue? {
+        summary.issues.first { issue in
+            issue.impact == .endpoint(endpoint)
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+    }
+
+    private func endpointRow(
+        title: String,
+        subtitle: String,
+        value: String,
+        issue: ReceiverStatusIssue?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(value)
+                .textSelection(.enabled)
+            if let issue {
+                Text(issue.message.localizedDiagnosticMessageText)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+        }
     }
 
     private func statusLine(_ title: String, _ value: String) -> some View {
@@ -656,6 +852,44 @@ private extension CarrierRecord.Status {
             .orange
         default:
             .secondary
+        }
+    }
+}
+
+private extension ReceiverDevicePlatform {
+    var systemImageName: String {
+        switch self {
+        case .apple:
+            "iphone"
+        case .android:
+            "apps.iphone"
+        }
+    }
+}
+
+private extension ReceiverIssueImpact {
+    var localizedManagementText: String {
+        switch self {
+        case .allDevices:
+            "影响所有设备"
+        case .endpoint(let endpoint):
+            switch endpoint {
+            case .appleMultipeer:
+                "可能影响 iPhone / iPad 连接"
+            case .androidBridge:
+                "可能影响 Android 连接"
+            }
+        }
+    }
+}
+
+private extension ReceiverIssueSeverity {
+    var systemImageName: String {
+        switch self {
+        case .warning:
+            "exclamationmark.triangle"
+        case .actionRequired:
+            "exclamationmark.triangle.fill"
         }
     }
 }

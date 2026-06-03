@@ -51,7 +51,22 @@ final class MacCarrierStore: ObservableObject {
         carrierService.connectionState
     }
 
+    var receiverStatusSummary: ReceiverStatusSummary {
+        ReceiverStatusSummary(
+            appleConnectionState: carrierService.connectionState,
+            appleConnectedDeviceNames: carrierService.diagnostics.connectedPeers,
+            androidConnectionState: androidEndpointConnectionState,
+            androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
+            sharedIssue: sharedReceiverIssue
+        )
+    }
+
     var receiverDisplayConnectionState: ConnectionState {
+        let connectedDeviceCount = receiverStatusSummary.connectedDevices.count
+        if connectedDeviceCount > 1 {
+            return .connected("\(connectedDeviceCount) 台设备")
+        }
+
         if carrierService.connectionState.isConnected {
             return carrierService.connectionState
         }
@@ -60,16 +75,19 @@ final class MacCarrierStore: ObservableObject {
             return .connected(androidDeviceName)
         }
 
+        if carrierService.connectionState.isFailed, androidEndpointConnectionState == .listening {
+            return .advertising
+        }
+
         return carrierService.connectionState
     }
 
     var receiverConnectedDeviceNames: [String] {
-        let names = carrierService.diagnostics.connectedPeers + androidBridge.connectedAndroidDeviceNames
-        return names.isEmpty ? [] : names.sorted()
+        receiverStatusSummary.connectedDevices.map(\.name)
     }
 
     var receiverHealthWarning: String? {
-        if connectionState.isFailed || carrierService.diagnostics.lastErrorMessage != nil {
+        if receiverStatusSummary.requiresGlobalAttention {
             return "连接异常，请尝试重启接收器。"
         }
 
@@ -202,6 +220,34 @@ final class MacCarrierStore: ObservableObject {
     private func bindAndroidBridge() {
         androidBridgeCancellable = androidBridge.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
+    private var androidEndpointConnectionState: ReceiverEndpointConnectionState {
+        if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
+            return .connected(androidDeviceName)
+        }
+
+        switch androidBridge.state {
+        case .stopped:
+            return .idle
+        case .listening:
+            return .listening
+        case .failed(let message):
+            return .failed(message)
+        }
+    }
+
+    private var sharedReceiverIssue: ReceiverStatusIssue? {
+        guard recordStore == nil else {
+            return nil
+        }
+
+        return ReceiverStatusIssue(
+            severity: .actionRequired,
+            impact: .allDevices,
+            message: "历史记录存储不可用",
+            suggestedAction: .restartReceiver
+        )
     }
 
     private static func formattedDuration(_ duration: TimeInterval) -> String {
