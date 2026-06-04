@@ -110,6 +110,45 @@ check_mac_record_action_toolbar() {
   fi
 }
 
+check_mac_main_window_uses_single_scene_path() {
+  if grep -q 'NSWindow(' Apps/macOS/App/MacAppCoordinator.swift; then
+    echo "Mac main window must be reopened through the SwiftUI WindowGroup, not a second manual NSWindow path."
+    return 1
+  fi
+
+  if grep -q 'NSHostingView(rootView: MainWindowView' Apps/macOS/App/MacAppCoordinator.swift; then
+    echo "MacAppCoordinator must not construct a second MainWindowView hosting tree."
+    return 1
+  fi
+}
+
+check_paste_diagnostics_capture_focus_and_restore_timing() {
+  local file="Apps/macOS/Services/PasteInjector.swift"
+  for marker in frontApp focusedElementResult postWaitSeconds clipboardRestore postValueResult; do
+    if ! grep -q "$marker" "$file"; then
+      echo "PasteInjector diagnostics must include ${marker}."
+      return 1
+    fi
+  done
+}
+
+check_clipboard_restore_is_opt_in() {
+  if ! grep -q 'restoreDelay: TimeInterval? = nil' Apps/macOS/Services/PasteInjector.swift; then
+    echo "PasteInjector clipboard restore must be optional and disabled by default."
+    return 1
+  fi
+
+  if ! grep -q 'clipboardRestore", "disabledBySetting"' Apps/macOS/Services/PasteInjector.swift; then
+    echo "PasteInjector must record when clipboard restore is disabled by setting."
+    return 1
+  fi
+
+  if ! grep -q 'restoresClipboardAfterAutomaticPaste' Apps/macOS/Stores/MacCarrierStore.swift; then
+    echo "MacCarrierStore must expose the clipboard restore setting."
+    return 1
+  fi
+}
+
 run_check "Whitespace check" git diff --check
 run_check "Generated Xcode project is in sync" check_project_generation
 run_check "Property lists are valid" check_plists
@@ -118,6 +157,9 @@ run_check "Signing placeholders stay generic" check_signing_placeholders
 run_check "Secret patterns are absent" check_secret_patterns
 run_check "Swift source hygiene" check_swift_source_hygiene
 run_check "Mac received record actions stay in the toolbar" check_mac_record_action_toolbar
+run_check "Mac main window uses the SwiftUI scene path" check_mac_main_window_uses_single_scene_path
+run_check "Paste diagnostics capture focus and restore timing" check_paste_diagnostics_capture_focus_and_restore_timing
+run_check "Clipboard restore is opt-in" check_clipboard_restore_is_opt_in
 
 if [[ "$failures" -gt 0 ]]; then
   echo "CI sanity checks failed with ${failures} issue(s)."

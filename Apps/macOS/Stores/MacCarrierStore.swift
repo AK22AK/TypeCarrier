@@ -3,18 +3,26 @@ import Combine
 import Foundation
 import TypeCarrierCore
 
+enum MacReceiverPreferenceKeys {
+    static let restoresClipboardAfterAutomaticPaste = "MacReceiverRestoresClipboardAfterAutomaticPaste"
+}
+
 @MainActor
 final class MacCarrierStore: ObservableObject {
+    private static let clipboardRestoreDelay: TimeInterval = 1.25
+
     @Published private(set) var lastPayloadText = ""
     @Published private(set) var lastPasteResult = PasteInjectionResult.idle
     @Published private(set) var accessibilityTrusted = false
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
+    @Published private(set) var restoresClipboardAfterAutomaticPaste: Bool
 
     @Published private(set) var carrierService: MultipeerCarrierService
     @Published private(set) var androidBridge: AndroidCarrierBridge
     let connectionDiagnosticLogFileURL: URL?
+    private let userDefaults: UserDefaults
     private let receiverDisplayName: String
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
@@ -22,7 +30,11 @@ final class MacCarrierStore: ObservableObject {
     private var carrierServiceCancellable: AnyCancellable?
     private var androidBridgeCancellable: AnyCancellable?
 
-    init() {
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        restoresClipboardAfterAutomaticPaste = userDefaults.bool(
+            forKey: MacReceiverPreferenceKeys.restoresClipboardAfterAutomaticPaste
+        )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
         receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
         carrierService = Self.makeCarrierService(
@@ -207,6 +219,14 @@ final class MacCarrierStore: ObservableObject {
         permissionChecker.openAccessibilitySettings()
     }
 
+    func setRestoresClipboardAfterAutomaticPaste(_ restoresClipboard: Bool) {
+        restoresClipboardAfterAutomaticPaste = restoresClipboard
+        userDefaults.set(
+            restoresClipboard,
+            forKey: MacReceiverPreferenceKeys.restoresClipboardAfterAutomaticPaste
+        )
+    }
+
     private func restart(reason: String, message: String) {
         carrierService.recordDiagnosticMarker(reason, message: message)
         restart()
@@ -284,13 +304,19 @@ final class MacCarrierStore: ObservableObject {
 
     func pasteTestText() {
         refreshAccessibilityStatus()
-        lastPasteResult = pasteInjector.paste(text: "来自 TypeCarrier 的测试文本")
+        lastPasteResult = pasteInjector.paste(
+            text: "来自 TypeCarrier 的测试文本",
+            restoreDelay: clipboardRestoreDelayIfEnabled
+        )
         recordPasteDiagnostic(lastPasteResult)
     }
 
     func paste(record: CarrierRecord) {
         refreshAccessibilityStatus()
-        lastPasteResult = pasteInjector.paste(text: record.text)
+        lastPasteResult = pasteInjector.paste(
+            text: record.text,
+            restoreDelay: clipboardRestoreDelayIfEnabled
+        )
         recordPasteDiagnostic(lastPasteResult)
     }
 
@@ -366,7 +392,10 @@ final class MacCarrierStore: ObservableObject {
             return
         }
 
-        let pasteResult = pasteInjector.paste(text: payload.text)
+        let pasteResult = pasteInjector.paste(
+            text: payload.text,
+            restoreDelay: clipboardRestoreDelayIfEnabled
+        )
         lastPasteResult = pasteResult
         recordPasteDiagnostic(pasteResult)
 
@@ -396,6 +425,10 @@ final class MacCarrierStore: ObservableObject {
             result.diagnosticEventName,
             message: result.fullDetail
         )
+    }
+
+    private var clipboardRestoreDelayIfEnabled: TimeInterval? {
+        restoresClipboardAfterAutomaticPaste ? Self.clipboardRestoreDelay : nil
     }
 
     private func syncRecords() {

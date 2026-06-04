@@ -116,6 +116,9 @@ struct MainWindowView: View {
     @ViewBuilder
     private var settingsDetailColumn: some View {
         switch selectedSettingsSection {
+        case .receiving:
+            SettingsReceivingPage(store: store)
+                .navigationTitle("接收")
         case .diagnostics:
             SettingsDiagnosticsPage(store: store)
                 .navigationTitle("诊断")
@@ -148,6 +151,7 @@ private enum MainWindowSection: String, Hashable, Identifiable {
 }
 
 private enum SettingsSection: String, Hashable, Identifiable {
+    case receiving
     case diagnostics
 
     var id: Self {
@@ -798,6 +802,16 @@ private struct SettingsListPane: View {
                     .padding(.bottom, 10)
 
                 SettingsSidebarRow(
+                    title: "接收",
+                    systemImage: "tray.and.arrow.down",
+                    tint: .green,
+                    isSelected: selectedSection == .receiving
+                ) {
+                    selectedSection = .receiving
+                }
+                .padding(.horizontal, 14)
+
+                SettingsSidebarRow(
                     title: "诊断",
                     systemImage: "stethoscope",
                     tint: .blue,
@@ -808,6 +822,35 @@ private struct SettingsListPane: View {
                 .padding(.horizontal, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private struct SettingsReceivingPage: View {
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        "自动粘贴后恢复剪贴板",
+                        isOn: Binding(
+                            get: { store.restoresClipboardAfterAutomaticPaste },
+                            set: { store.setRestoresClipboardAfterAutomaticPaste($0) }
+                        )
+                    )
+
+                    Text("关闭时，TypeCarrier 会把接收文本留在 Mac 剪贴板里；开启后会尝试在自动粘贴后恢复发送前的剪贴板内容。")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: 640, alignment: .leading)
+            .padding(.horizontal, 42)
+            .padding(.top, 48)
+            .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
