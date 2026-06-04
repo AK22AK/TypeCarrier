@@ -1,3 +1,9 @@
 <resources>
     <style name="Theme.TypeCarrier" parent="android:style/Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.TypeCarrier.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFFBFE</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.TypeCarrier</item>
+    </style>
 </resources>

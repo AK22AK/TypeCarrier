@@ -76,7 +76,7 @@ check_signing_placeholders() {
 check_secret_patterns() {
   local matches
   matches="$(
-    git grep -I -n -E 'AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-[A-Za-z0-9]{32,}|xox[baprs]-[A-Za-z0-9-]{20,}|-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----|(^|[^A-Za-z0-9_])(api[_-]?key|client[_-]?secret|password|secret|token)[[:space:]]*[:=][[:space:]]*["'\'']?[A-Za-z0-9_./+=-]{16,}' -- . ':!docs/github-history-remediation.md' || true
+    git grep -I -n -E 'AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{30,}|github_pat_[A-Za-z0-9_]{40,}|sk-[A-Za-z0-9]{32,}|xox[baprs]-[A-Za-z0-9-]{20,}|-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----|(^|[^A-Za-z0-9_])(api[_-]?key|client[_-]?secret|password|secret|token)[[:space:]]*[:=][[:space:]]*["'\''][A-Za-z0-9_./+=-]{16,}["'\'']' -- . ':!docs/github-history-remediation.md' || true
   )"
   if [[ -n "$matches" ]]; then
     echo "$matches"
