@@ -84,6 +84,32 @@ check_secret_patterns() {
   fi
 }
 
+check_mac_record_action_toolbar() {
+  local block
+  block="$(
+    awk '
+      /^private struct ReceivedRecordDetail: View/ { in_block = 1 }
+      /^private struct ReceiverStatusPage: View/ { in_block = 0 }
+      in_block { print }
+    ' Apps/macOS/Views/MainWindowView.swift
+  )"
+
+  if ! grep -q 'ToolbarItemGroup(placement: \.primaryAction)' <<<"$block"; then
+    echo "ReceivedRecordDetail must keep copy/delete actions in the primaryAction toolbar."
+    return 1
+  fi
+
+  if ! grep -q 'recordActionButtons' <<<"$block"; then
+    echo "ReceivedRecordDetail toolbar must render recordActionButtons."
+    return 1
+  fi
+
+  if grep -q 'recordActionBar' <<<"$block"; then
+    echo "ReceivedRecordDetail must not render recordActionBar inside the detail content."
+    return 1
+  fi
+}
+
 run_check "Whitespace check" git diff --check
 run_check "Generated Xcode project is in sync" check_project_generation
 run_check "Property lists are valid" check_plists
@@ -91,6 +117,7 @@ run_check "Forbidden local/private files are not tracked" check_forbidden_files
 run_check "Signing placeholders stay generic" check_signing_placeholders
 run_check "Secret patterns are absent" check_secret_patterns
 run_check "Swift source hygiene" check_swift_source_hygiene
+run_check "Mac received record actions stay in the toolbar" check_mac_record_action_toolbar
 
 if [[ "$failures" -gt 0 ]]; then
   echo "CI sanity checks failed with ${failures} issue(s)."
