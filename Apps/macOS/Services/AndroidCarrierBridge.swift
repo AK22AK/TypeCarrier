@@ -253,8 +253,7 @@ final class AndroidCarrierBridge: ObservableObject {
         if handshake.isPairingAttempt, handshake.pairingCode == localPairingCode {
             let trustToken = (try? AndroidTrustToken.generate()) ?? AndroidTrustToken(rawValue: UUID().uuidString)
             trustTokenStore.remember(trustToken, for: handshake.deviceID)
-            connectionState.deviceID = handshake.deviceID
-            connectionState.deviceName = handshake.deviceName
+            accept(handshake: handshake, from: connection, state: &connectionState)
             send(AndroidBridgeResponse(status: .accepted, message: "Paired.", trustToken: trustToken.rawValue, macID: macID, macName: displayName), to: connection)
             return
         }
@@ -264,14 +263,23 @@ final class AndroidCarrierBridge: ObservableObject {
            let challenge = handshake.challenge,
            let trustToken = trustTokenStore.token(for: handshake.deviceID),
            AndroidTrustToken.verify(token: trustToken, challenge: Data(challenge.utf8), proof: tokenProof) {
-            connectionState.deviceID = handshake.deviceID
-            connectionState.deviceName = handshake.deviceName
+            accept(handshake: handshake, from: connection, state: &connectionState)
             send(AndroidBridgeResponse(status: .accepted, message: "Trusted.", macID: macID, macName: displayName), to: connection)
             return
         }
 
         activeSenderGate.release(deviceID: handshake.deviceID)
         sendAndRemove(AndroidBridgeResponse(status: .invalidPairing, message: "Invalid pairing code or trust token."), to: connection)
+    }
+
+    private func accept(
+        handshake: AndroidBridgeHandshake,
+        from connection: NWConnection,
+        state connectionState: inout BridgeConnectionState
+    ) {
+        removeSupersededConnections(for: handshake.deviceID, keeping: connection)
+        connectionState.deviceID = handshake.deviceID
+        connectionState.deviceName = handshake.deviceName
     }
 
     private func send(_ response: AndroidBridgeResponse, to connection: NWConnection) {
@@ -319,26 +327,42 @@ final class AndroidCarrierBridge: ObservableObject {
 
     private func remove(_ connection: NWConnection) {
         let id = ObjectIdentifier(connection)
-        if let deviceID = connections[id]?.deviceID {
+        let deviceID = connections[id]?.deviceID
+        connections[id] = nil
+        if let deviceID,
+           !connections.values.contains(where: { $0.deviceID == deviceID }) {
             activeSenderGate.release(deviceID: deviceID)
         }
-        connections[id] = nil
         updateConnectedAndroidDevices()
         connection.cancel()
     }
 
-    private func updateConnectedAndroidDevices() {
-        connectedAndroidDeviceNames = connections.values
-            .compactMap { state in
-                guard state.deviceID != nil else {
-                    return nil
-                }
-                if let deviceName = state.deviceName, !deviceName.isEmpty {
-                    return deviceName
-                }
-                return "Android"
+    private func removeSupersededConnections(for deviceID: String, keeping connection: NWConnection) {
+        let currentID = ObjectIdentifier(connection)
+        let supersededConnections = connections
+            .filter { id, state in
+                id != currentID && state.deviceID == deviceID
             }
-            .sorted()
+
+        for (id, state) in supersededConnections {
+            connections[id] = nil
+            state.connection.cancel()
+        }
+    }
+
+    private func updateConnectedAndroidDevices() {
+        var devicesByID: [String: String] = [:]
+        for state in connections.values {
+            guard let deviceID = state.deviceID else {
+                continue
+            }
+            if let deviceName = state.deviceName, !deviceName.isEmpty {
+                devicesByID[deviceID] = deviceName
+            } else {
+                devicesByID[deviceID] = "Android"
+            }
+        }
+        connectedAndroidDeviceNames = devicesByID.values.sorted()
     }
 
     private func fail(_ message: String) {

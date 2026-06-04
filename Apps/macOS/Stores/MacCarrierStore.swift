@@ -366,13 +366,29 @@ final class MacCarrierStore: ObservableObject {
             return
         }
 
+        let pasteResult = pasteInjector.paste(text: payload.text)
+        lastPasteResult = pasteResult
+        recordPasteDiagnostic(pasteResult)
+
+        var updatedRecord = record
+        updatedRecord.status = Self.recordStatus(for: pasteResult.pasteStatus)
+        updatedRecord.updatedAt = pasteResult.date
+        updatedRecord.detail = pasteResult.status
+        do {
+            try recordStore.upsert(updatedRecord)
+            syncRecords()
+        } catch {
+            carrierService.recordDiagnosticMarker(
+                "record.pasteStatusUpdate.failed",
+                message: "Failed to update paste status for \(payload.id): \(error.localizedDescription)"
+            )
+        }
+
         sendReceipt(.receipt(CarrierDeliveryReceipt(
             payloadID: payload.id,
-            pasteStatus: .received,
-            detail: "Mac 已接收来自 \(sourceDeviceName) 的文本"
+            pasteStatus: pasteResult.pasteStatus,
+            detail: pasteResult.status
         )))
-        lastPasteResult = pasteInjector.paste(text: payload.text)
-        recordPasteDiagnostic(lastPasteResult)
     }
 
     private func recordPasteDiagnostic(_ result: PasteInjectionResult) {
@@ -384,6 +400,19 @@ final class MacCarrierStore: ObservableObject {
 
     private func syncRecords() {
         records = recordStore?.records ?? []
+    }
+
+    private static func recordStatus(for pasteStatus: CarrierDeliveryReceipt.PasteStatus) -> CarrierRecord.Status {
+        switch pasteStatus {
+        case .received:
+            return .received
+        case .posted:
+            return .pastePosted
+        case .unverifiedPosted:
+            return .pasteUnverified
+        case .failed:
+            return .pasteFailed
+        }
     }
 }
 
