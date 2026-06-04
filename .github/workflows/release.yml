@@ -50,6 +50,13 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
       - name: Run project sanity checks
         run: script/ci_sanity.sh
 
@@ -98,6 +105,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Build Android APK
+        working-directory: Apps/Android
+        run: ./gradlew testDebugUnitTest assembleDebug
+
+      - name: Prepare Android release asset
+        run: |
+          mkdir -p dist
+          cp Apps/Android/app/build/outputs/apk/debug/app-debug.apk "dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk"
+          echo "ANDROID_APK=dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk" >> "$GITHUB_ENV"
+
       - name: Create or update draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,4 +134,11 @@ jobs:
               --verify-tag
           fi
 
-          echo "::notice::Draft prerelease is ready. Upload the local Personal Team macOS development zip manually if this release includes a binary asset."
+      - name: Upload Android APK to draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$ANDROID_APK" --clobber
+
+      - name: Report release asset status
+        run: |
+          echo "::notice::Draft prerelease is ready. Android debug APK uploaded as $(basename "$ANDROID_APK"). Upload the local Personal Team macOS development zip manually if this release includes a macOS binary asset."

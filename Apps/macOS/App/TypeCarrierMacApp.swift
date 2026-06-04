@@ -8,6 +8,7 @@ struct TypeCarrierMacApp: App {
     var body: some Scene {
         WindowGroup("TypeCarrier", id: "main") {
             MainWindowView(store: coordinator.store)
+                .background(MainWindowRequestInstaller(coordinator: coordinator))
         }
         .defaultSize(width: 900, height: 620)
         .windowResizability(.contentSize)
@@ -19,6 +20,22 @@ struct TypeCarrierMacApp: App {
             MenuBarStatusIcon(store: coordinator.store)
         }
         .menuBarExtraStyle(.menu)
+    }
+}
+
+private struct MainWindowRequestInstaller: View {
+    @ObservedObject var coordinator: MacAppCoordinator
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                coordinator.setMainWindowRequestHandler {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
     }
 }
 
@@ -35,7 +52,7 @@ private struct MenuBarStatusIcon: View {
             return .warning
         }
 
-        return store.connectionState.isConnected ? .connected : .idle
+        return store.receiverDisplayConnectionState.isConnected ? .connected : .idle
     }
 
     private var accessibilityLabel: String {
@@ -43,7 +60,7 @@ private struct MenuBarStatusIcon: View {
             return "TypeCarrier 接收器异常"
         }
 
-        return store.connectionState.isConnected ? "TypeCarrier 已连接" : "TypeCarrier 空闲"
+        return store.receiverDisplayConnectionState.isConnected ? "TypeCarrier 已连接" : "TypeCarrier 空闲"
     }
 }
 

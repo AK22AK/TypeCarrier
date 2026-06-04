@@ -1,6 +1,5 @@
 import AppKit
 import OSLog
-import SwiftUI
 
 @MainActor
 final class MacAppCoordinator: NSObject, ObservableObject {
@@ -8,7 +7,7 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
     private let logger = Logger(subsystem: "org.typecarrier.mac", category: "Lifecycle")
     private let hotKeyMonitor = GlobalHotKeyMonitor()
-    private var mainWindow: NSWindow?
+    private var mainWindowRequestHandler: (() -> Void)?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var sleepStartedAt: Date?
     private var lastWakeRestartAt: Date?
@@ -25,6 +24,10 @@ final class MacAppCoordinator: NSObject, ObservableObject {
         observeWorkspaceWake()
     }
 
+    func setMainWindowRequestHandler(_ handler: @escaping () -> Void) {
+        mainWindowRequestHandler = handler
+    }
+
     func showMainWindow() {
         if let existingWindow = NSApp.windows.first(where: { $0.title == "TypeCarrier" && $0.canBecomeMain }) {
             NSApp.activate(ignoringOtherApps: true)
@@ -32,25 +35,8 @@ final class MacAppCoordinator: NSObject, ObservableObject {
             return
         }
 
-        if mainWindow == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 980, height: 620),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "TypeCarrier"
-            window.minSize = NSSize(width: 900, height: 560)
-            window.maxSize = NSSize(width: 1_040, height: 1_000)
-            window.isReleasedWhenClosed = false
-            window.delegate = self
-            window.contentView = NSHostingView(rootView: MainWindowView(store: store))
-            window.center()
-            mainWindow = window
-        }
-
         NSApp.activate(ignoringOtherApps: true)
-        mainWindow?.makeKeyAndOrderFront(nil)
+        mainWindowRequestHandler?()
     }
 
     private func observeWorkspaceWake() {
@@ -132,16 +118,5 @@ extension MacAppCoordinator: NSApplicationDelegate {
             showMainWindow()
         }
         return true
-    }
-}
-
-extension MacAppCoordinator: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        guard notification.object as? NSWindow === mainWindow else {
-            return
-        }
-
-        mainWindow?.delegate = nil
-        mainWindow = nil
     }
 }

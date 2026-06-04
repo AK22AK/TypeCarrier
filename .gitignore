@@ -6,3 +6,9 @@ DerivedData/
 .DS_Store
 .codex/
 Configs/Signing.local.xcconfig
+
+# Android local build state
+Apps/Android/.gradle/
+Apps/Android/local.properties
+Apps/Android/build/
+Apps/Android/app/build/

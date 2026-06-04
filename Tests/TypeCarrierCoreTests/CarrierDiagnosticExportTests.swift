@@ -25,6 +25,54 @@ final class CarrierDiagnosticExportTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: exportURL, encoding: .utf8), contents)
     }
 
+    func testReadsRecentDiagnosticLogEntriesNewestFirst() throws {
+        let sourceURL = try temporaryFileURL(fileName: "mac-connection-events.jsonl")
+        let store = try CarrierDiagnosticLogStore(fileURL: sourceURL)
+        let diagnostics = CarrierDiagnostics(
+            role: "receiver",
+            localPeerName: "Mac",
+            serviceType: "typecarrier"
+        )
+
+        try store.append(
+            event: CarrierDiagnosticEvent(
+                timestamp: try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-03T09:00:00Z")),
+                name: "service.start",
+                message: "Starting receiver",
+                peerName: nil,
+                connectionState: .advertising,
+                connectedPeers: []
+            ),
+            diagnostics: diagnostics
+        )
+        try store.append(
+            event: CarrierDiagnosticEvent(
+                timestamp: try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-03T09:01:00Z")),
+                name: "advertiser.start",
+                message: "Advertising typecarrier",
+                peerName: nil,
+                connectionState: .advertising,
+                connectedPeers: []
+            ),
+            diagnostics: diagnostics
+        )
+        try store.append(
+            event: CarrierDiagnosticEvent(
+                timestamp: try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-03T09:02:00Z")),
+                name: "paste.command.posted",
+                message: "已接收文本，已发送粘贴指令",
+                peerName: "iPhone",
+                connectionState: .connected("iPhone"),
+                connectedPeers: ["iPhone"]
+            ),
+            diagnostics: diagnostics
+        )
+
+        let entries = try store.recentEntries(limit: 2)
+
+        XCTAssertEqual(entries.map(\.name), ["paste.command.posted", "advertiser.start"])
+    }
+
     private func temporaryFileURL(fileName: String) throws -> URL {
         let directoryURL = try temporaryDirectoryURL()
         return directoryURL.appendingPathComponent(fileName)

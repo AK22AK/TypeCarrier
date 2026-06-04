@@ -1,12 +1,13 @@
 # TypeCarrier 多设备管理后续计划
 
-状态：后续路线图。0.1 Beta 仍按 1:1 receiver 约束发布，本计划不代表当前版本已经支持多设备连接。
+状态：后续路线图。当前 Mac 端已经支持 iPhone Multipeer 入口和 Android Bridge 入口并行接收；同一入口内的多 sender 管理仍按后续能力处理。
 
 ## 目标
 
-- 将 TypeCarrier 从当前 1:1 receiver 约束升级为局域网多设备模型。
+- 将 TypeCarrier 从当前“跨入口可并行、同入口仍偏单 active sender”的状态升级为完整局域网多设备模型。
 - iOS 端展示可用 Mac receiver 列表，并要求发送前选择目标 Mac。
 - macOS 端允许多个 iOS sender 同时连接，收到任意 sender 文本后继续走现有接收、粘贴、历史和回执流程。
+- macOS 状态展示区分全局接收健康、iOS Multipeer 入口健康、Android Bridge 入口健康和共享执行层问题；单入口异常不覆盖其他入口的可用状态。
 - 第一版不做配对、可信设备列表、二维码或跨网络中转。
 
 ## 范围
@@ -30,6 +31,7 @@
 - 菜单栏显示已连接 sender 数量和最近发送来源。
 - 主窗口 diagnostics 显示 connected sender 列表。
 - 接收历史记录保留来源设备名/device id，便于区分真机和模拟器。
+- 全局感叹号只表示所有入口不可用或共享执行层需要处理；Android Bridge 端口占用这类单入口异常只在对应入口状态中提示。
 
 ### Docs
 
