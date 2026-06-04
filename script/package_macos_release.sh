@@ -11,7 +11,7 @@ DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist}"
 TYPECARRIER_RELEASE_CHANNEL="${TYPECARRIER_RELEASE_CHANNEL:-development}"
 
 if [[ "$TYPECARRIER_RELEASE_CHANNEL" != "development" ]]; then
-  echo "error: only TYPECARRIER_RELEASE_CHANNEL=development is supported for 0.1 Personal Team beta packaging." >&2
+  echo "error: only TYPECARRIER_RELEASE_CHANNEL=development is supported for Personal Team beta packaging." >&2
   echo "error: Developer ID notarization is intentionally deferred until the paid Apple Developer Program is configured." >&2
   exit 1
 fi
@@ -43,13 +43,14 @@ codesign -dv --verbose=4 "$APP_PATH" 2>&1 | sed -n '/Authority=/p;/TeamIdentifie
 
 if ! spctl --assess --type execute --verbose=4 "$APP_PATH"; then
   echo "warning: Gatekeeper assessment failed." >&2
-  echo "warning: This is expected for the 0.1 development package when signed with Apple Development / Personal Team." >&2
+  echo "warning: This is expected for the development package when signed with Apple Development / Personal Team." >&2
   echo "warning: Public no-warning macOS distribution requires Developer ID signing and notarization." >&2
 fi
 
 rm -f "$ARCHIVE_PATH"
 ditto -c -k --keepParent --sequesterRsrc "$APP_PATH" "$ARCHIVE_PATH"
-shasum -a 256 "$ARCHIVE_PATH"
+(cd "$DIST_DIR" && shasum -a 256 "$ARCHIVE_NAME") | tee "$ARCHIVE_PATH.sha256"
 
 echo "Created $ARCHIVE_PATH"
+echo "Created $ARCHIVE_PATH.sha256"
 echo "Release channel: $TYPECARRIER_RELEASE_CHANNEL"

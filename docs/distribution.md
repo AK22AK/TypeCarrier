@@ -50,26 +50,26 @@ DEVELOPMENT_TEAM = YOURTEAMID
 - 这个 macOS 测试包不是 Developer ID notarized 正式包，Gatekeeper 可能拦截。
 - 不要把 0.1 Beta 的 macOS zip 描述成对普通用户即开即用的正式安装包。
 
-建议 tag 命名：
+0.1.1 建议 tag 命名：
 
 ```sh
-git tag -a v0.1.0-beta.1 -m "TypeCarrier 0.1 Beta 1"
-git push origin v0.1.0-beta.1
+git tag -a v0.1.1 -m "TypeCarrier 0.1.1"
+git push origin v0.1.1
 ```
 
 创建 GitHub prerelease：
 
 ```sh
-gh release create v0.1.0-beta.1 \
-  --title "TypeCarrier 0.1 Beta 1" \
-  --notes-file docs/releases/0.1-beta.1.md \
+gh release create v0.1.1 \
+  --title "TypeCarrier 0.1.1" \
+  --notes-file docs/releases/0.1.1.md \
   --prerelease
 ```
 
 如果已经准备好 macOS development zip，可以一并上传：
 
 ```sh
-gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1-development.zip
+gh release upload v0.1.1 dist/TypeCarrierMac-0.1.1-2-development.zip
 ```
 
 ### 发布后核对
@@ -78,7 +78,7 @@ gh release upload v0.1.0-beta.1 dist/TypeCarrierMac-0.1-1-development.zip
 
 1. GitHub Release 标记为 prerelease，不是正式 stable release。
 2. Release 页面显示 macOS development zip 和对应 `.sha256` 文件。
-3. `.sha256` 内容与本地 `shasum -a 256 dist/TypeCarrierMac-0.1-1-development.zip` 输出一致。
+3. `.sha256` 内容与本地 `shasum -a 256 dist/TypeCarrierMac-0.1.1-2-development.zip` 输出一致。
 4. Release body 保留 beta 定位、iOS source-only 说明、macOS development 签名限制和 Gatekeeper 风险。
 5. 当前 tag 指向预期的发布 commit，而不是临时本地 commit。
 6. 如果 GitHub Actions 因 runner Xcode 版本跳过 build，发布前必须使用本机 Xcode 重新跑完 release note 里的验证命令。
@@ -94,9 +94,9 @@ script/package_macos_release.sh
 
 脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>-development.zip` 及 SHA-256。
 
-0.1 默认生成 development 测试包：
+0.1.1 默认生成 development 测试包：
 
-- 文件名：`TypeCarrierMac-0.1-1-development.zip`。
+- 文件名：`TypeCarrierMac-0.1.1-2-development.zip`。
 - 签名：Apple Development / Personal Team。
 - Gatekeeper assessment 可能失败；脚本会输出 warning，但不会把它当作 0.1 development 包的构建失败。
 
