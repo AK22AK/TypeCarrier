@@ -41,14 +41,21 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 官方 App Store 或 Mac 版本应从可信本机或私有发布环境归档。不要把证书、provisioning profile、App Store Connect API key 或私有发布配置提交到公开仓库。
 
+## 用户下载入口
+
+- iOS：前往 App Store 下载。App Store 页面尚未上架，当前占位链接为 [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier)，正式上架后替换为真实商店地址。
+- Android：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 APK 侧载包。
+- macOS：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 Mac 侧载包。
+
 ## GitHub Beta 发布
 
-首个 0.1 Beta 可以按 GitHub prerelease 处理：
+GitHub Release 提供 Android / macOS 侧载包，并保留到最新 Release 的自引用入口：
 
-- iOS 端只发布源码和说明，不在 GitHub Release 上传可直接安装的 iOS 构建产物。
-- macOS 端随 release 上传 Apple Development / Personal Team 签名的测试包。
-- 这个 macOS 测试包不是 Developer ID notarized 正式包，Gatekeeper 可能拦截。
-- 不要把 0.1 Beta 的 macOS zip 描述成对普通用户即开即用的正式安装包。
+- iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；正式获取方式是 App Store。
+- Android 端随 release 上传 APK 侧载包。
+- macOS 端随 release 上传测试包。
+- macOS 测试包可能不是 Developer ID notarized 正式包，Gatekeeper 可能拦截。
+- 不要把 beta 侧载包描述成对普通用户即开即用的正式安装包。
 
 0.1.1 建议 tag 命名：
 
@@ -77,9 +84,9 @@ gh release upload v0.1.1 dist/TypeCarrierMac-0.1.1-2-development.zip
 发布后按下面顺序确认：
 
 1. GitHub Release 标记为 prerelease，不是正式 stable release。
-2. Release 页面显示 macOS development zip 和对应 `.sha256` 文件。
-3. `.sha256` 内容与本地 `shasum -a 256 dist/TypeCarrierMac-0.1.1-2-development.zip` 输出一致。
-4. Release body 保留 beta 定位、iOS source-only 说明、macOS development 签名限制和 Gatekeeper 风险。
+2. Release 页面显示 Android APK、macOS zip 以及对应校验文件。
+3. 校验文件内容与本地 `shasum -a 256` 输出一致。
+4. Release body 保留 beta 定位、iOS App Store 获取方式、Android / macOS 侧载说明、macOS 签名限制和 Gatekeeper 风险。
 5. 当前 tag 指向预期的发布 commit，而不是临时本地 commit。
 6. 如果 GitHub Actions 因 runner Xcode 版本跳过 build，发布前必须使用本机 Xcode 重新跑完 release note 里的验证命令。
 7. 发布后下载一次 GitHub asset，确认 zip 可以解压，app bundle 版本号与 release tag 对应。

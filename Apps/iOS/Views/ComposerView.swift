@@ -15,6 +15,7 @@ struct ComposerView: View {
     @State private var showsDebugFeatures = false
     @State private var showsHistory = false
     @State private var showsSettings = false
+    @State private var showsAbout = false
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
@@ -48,6 +49,9 @@ struct ComposerView: View {
             }
             .navigationDestination(isPresented: $showsSettings) {
                 ComposerSettingsView(store: store)
+            }
+            .navigationDestination(isPresented: $showsAbout) {
+                AboutView()
             }
             .navigationDestination(isPresented: $showsDebugFeatures) {
                 DebugFeaturesView(store: store)
@@ -183,6 +187,13 @@ struct ComposerView: View {
                     showsSettings = true
                 } label: {
                     Label("设置", systemImage: "gearshape")
+                }
+
+                Button {
+                    prepareForChildNavigation()
+                    showsAbout = true
+                } label: {
+                    Label("关于", systemImage: "info.circle")
                 }
 
                 Button {
@@ -639,6 +650,11 @@ struct ComposerView: View {
 
 }
 
+private enum PlatformDownloadLinks {
+    static let appStorePlaceholderURL = URL(string: "https://apps.apple.com/app/typecarrier")!
+    static let latestGitHubReleaseURL = URL(string: "https://github.com/AK22AK/TypeCarrier/releases/latest")!
+}
+
 private struct TypeCarrierHeaderLogoMark: View {
     var body: some View {
         Image("TypeCarrierLogoMark")
@@ -727,6 +743,97 @@ private struct ConnectionStatusIndicator: View {
 private extension ComposerStore.ConnectionStatus {
     var isBreathing: Bool {
         self == .searching || self == .connecting
+    }
+}
+
+private struct AboutView: View {
+    var body: some View {
+        List {
+            Section {
+                AboutInfoRow(title: "应用", value: "TypeCarrier")
+                AboutInfoRow(title: "版本", value: appVersionText)
+            }
+
+            Section {
+                Link(destination: PlatformDownloadLinks.appStorePlaceholderURL) {
+                    PlatformDownloadRow(
+                        title: "iOS",
+                        detail: "前往 App Store 下载",
+                        systemImage: "iphone"
+                    )
+                }
+
+                Link(destination: PlatformDownloadLinks.latestGitHubReleaseURL) {
+                    PlatformDownloadRow(
+                        title: "Android",
+                        detail: "在 GitHub 最新 Release 下载 APK 侧载包",
+                        systemImage: "app"
+                    )
+                }
+
+                Link(destination: PlatformDownloadLinks.latestGitHubReleaseURL) {
+                    PlatformDownloadRow(
+                        title: "macOS",
+                        detail: "在 GitHub 最新 Release 下载 Mac 侧载包",
+                        systemImage: "laptopcomputer"
+                    )
+                }
+            } header: {
+                Text("更多平台")
+            } footer: {
+                Text("iOS App Store 页面尚未上架，当前链接是占位位置；Android 和 macOS 目前通过 GitHub 最新 Release 提供侧载包。")
+            }
+        }
+        .navigationTitle("关于")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var appVersionText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+
+        switch (version, build) {
+        case let (version?, build?) where !version.isEmpty && !build.isEmpty:
+            return "\(version) (\(build))"
+        case let (version?, _) where !version.isEmpty:
+            return version
+        default:
+            return "未知"
+        }
+    }
+}
+
+private struct AboutInfoRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer(minLength: 16)
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+private struct PlatformDownloadRow: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: systemImage)
+        }
     }
 }
 

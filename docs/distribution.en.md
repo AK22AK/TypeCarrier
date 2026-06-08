@@ -37,14 +37,21 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 `Configs/Signing.local.xcconfig` is gitignored and should stay local.
 
+## User Download Entry Points
+
+- iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
+- Android: download the sideloadable APK from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+- macOS: download the sideloadable Mac package from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+
 ## GitHub Beta Release
 
-The first 0.1 Beta should be published as a GitHub prerelease:
+GitHub Release provides Android / macOS sideload packages and should keep a self-link to the latest Release:
 
-- The iOS side is source-only. No installable iOS build is uploaded to GitHub Release.
-- The macOS side may upload an Apple Development / Personal Team signed testing zip.
-- This macOS testing zip is not a Developer ID notarized public distribution build. Gatekeeper may block it.
-- Do not describe the 0.1 Beta macOS zip as a regular user-ready installer.
+- iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store.
+- Android uploads a sideloadable APK.
+- macOS uploads a testing package.
+- The macOS testing package may not be a Developer ID notarized public distribution build. Gatekeeper may block it.
+- Do not describe beta sideload packages as regular user-ready installers.
 
 Recommended tag for 0.1.1:
 
@@ -73,9 +80,9 @@ gh release upload v0.1.1 dist/TypeCarrierMac-0.1.1-2-development.zip
 After publishing, verify in this order:
 
 1. The GitHub Release is marked as a prerelease, not a stable release.
-2. The Release page shows the macOS development zip and the matching `.sha256` file.
-3. The `.sha256` content matches `shasum -a 256 dist/TypeCarrierMac-0.1.1-2-development.zip`.
-4. The Release body keeps the beta positioning, iOS source-only note, macOS development signing limitation, and Gatekeeper risk.
+2. The Release page shows the Android APK, macOS zip, and matching checksum files.
+3. The checksum files match local `shasum -a 256` output.
+4. The Release body keeps the beta positioning, iOS App Store acquisition path, Android / macOS sideload notes, macOS signing limitation, and Gatekeeper risk.
 5. The tag points at the intended release commit, not a temporary local commit.
 6. If GitHub Actions skipped builds because of the runner Xcode version, rerun the release note verification commands locally before publishing.
 7. Download the GitHub asset once after publishing, unzip it, and confirm the app bundle version matches the release tag.

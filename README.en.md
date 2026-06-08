@@ -31,12 +31,17 @@ TypeCarrier is currently a native Apple 0.1 Beta:
 
 ## Downloads and Releases
 
-0.1 Beta is published as a GitHub prerelease:
+Users can get TypeCarrier from these platform-specific entry points:
 
-- The iOS side is source-only. No installable iOS build is provided through GitHub.
-- The macOS zip is an Apple Development / Personal Team signed testing build for technical preview and small-scope testing.
-- The macOS testing build is not a Developer ID notarized public distribution build. Gatekeeper may block it.
-- TestFlight, App Store distribution, and Developer ID notarized macOS builds require the paid Apple Developer Program and are deferred to later beta or stable releases.
+- iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
+- Android: download the sideloadable APK from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+- macOS: download the sideloadable Mac package from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+
+Current GitHub Releases are still beta / sideload distribution:
+
+- Android and macOS packages are provided through GitHub Release, not through app stores.
+- The macOS testing package may still be Apple Development / Personal Team signed and may not be a Developer ID notarized public distribution build. Gatekeeper may block it.
+- iOS installable builds are not provided through GitHub Release. The official iOS acquisition path is the App Store.
 
 ## Build
 

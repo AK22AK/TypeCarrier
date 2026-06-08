@@ -41,6 +41,8 @@ class AndroidCarrierRepositoryImpl(
     private val _services = MutableStateFlow(emptyList<MacService>())
     private val _discoveryError = MutableStateFlow<String?>(null)
     private var client: AndroidCarrierClient? = null
+    private var manualHostValue = ""
+    private var manualPortValue = defaultAndroidBridgePort.toString()
     private val discovery = MacDiscovery(
         context = appContext,
         onServicesChanged = { _services.value = it },
@@ -85,15 +87,15 @@ class AndroidCarrierRepositoryImpl(
         get() = readTrustedMacs()
 
     override var manualHost: String
-        get() = prefs.getString("manual_host", "") ?: ""
+        get() = manualHostValue
         set(value) {
-            prefs.edit().putString("manual_host", value.trim()).apply()
+            manualHostValue = value.trim()
         }
 
     override var manualPort: String
-        get() = prefs.getString("manual_port", "17641") ?: "17641"
+        get() = manualPortValue
         set(value) {
-            prefs.edit().putString("manual_port", value.filter(Char::isDigit).take(5)).apply()
+            manualPortValue = value.filter(Char::isDigit).take(5)
         }
 
     override var senderDisplayName: String

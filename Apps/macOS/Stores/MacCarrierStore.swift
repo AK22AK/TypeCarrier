@@ -41,7 +41,10 @@ final class MacCarrierStore: ObservableObject {
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
+        androidBridge = AndroidCarrierBridge(
+            displayName: receiverDisplayName,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
@@ -119,11 +122,19 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func start() {
+        startCarrierService()
+        startAndroidBridge()
+    }
+
+    private func startCarrierService() {
         carrierService.start { [weak self] envelope, peerID in
             self?.handle(envelope, from: peerID.displayName) { receipt in
                 try? self?.carrierService.send(receipt)
             }
         }
+    }
+
+    private func startAndroidBridge() {
         androidBridge.start { [weak self] envelope, deviceName, reply in
             self?.handle(envelope, from: deviceName, sendReceipt: reply)
         }
@@ -140,12 +151,11 @@ final class MacCarrierStore: ObservableObject {
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        androidBridge.stop()
-        androidBridgeCancellable = nil
-        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
         bindCarrierService()
-        bindAndroidBridge()
-        start()
+        startCarrierService()
+        androidBridge.restart { [weak self] envelope, deviceName, reply in
+            self?.handle(envelope, from: deviceName, sendReceipt: reply)
+        }
         carrierService.recordDiagnosticMarker(
             rebuiltReason,
             message: "Created a fresh receiver service after restart."
