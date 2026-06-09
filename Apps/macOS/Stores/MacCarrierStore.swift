@@ -37,12 +37,14 @@ final class MacCarrierStore: ObservableObject {
         )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
         receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
-        carrierService = Self.makeCarrierService(
+        let bridge = AndroidCarrierBridge(
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        androidBridge = AndroidCarrierBridge(
+        androidBridge = bridge
+        carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
+            androidDiscoveryInfo: bridge.bonjourDiscoveryInfo,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         do {
@@ -149,6 +151,7 @@ final class MacCarrierStore: ObservableObject {
         carrierServiceCancellable = nil
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
+            androidDiscoveryInfo: androidBridge.bonjourDiscoveryInfo,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         bindCarrierService()
@@ -244,11 +247,13 @@ final class MacCarrierStore: ObservableObject {
 
     private static func makeCarrierService(
         displayName: String,
+        androidDiscoveryInfo: [String: String],
         diagnosticLogFileURL: URL?
     ) -> MultipeerCarrierService {
         MultipeerCarrierService(
             role: .receiver,
             displayName: displayName,
+            receiverDiscoveryInfoExtras: androidDiscoveryInfo,
             diagnosticLogFileURL: diagnosticLogFileURL
         )
     }

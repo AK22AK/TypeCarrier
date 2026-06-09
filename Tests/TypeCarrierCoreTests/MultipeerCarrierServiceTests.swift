@@ -218,6 +218,23 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "available")
     }
 
+    func testReceiverDiscoveryInfoIncludesAndroidBridgeMetadata() {
+        let service = MultipeerCarrierService(
+            role: .receiver,
+            displayName: "MacBook Pro",
+            receiverDiscoveryInfoExtras: [
+                "androidPort": "17641",
+                "macID": "mac-123",
+                "macName": "MacBook Pro",
+            ]
+        )
+
+        XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "available")
+        XCTAssertEqual(service.discoveryInfoForTesting?["androidPort"], "17641")
+        XCTAssertEqual(service.discoveryInfoForTesting?["macID"], "mac-123")
+        XCTAssertEqual(service.discoveryInfoForTesting?["macName"], "MacBook Pro")
+    }
+
     private func waitForDiagnosticEvents(
         in service: MultipeerCarrierService,
         containing eventName: String,

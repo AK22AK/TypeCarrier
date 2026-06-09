@@ -19,7 +19,7 @@ final class AndroidCarrierBridge: ObservableObject {
         }
     }
 
-    static let serviceType = "_typecarrier-json._tcp"
+    static let serviceType = AndroidBonjourAdvertisement.serviceType
     static let defaultPort: NWEndpoint.Port = 17641
     private static let macIDDefaultsKey = "AndroidBridgeMacID"
     private static let pairingCodeDefaultsKey = "AndroidBridgePairingCode"
@@ -32,6 +32,14 @@ final class AndroidCarrierBridge: ObservableObject {
 
     var pairingCode: String {
         localPairingCode
+    }
+
+    var bonjourDiscoveryInfo: [String: String] {
+        AndroidBonjourAdvertisement.discoveryInfo(
+            macID: macID,
+            macName: displayName,
+            port: Self.defaultPort.rawValue
+        )
     }
 
     var manualConnectionHints: String {
@@ -56,7 +64,6 @@ final class AndroidCarrierBridge: ObservableObject {
     private let trustTokenStore: AndroidTrustTokenStore
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var listener: NWListener?
-    private var bonjourPublisher: AndroidBonjourPublisher?
     private var pairingBrowser: AndroidPairingBrowser?
     private var connections: [ObjectIdentifier: BridgeConnectionState] = [:]
     private var activeSenderGate = AndroidBridgeActiveSenderGate()
@@ -112,7 +119,6 @@ final class AndroidCarrierBridge: ObservableObject {
             )
             listener.start(queue: .main)
             self.listener = listener
-            startPairingBrowser()
             state = .listening(port: nil)
         } catch {
             fail(error.localizedDescription)
@@ -130,8 +136,6 @@ final class AndroidCarrierBridge: ObservableObject {
             isStoppingListener = true
         }
         listener?.cancel()
-        bonjourPublisher?.stop()
-        bonjourPublisher = nil
         pairingBrowser?.stop()
         pairingBrowser = nil
         discoveredAndroidPairingDevices = []
@@ -202,7 +206,6 @@ final class AndroidCarrierBridge: ObservableObject {
                 "androidBridge.listener.ready",
                 message: "Android bridge listening on \(manualConnectionHints)."
             )
-            publishBonjour(port: port)
         case .failed(let error):
             fail(error.localizedDescription)
         case .cancelled:
@@ -214,7 +217,7 @@ final class AndroidCarrierBridge: ObservableObject {
     }
 
     private var hasActiveResources: Bool {
-        listener != nil || bonjourPublisher != nil || pairingBrowser != nil || !connections.isEmpty
+        listener != nil || pairingBrowser != nil || !connections.isEmpty
     }
 
     private func finishListenerStop() {
@@ -484,34 +487,6 @@ final class AndroidCarrierBridge: ObservableObject {
         recordDiagnosticEvent("androidBridge.listener.failed", message: message)
     }
 
-    private func publishBonjour(port: UInt16?) {
-        let resolvedPort = port ?? Self.defaultPort.rawValue
-        bonjourPublisher?.stop()
-        recordDiagnosticEvent(
-            "androidBridge.bonjour.publish.start",
-            message: "Publishing \(Self.serviceType) for Android discovery on port \(resolvedPort)."
-        )
-        let publisher = AndroidBonjourPublisher(
-            name: displayName,
-            type: Self.serviceType + ".",
-            port: resolvedPort,
-            macID: macID,
-            onPublished: { [weak self] message in
-                Task { @MainActor in
-                    self?.recordDiagnosticEvent("androidBridge.bonjour.publish.published", message: message)
-                }
-            },
-            onError: { [weak self] message in
-                Task { @MainActor in
-                    self?.lastErrorMessage = message
-                    self?.recordDiagnosticEvent("androidBridge.bonjour.publish.failed", message: message)
-                }
-            }
-        )
-        bonjourPublisher = publisher
-        publisher.start()
-    }
-
     private func startPairingBrowser() {
         let browser = AndroidPairingBrowser { [weak self] devices in
             Task { @MainActor in
@@ -645,7 +620,7 @@ private final class AndroidPairingBrowser: NSObject, NetServiceBrowserDelegate, 
     }
 
     func start() {
-        browser.searchForServices(ofType: "_typecarrier-android-pair._tcp.", inDomain: "local.")
+        browser.searchForServices(ofType: "_tcpair._tcp", inDomain: "local.")
     }
 
     func stop() {
@@ -812,64 +787,6 @@ private enum AndroidAssociationError: LocalizedError {
         case .connectionClosed:
             "关联连接已关闭。"
         }
-    }
-}
-
-private final class AndroidBonjourPublisher: NSObject, NetServiceDelegate {
-    private let name: String
-    private let type: String
-    private let port: UInt16
-    private let macID: String
-    private let onPublished: (String) -> Void
-    private let onError: (String) -> Void
-    private var service: NetService?
-
-    init(
-        name: String,
-        type: String,
-        port: UInt16,
-        macID: String,
-        onPublished: @escaping (String) -> Void,
-        onError: @escaping (String) -> Void
-    ) {
-        self.name = name
-        self.type = type
-        self.port = port
-        self.macID = macID
-        self.onPublished = onPublished
-        self.onError = onError
-    }
-
-    func start() {
-        let nextService = NetService(
-            domain: "local.",
-            type: type,
-            name: name,
-            port: Int32(port)
-        )
-        nextService.setTXTRecord(
-            NetService.data(fromTXTRecord: [
-                "macID": Data(macID.utf8),
-                "macName": Data(name.utf8),
-            ])
-        )
-        nextService.delegate = self
-        nextService.publish()
-        service = nextService
-    }
-
-    func stop() {
-        service?.stop()
-        service?.delegate = nil
-        service = nil
-    }
-
-    func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
-        onError("Android 自动发现发布失败：\(errorDict)")
-    }
-
-    func netServiceDidPublish(_ sender: NetService) {
-        onPublished("Android 自动发现已发布：\(sender.type) \(sender.name):\(sender.port)")
     }
 }
 

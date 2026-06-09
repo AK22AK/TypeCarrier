@@ -145,6 +145,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let connectionRetryDelay: Duration
     private let inviteTimeout: TimeInterval
     private let maxConnectionAttempts: Int
+    private let receiverDiscoveryInfoExtras: [String: String]
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private nonisolated(unsafe) var session: MCSession
     private nonisolated(unsafe) var activeReceiverPeerName: String?
@@ -172,6 +173,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectionRetryDelay: Duration = .seconds(1),
         inviteTimeout: TimeInterval = 6,
         maxConnectionAttempts: Int = 3,
+        receiverDiscoveryInfoExtras: [String: String] = [:],
         diagnosticLogFileURL: URL? = nil
     ) {
         self.role = role
@@ -180,6 +182,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.connectionRetryDelay = connectionRetryDelay
         self.inviteTimeout = inviteTimeout
         self.maxConnectionAttempts = max(1, maxConnectionAttempts)
+        self.receiverDiscoveryInfoExtras = receiverDiscoveryInfoExtras
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
         let localPeerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
         peerID = localPeerID
@@ -326,9 +329,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             return nil
         }
 
-        return [
-            ReceiverDiscoveryInfo.availabilityKey: receiverAvailabilityDiscoveryValue
-        ]
+        var info = receiverDiscoveryInfoExtras
+        info[ReceiverDiscoveryInfo.availabilityKey] = receiverAvailabilityDiscoveryValue
+        return info
     }
 
     private var receiverAvailabilityDiscoveryValue: String {

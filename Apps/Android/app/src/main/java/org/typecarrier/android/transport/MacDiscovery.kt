@@ -25,9 +25,10 @@ class MacDiscovery(
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private val services = linkedMapOf<String, MacService>()
+    private val serviceIDsByDiscoveryName = linkedMapOf<String, String>()
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
-    private var resolving = false
+    private val resolutionQueue = MacDiscoveryResolutionQueue<NsdServiceInfo> { it.serviceName }
 
     fun start() {
         if (discoveryListener != null) {
@@ -43,15 +44,16 @@ class MacDiscovery(
             override fun onDiscoveryStarted(serviceType: String) = Unit
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                if (serviceInfo.serviceType == serviceType && !resolving) {
-                    resolve(serviceInfo)
+                if (serviceInfo.serviceType == serviceType) {
+                    resolutionQueue.enqueue(serviceInfo)?.let(::resolve)
                 }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val key = services.values.firstOrNull { it.name == serviceInfo.serviceName }?.id
-                if (key != null) {
-                    services.remove(key)
+                resolutionQueue.removePending(serviceInfo.serviceName)
+                val serviceID = serviceIDsByDiscoveryName.remove(serviceInfo.serviceName)
+                if (serviceID != null) {
+                    services.remove(serviceID)
                     publishServices()
                 }
             }
@@ -76,37 +78,56 @@ class MacDiscovery(
         val listener = discoveryListener ?: return
         runCatching { nsdManager.stopServiceDiscovery(listener) }
         discoveryListener = null
-        resolving = false
+        resolutionQueue.clear()
         multicastLock?.release()
         multicastLock = null
         services.clear()
+        serviceIDsByDiscoveryName.clear()
         publishServices()
     }
 
     private fun resolve(serviceInfo: NsdServiceInfo) {
-        resolving = true
         nsdManager.resolveService(
             serviceInfo,
             object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    resolving = false
                     onError("解析服务失败：$errorCode")
+                    resolveNextPendingService()
                 }
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    resolving = false
-                    val host = serviceInfo.host?.hostAddress ?: return
+                    val host = serviceInfo.host?.hostAddress
+                    if (host == null) {
+                        resolveNextPendingService()
+                        return
+                    }
+                    val androidPort = serviceInfo.attributes["androidPort"]
+                        ?.toString(Charsets.UTF_8)
+                        ?.toIntOrNull()
+                        ?: run {
+                            resolveNextPendingService()
+                            return
+                        }
+                    val macName = serviceInfo.attributes["macName"]
+                        ?.toString(Charsets.UTF_8)
+                        ?.takeIf { it.isNotBlank() }
                     val service = MacService(
-                        name = serviceInfo.serviceName,
+                        name = macName ?: serviceInfo.serviceName,
                         host = host,
-                        port = serviceInfo.port,
+                        port = androidPort,
                         macID = serviceInfo.attributes["macID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
                     )
                     services[service.id] = service
+                    serviceIDsByDiscoveryName[serviceInfo.serviceName] = service.id
                     publishServices()
+                    resolveNextPendingService()
                 }
             },
         )
+    }
+
+    private fun resolveNextPendingService() {
+        resolutionQueue.finishCurrent()?.let(::resolve)
     }
 
     private fun publishServices() {
@@ -117,6 +138,6 @@ class MacDiscovery(
     }
 
     private companion object {
-        const val serviceType = "_typecarrier-json._tcp."
+        const val serviceType = "_typecarrier._tcp."
     }
 }

@@ -32,7 +32,7 @@
 
 - [x] Extract Mac text-envelope handling so Multipeer and Android bridge can share save/history/paste/receipt behavior.
 - [x] Add an Android bridge object with start/stop state, pairing gate, active-sender busy policy, and a testable connection handler.
-- [x] Add `_typecarrier-json._tcp` to Mac Bonjour services in `project.yml`; generate Xcode project only when implementation needs it.
+- [x] Reuse `_typecarrier._tcp` for Mac Bonjour discovery and include Android bridge metadata in TXT records; generate Xcode project only when implementation needs it.
 - [x] Verify iPhone Multipeer behavior still builds and the core tests remain green.
 
 ### Task 3: Android Project Scaffold

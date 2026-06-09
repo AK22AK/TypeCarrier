@@ -660,11 +660,11 @@ private fun LogoMark(size: Dp, iconSize: Dp) {
     }
 }
 
-private fun connectionDisplayText(state: AndroidComposerUiState): String =
+internal fun connectionDisplayText(state: AndroidComposerUiState): String =
     when (state.connectionStatus) {
         AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "Mac 已连接"
         AndroidConnectionStatus.Connecting -> state.headerStatusText
-        AndroidConnectionStatus.Searching -> if (state.services.isEmpty()) "正在查找 Mac" else "发现 ${state.services.size} 台 Mac"
+        AndroidConnectionStatus.Searching -> state.headerStatusText
         AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
     }
 
