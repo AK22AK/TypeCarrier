@@ -187,6 +187,7 @@ jobs:
         if: steps.xcode.outputs.supports_build == 'true'
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TYPECARRIER_BUNDLE_PREFIX: ak22ak.typecarrier
           NOTARYTOOL_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
           NOTARYTOOL_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_API_ISSUER_ID }}
         run: script/package_macos_developer_id_dmg.sh
