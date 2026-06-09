@@ -16,7 +16,8 @@ permissions:
 
 jobs:
   prepare-prerelease:
-    runs-on: macos-latest
+    runs-on: macos-26
+    environment: release-signing
 
     steps:
       - name: Check out repository
@@ -119,6 +120,77 @@ jobs:
           cp Apps/Android/app/build/outputs/apk/debug/app-debug.apk "dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk"
           echo "ANDROID_APK=dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk" >> "$GITHUB_ENV"
 
+      - name: Verify macOS signing secrets
+        if: steps.xcode.outputs.supports_build == 'true'
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPSTORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
+          APPSTORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APPSTORE_CONNECT_API_PRIVATE_KEY }}
+        run: |
+          missing=0
+          for name in \
+            DEVELOPER_ID_CERTIFICATE_BASE64 \
+            DEVELOPER_ID_CERTIFICATE_PASSWORD \
+            APPLE_TEAM_ID \
+            APPSTORE_CONNECT_API_KEY_ID \
+            APPSTORE_CONNECT_API_PRIVATE_KEY
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret: $name"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        if: steps.xcode.outputs.supports_build == 'true'
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ runner.temp }}-${{ github.run_id }}
+        run: |
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/typecarrier-release.keychain-db"
+
+          echo "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security find-identity -p codesigning -v "$keychain_path"
+
+      - name: Write App Store Connect API key
+        if: steps.xcode.outputs.supports_build == 'true'
+        env:
+          APPSTORE_CONNECT_API_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
+          APPSTORE_CONNECT_API_PRIVATE_KEY: ${{ secrets.APPSTORE_CONNECT_API_PRIVATE_KEY }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPSTORE_CONNECT_API_KEY_ID}.p8"
+          printf '%s' "$APPSTORE_CONNECT_API_PRIVATE_KEY" > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "APPSTORE_CONNECT_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+          echo "NOTARYTOOL_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Build notarized macOS DMG
+        if: steps.xcode.outputs.supports_build == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARYTOOL_KEY_ID: ${{ secrets.APPSTORE_CONNECT_API_KEY_ID }}
+          NOTARYTOOL_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_API_ISSUER_ID }}
+        run: script/package_macos_developer_id_dmg.sh
+
       - name: Create or update draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,6 +215,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$RELEASE_TAG" "$ANDROID_APK" --clobber
 
+      - name: Upload macOS DMG to draft prerelease
+        if: steps.xcode.outputs.supports_build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$MACOS_DMG" "$MACOS_DMG_SHA256" --clobber
+
       - name: Report release asset status
         run: |
-          echo "::notice::Draft prerelease is ready. Android debug APK uploaded as $(basename "$ANDROID_APK"). Upload the local Personal Team macOS development zip manually if this release includes a macOS binary asset."
+          echo "::notice::Draft prerelease is ready. Android debug APK uploaded as $(basename "$ANDROID_APK")."
+          if [ -n "${MACOS_DMG:-}" ]; then
+            echo "::notice::Notarized macOS DMG uploaded as $(basename "$MACOS_DMG")."
+          else
+            echo "::notice::macOS DMG was not built because the runner Xcode version is not compatible with this project."
+          fi
