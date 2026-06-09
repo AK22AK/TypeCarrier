@@ -41,10 +41,10 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 The first 0.1 Beta should be published as a GitHub prerelease:
 
-- The iOS side is source-only. No installable iOS build is uploaded to GitHub Release.
-- The macOS side may upload an Apple Development / Personal Team signed testing zip.
-- This macOS testing zip is not a Developer ID notarized public distribution build. Gatekeeper may block it.
-- Do not describe the 0.1 Beta macOS zip as a regular user-ready installer.
+- iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store / TestFlight.
+- Android uploads a sideloadable APK.
+- macOS builds a Developer ID signed + notarized DMG in the release workflow and uploads the `.dmg` plus `.sha256`.
+- Do not describe beta sideload packages as regular user-ready installers.
 
 Recommended tag for 0.1.1:
 
@@ -62,23 +62,18 @@ gh release create v0.1.1 \
   --prerelease
 ```
 
-Upload the local macOS development zip when ready:
-
-```sh
-gh release upload v0.1.1 dist/TypeCarrierMac-0.1.1-2-development.zip
-```
-
 ### Post-Release Checks
 
 After publishing, verify in this order:
 
 1. The GitHub Release is marked as a prerelease, not a stable release.
-2. The Release page shows the macOS development zip and the matching `.sha256` file.
-3. The `.sha256` content matches `shasum -a 256 dist/TypeCarrierMac-0.1.1-2-development.zip`.
-4. The Release body keeps the beta positioning, iOS source-only note, macOS development signing limitation, and Gatekeeper risk.
+2. The Release page shows the Android APK, macOS notarized DMG, and matching checksum files.
+3. The checksum files match local `shasum -a 256` output.
+4. The Release body keeps the beta positioning, iOS App Store / TestFlight acquisition path, Android / macOS sideload notes, and macOS permission guidance.
 5. The tag points at the intended release commit, not a temporary local commit.
 6. If GitHub Actions skipped builds because of the runner Xcode version, rerun the release note verification commands locally before publishing.
-7. Download the GitHub asset once after publishing, unzip it, and confirm the app bundle version matches the release tag.
+7. Download the GitHub asset once after publishing, mount the DMG, and confirm the app bundle version matches the release tag.
+8. Run `spctl --assess --type install --verbose=4 <dmg>` on the downloaded DMG and confirm Gatekeeper accepts it.
 
 ## macOS Local Packaging
 
@@ -98,18 +93,54 @@ The script runs a Release build, verifies code signing, runs Gatekeeper assessme
 
 ## Future Official macOS Package
 
-The public repository must not store real signing material. A future Developer ID notarized build requires local signing configuration such as:
+The public repository must not store real signing material. A local Developer ID notarized build requires signing configuration such as:
 
 ```xcconfig
 TYPECARRIER_BUNDLE_PREFIX = ak22ak.typecarrier
 DEVELOPMENT_TEAM = YOURTEAMID
+CODE_SIGN_STYLE[sdk=macosx*] = Manual
 CODE_SIGN_IDENTITY[sdk=macosx*] = Developer ID Application
 ```
 
-An official public macOS package also requires the paid Apple Developer Program, a Developer ID Application certificate, notarytool credentials, notarization, stapling, and a passing `spctl --assess` check.
+Then run:
+
+```sh
+APPLE_TEAM_ID=YOURTEAMID \
+NOTARYTOOL_KEYCHAIN_PROFILE=typecarrier-notary \
+script/package_macos_developer_id_dmg.sh
+```
+
+The script archives the app, creates a DMG, signs the DMG, submits notarization, staples the ticket, and verifies the final package with `spctl --assess`.
+
+## GitHub Actions Signing
+
+The release workflow automatically builds the Android APK and macOS Developer ID notarized DMG. The official macOS DMG uses a protected GitHub Environment: `release-signing`. Do not store signing Secrets as regular repository secrets. Store them as `release-signing` environment secrets, and configure Required reviewers for the environment.
+
+The `release-signing` environment requires these Secrets:
+
+| Secret | Content |
+| --- | --- |
+| `DEVELOPER_ID_CERTIFICATE_BASE64` | Base64 content of the Developer ID Application `.p12` certificate |
+| `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
+| `APPLE_TEAM_ID` | Apple Developer Team ID, for example `4H8462MSN6` |
+| `APPSTORE_CONNECT_API_KEY_ID` | App Store Connect API Key ID |
+| `APPSTORE_CONNECT_API_ISSUER_ID` | Issuer ID for a Team API Key; leave empty for an Individual API Key |
+| `APPSTORE_CONNECT_API_PRIVATE_KEY` | Full text of the App Store Connect API `.p8` private key |
+
+Create the API Key in App Store Connect under `Users and Access` -> `Integrations`. Use it for CI notarization. Do not store an Apple ID password or app-specific password in the repository.
+
+To export the Developer ID `.p12`, use Keychain Access, select the `Developer ID Application` certificate and its private key, export them as `.p12`, and set a strong password. Convert it for GitHub Secrets locally:
+
+```sh
+base64 -i DeveloperIDApplication.p12 | pbcopy
+```
+
+The release workflow creates a temporary keychain on the macOS runner, imports the certificate, runs `script/package_macos_developer_id_dmg.sh`, and uploads the DMG plus `.sha256` to the draft prerelease. Because the job is bound to the `release-signing` environment, signing material is exposed to the runner only after the environment is approved.
+
+The release workflow pins the runner to `macos-26` to avoid receiving an incompatible Xcode version during `macos-latest` migrations.
 
 ## GitHub Actions
 
-Public CI verifies source, tests, and builds. The release workflow may create a GitHub prerelease draft, but it does not store signing private keys on GitHub hosted runners and does not produce an official signed macOS package.
+Public CI verifies source, tests, and builds. The release workflow creates a GitHub prerelease draft, uploads the Android APK, and uploads the macOS notarized DMG.
 
-Future fully automated signing should use Xcode Cloud or a controlled self-hosted Mac runner with private signing materials and App Store Connect credentials.
+Signing private keys and App Store Connect keys in `release-signing` Environment Secrets must only be used by the controlled release workflow. Do not print them in pull request workflows, logs, release notes, or repository files.
