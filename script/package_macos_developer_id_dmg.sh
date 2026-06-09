@@ -15,26 +15,35 @@ CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:-Developer ID Application}"
 APPLE_TEAM_ID="${APPLE_TEAM_ID:-${DEVELOPMENT_TEAM:-}}"
 NOTARY_TIMEOUT="${NOTARY_TIMEOUT:-30m}"
 SKIP_NOTARIZATION="${SKIP_NOTARIZATION:-0}"
+TYPECARRIER_BUNDLE_PREFIX="${TYPECARRIER_BUNDLE_PREFIX:-}"
 
 if [[ -z "$APPLE_TEAM_ID" ]]; then
   echo "error: APPLE_TEAM_ID or DEVELOPMENT_TEAM is required for Developer ID signing." >&2
   exit 1
 fi
 
+xcodebuild_args=(
+  -project TypeCarrier.xcodeproj
+  -scheme "$SCHEME"
+  -configuration "$CONFIGURATION"
+  -destination 'generic/platform=macOS'
+  -archivePath "$ARCHIVE_PATH"
+  -derivedDataPath "$DERIVED_DATA_PATH"
+  CODE_SIGN_STYLE=Manual
+  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY"
+  DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+)
+
+if [[ -n "$TYPECARRIER_BUNDLE_PREFIX" ]]; then
+  xcodebuild_args+=(TYPECARRIER_BUNDLE_PREFIX="$TYPECARRIER_BUNDLE_PREFIX")
+fi
+
+xcodebuild_args+=(archive)
+
 rm -rf "$DERIVED_DATA_PATH" "$ARCHIVE_PATH" "$DMG_ROOT"
 mkdir -p "$DIST_DIR" "$DMG_ROOT"
 
-xcodebuild \
-  -project TypeCarrier.xcodeproj \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -destination 'generic/platform=macOS' \
-  -archivePath "$ARCHIVE_PATH" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  CODE_SIGN_STYLE=Manual \
-  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY" \
-  DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-  archive
+xcodebuild "${xcodebuild_args[@]}"
 
 APP_PATH="$ARCHIVE_PATH/Products/Applications/TypeCarrierMac.app"
 if [[ ! -d "$APP_PATH" ]]; then
@@ -44,7 +53,7 @@ fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
-DMG_NAME="TypeCarrierMac-${VERSION}-${BUILD}-developer-id.dmg"
+DMG_NAME="TypeCarrierMac-${VERSION}-${BUILD}.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
 
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
