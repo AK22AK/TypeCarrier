@@ -86,6 +86,8 @@ targets:
       path: Apps/macOS/TypeCarrierMac.entitlements
       properties:
         com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac

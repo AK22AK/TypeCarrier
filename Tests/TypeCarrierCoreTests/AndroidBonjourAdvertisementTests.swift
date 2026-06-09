@@ -2,7 +2,7 @@ import Testing
 @testable import TypeCarrierCore
 
 struct AndroidBonjourAdvertisementTests {
-    @Test func descriptorUsesAndroidDiscoveryServiceTypeAndTxtRecord() {
+    @Test func descriptorUsesSharedReceiverDiscoveryServiceTypeAndTxtRecord() {
         let descriptor = AndroidBonjourAdvertisement(name: "MacBook Pro", macID: "mac-123")
 
         #expect(descriptor.serviceType == "_typecarrier._tcp")

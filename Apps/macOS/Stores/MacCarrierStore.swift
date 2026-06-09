@@ -44,7 +44,7 @@ final class MacCarrierStore: ObservableObject {
         androidBridge = bridge
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
-            androidDiscoveryInfo: bridge.bonjourDiscoveryInfo,
+            receiverDiscoveryInfoExtras: bridge.bonjourDiscoveryInfo,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         do {
@@ -58,6 +58,7 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
+        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
         bindAndroidBridge()
         refreshAccessibilityStatus()
@@ -143,25 +144,35 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func restart() {
-        rebuildReceiverService(rebuiltReason: "receiver.restart.rebuilt")
+        rebuildReceiverService(
+            rebuiltReason: "receiver.restart.rebuilt",
+            restartsAndroidBridge: true
+        )
     }
 
-    private func rebuildReceiverService(rebuiltReason: String) {
+    private func rebuildReceiverService(rebuiltReason: String, restartsAndroidBridge: Bool) {
         carrierService.stop()
         carrierServiceCancellable = nil
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
-            androidDiscoveryInfo: androidBridge.bonjourDiscoveryInfo,
+            receiverDiscoveryInfoExtras: androidBridge.bonjourDiscoveryInfo,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
+        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
         startCarrierService()
-        androidBridge.restart { [weak self] envelope, deviceName, reply in
-            self?.handle(envelope, from: deviceName, sendReceipt: reply)
+
+        if restartsAndroidBridge {
+            androidBridge.restart { [weak self] envelope, deviceName, reply in
+                self?.handle(envelope, from: deviceName, sendReceipt: reply)
+            }
         }
+
         carrierService.recordDiagnosticMarker(
             rebuiltReason,
-            message: "Created a fresh receiver service after restart."
+            message: restartsAndroidBridge
+                ? "Created fresh Apple and Android receiver services after restart."
+                : "Created a fresh Apple receiver service after Multipeer session invalidation."
         )
     }
 
@@ -245,17 +256,34 @@ final class MacCarrierStore: ObservableObject {
         restart()
     }
 
+    private func restartAfterReceiverSessionInvalidated(peerName: String, previousState: ConnectionState) {
+        carrierService.recordDiagnosticMarker(
+            "receiver.restart.sessionInvalidated",
+            message: "Automatically rebuilding receiver after \(peerName) changed from \(previousState.displayText) to not connected."
+        )
+        rebuildReceiverService(
+            rebuiltReason: "receiver.restart.appleSessionRebuilt",
+            restartsAndroidBridge: false
+        )
+    }
+
     private static func makeCarrierService(
         displayName: String,
-        androidDiscoveryInfo: [String: String],
+        receiverDiscoveryInfoExtras: [String: String],
         diagnosticLogFileURL: URL?
     ) -> MultipeerCarrierService {
         MultipeerCarrierService(
             role: .receiver,
             displayName: displayName,
-            receiverDiscoveryInfoExtras: androidDiscoveryInfo,
+            receiverDiscoveryInfoExtras: receiverDiscoveryInfoExtras,
             diagnosticLogFileURL: diagnosticLogFileURL
         )
+    }
+
+    private func configureCarrierServiceRecoveryHandler() {
+        carrierService.receiverSessionInvalidatedHandler = { [weak self] peerName, previousState in
+            self?.restartAfterReceiverSessionInvalidated(peerName: peerName, previousState: previousState)
+        }
     }
 
     private func bindCarrierService() {

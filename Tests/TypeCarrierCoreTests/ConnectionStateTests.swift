@@ -19,6 +19,16 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertFalse(ConnectionState.advertising.isFailed)
     }
 
+    func testManualRestartEligibilityIncludesInFlightConnectionStates() {
+        XCTAssertTrue(ConnectionState.idle.isManualRestartEligible)
+        XCTAssertTrue(ConnectionState.searching.isManualRestartEligible)
+        XCTAssertTrue(ConnectionState.connecting("Mac").isManualRestartEligible)
+        XCTAssertTrue(ConnectionState.reconnecting("Mac").isManualRestartEligible)
+        XCTAssertTrue(ConnectionState.failed("Denied").isManualRestartEligible)
+        XCTAssertFalse(ConnectionState.connected("Mac").isManualRestartEligible)
+        XCTAssertFalse(ConnectionState.advertising.isManualRestartEligible)
+    }
+
     func testPeerNameIsAvailableOnlyAfterFindingADevice() {
         XCTAssertNil(ConnectionState.idle.peerName)
         XCTAssertNil(ConnectionState.searching.peerName)
@@ -63,6 +73,35 @@ final class ConnectionStateTests: XCTestCase {
             diagnostics.connectionRecoverySuggestion,
             "Disconnect the other iPhone or simulator from this Mac, then retry here."
         )
+    }
+
+    func testSenderFailureSuggestionIgnoresStaleBusyEvents() {
+        let diagnostics = CarrierDiagnostics(
+            role: "sender",
+            localPeerName: "iPhone",
+            serviceType: "typecarrier",
+            connectionState: .failed("Could not connect to MacBook Pro."),
+            discoveredPeers: ["MacBook Pro"],
+            lastErrorMessage: "Could not connect to MacBook Pro.",
+            events: [
+                CarrierDiagnosticEvent(
+                    name: "browser.foundBusyPeer",
+                    message: "Receiver advertised busy availability",
+                    peerName: "MacBook Pro",
+                    connectionState: .failed("MacBook Pro is already connected to another device."),
+                    connectedPeers: []
+                ),
+                CarrierDiagnosticEvent(
+                    name: "connection.retryBudgetExceeded",
+                    message: "Stopped after 2 connection attempts",
+                    peerName: "MacBook Pro",
+                    connectionState: .failed("Could not connect to MacBook Pro."),
+                    connectedPeers: []
+                )
+            ]
+        )
+
+        XCTAssertNil(diagnostics.connectionRecoverySuggestion)
     }
 
     func testSenderFailureSuggestionIsHiddenBeforeDiscovery() {

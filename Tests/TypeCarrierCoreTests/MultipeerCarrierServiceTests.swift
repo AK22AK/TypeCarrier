@@ -74,7 +74,7 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertEqual(service.connectionState, .searching)
     }
 
-    func testSenderShowsBusySuggestionWhenRefreshedDiscoveryReportsBusyReceiver() async throws {
+    func testSenderKeepsSearchingWhenRefreshedDiscoveryReportsBusyReceiver() async throws {
         let service = MultipeerCarrierService(
             role: .sender,
             displayName: "iPhone",
@@ -96,11 +96,8 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         )
         await Task.yield()
 
-        XCTAssertEqual(service.connectionState, .failed("MacBook Pro is already connected to another device."))
-        XCTAssertEqual(
-            service.diagnostics.connectionRecoverySuggestion,
-            "Disconnect the other iPhone or simulator from this Mac, then retry here."
-        )
+        XCTAssertEqual(service.connectionState, .searching)
+        XCTAssertNil(service.diagnostics.connectionRecoverySuggestion)
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.foundBusyPeer" && $0.peerName == "MacBook Pro" })
     }
 
@@ -187,18 +184,16 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         let service = MultipeerCarrierService(role: .sender, displayName: "iPhone")
         let peerID = MCPeerID(displayName: "MacBook Pro")
 
+        service.startSearchingForTesting()
         service.simulateFoundPeerForTesting(
             peerID,
             discoveryInfo: ["receiverAvailability": "busy"]
         )
         await Task.yield()
 
-        XCTAssertEqual(service.connectionState, .failed("MacBook Pro is already connected to another device."))
+        XCTAssertEqual(service.connectionState, .searching)
         XCTAssertEqual(service.diagnostics.discoveredPeers, ["MacBook Pro"])
-        XCTAssertEqual(
-            service.diagnostics.connectionRecoverySuggestion,
-            "Disconnect the other iPhone or simulator from this Mac, then retry here."
-        )
+        XCTAssertNil(service.diagnostics.connectionRecoverySuggestion)
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.foundBusyPeer" && $0.peerName == "MacBook Pro" })
         XCTAssertFalse(service.diagnostics.events.contains { $0.name == "browser.invitePeer" && $0.peerName == "MacBook Pro" })
     }
@@ -216,6 +211,38 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         service.simulateSessionStateForTesting(.notConnected, peerID: connectedPeer)
 
         XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "available")
+    }
+
+    func testReceiverRequestsServiceRebuildAfterConnectedPeerDisconnects() {
+        let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
+        let connectedPeer = MCPeerID(displayName: "iPhone 17 Pro")
+        var rebuildRequest: (peerName: String, previousState: ConnectionState)?
+
+        service.receiverSessionInvalidatedHandler = { peerName, previousState in
+            rebuildRequest = (peerName, previousState)
+        }
+
+        service.simulateSessionStateForTesting(.connected, peerID: connectedPeer)
+        service.simulateSessionStateForTesting(.notConnected, peerID: connectedPeer)
+
+        XCTAssertEqual(rebuildRequest?.peerName, "iPhone 17 Pro")
+        XCTAssertEqual(rebuildRequest?.previousState, .connected("iPhone 17 Pro"))
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "receiver.rebuildRequested" && $0.peerName == "iPhone 17 Pro" })
+    }
+
+    func testReceiverDoesNotRequestServiceRebuildForIdleNotConnectedCallback() {
+        let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
+        let stalePeer = MCPeerID(displayName: "iPhone")
+        var rebuildWasRequested = false
+
+        service.receiverSessionInvalidatedHandler = { _, _ in
+            rebuildWasRequested = true
+        }
+
+        service.simulateSessionStateForTesting(.notConnected, peerID: stalePeer)
+
+        XCTAssertFalse(rebuildWasRequested)
+        XCTAssertFalse(service.diagnostics.events.contains { $0.name == "receiver.rebuildRequested" })
     }
 
     func testReceiverDiscoveryInfoIncludesAndroidBridgeMetadata() {

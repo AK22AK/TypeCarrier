@@ -103,9 +103,16 @@ final class AndroidCarrierBridge: ObservableObject {
 
         do {
             let listener = try NWListener(using: .tcp, on: Self.defaultPort)
-            listener.stateUpdateHandler = { [weak self] state in
+            recordDiagnosticEvent(
+                "androidBridge.bonjour.publish.delegated",
+                message: "Android discovery metadata is advertised by the Apple receiver over \(Self.serviceType)."
+            )
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
+                guard let listener else {
+                    return
+                }
                 Task { @MainActor in
-                    self?.handleListenerState(state)
+                    self?.handleListenerState(state, for: listener)
                 }
             }
             listener.newConnectionHandler = { [weak self] connection in
@@ -117,8 +124,8 @@ final class AndroidCarrierBridge: ObservableObject {
                 "androidBridge.listener.start",
                 message: "Starting Android TCP listener on port \(Self.defaultPort.rawValue)."
             )
-            listener.start(queue: .main)
             self.listener = listener
+            listener.start(queue: .main)
             state = .listening(port: nil)
         } catch {
             fail(error.localizedDescription)
@@ -186,7 +193,11 @@ final class AndroidCarrierBridge: ObservableObject {
         }
     }
 
-    private func handleListenerState(_ listenerState: NWListener.State) {
+    private func handleListenerState(_ listenerState: NWListener.State, for listener: NWListener) {
+        guard listener === self.listener else {
+            return
+        }
+
         if isStoppingListener {
             switch listenerState {
             case .cancelled, .failed:
@@ -200,7 +211,7 @@ final class AndroidCarrierBridge: ObservableObject {
 
         switch listenerState {
         case .ready:
-            let port = listener?.port?.rawValue
+            let port = listener.port?.rawValue
             state = .listening(port: port)
             recordDiagnosticEvent(
                 "androidBridge.listener.ready",
