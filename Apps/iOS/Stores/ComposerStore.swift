@@ -163,12 +163,7 @@ final class ComposerStore: ObservableObject {
             return false
         }
 
-        switch connectionState {
-        case .idle, .failed:
-            return true
-        default:
-            return false
-        }
+        return connectionState.isManualRestartEligible
     }
 
     var connectionStatus: ConnectionStatus {
