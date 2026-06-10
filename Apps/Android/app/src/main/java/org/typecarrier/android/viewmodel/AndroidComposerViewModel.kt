@@ -76,6 +76,7 @@ class AndroidComposerViewModel(
 ) {
     private val textHistory = TextEditHistory()
     private var connectedMac: MacService? = null
+    private var autoConnectAttemptedServiceIDs: Set<String> = emptySet()
     private var lastServicesDiagnosticSignature: String? = null
     private var lastDiscoveryError: String? = null
 
@@ -101,11 +102,14 @@ class AndroidComposerViewModel(
         repository.services.collect { services ->
             recordServicesDiagnostic(services)
             val trustedMacs = repository.trustedMacs
+            autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs.intersect(services.map { it.id }.toSet())
+            var autoConnectTarget: MacService? = null
             _uiState.update { current ->
                 val selected = current.selectedMac?.let { selected ->
                     services.firstOrNull { it.id == selected.id }
                         ?: selected.takeIf { connectedMac?.id == selected.id }
                 }
+                autoConnectTarget = autoConnectTarget(services = services, current = current, selected = selected)
                 current.copy(
                     services = services,
                     trustedMacs = trustedMacs,
@@ -118,6 +122,10 @@ class AndroidComposerViewModel(
                         else -> "发现 ${services.size} 台 Mac"
                     },
                 ).withDerivedValues(repository)
+            }
+            autoConnectTarget?.let { service ->
+                autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs + service.id
+                connectToService(service, requestedPairingCode = null)
             }
         }
     }
@@ -589,6 +597,26 @@ class AndroidComposerViewModel(
 
     private fun effectiveService(): MacService? =
         _uiState.value.selectedMac ?: manualService(_uiState.value.manualHost, _uiState.value.manualPort)
+
+    private fun autoConnectTarget(
+        services: List<MacService>,
+        current: AndroidComposerUiState,
+        selected: MacService?,
+    ): MacService? {
+        if (connectedMac != null ||
+            current.isBusy ||
+            current.connectionStatus == AndroidConnectionStatus.Connecting ||
+            current.connectionStatus == AndroidConnectionStatus.Connected ||
+            selected != null
+        ) {
+            return null
+        }
+
+        val trustedServices = services.filter { service ->
+            service.id !in autoConnectAttemptedServiceIDs && repository.hasSavedTrustToken(service)
+        }
+        return trustedServices.singleOrNull()
+    }
 
     private fun connectingStatusText(service: MacService): String {
         if (service.isManualMac()) {

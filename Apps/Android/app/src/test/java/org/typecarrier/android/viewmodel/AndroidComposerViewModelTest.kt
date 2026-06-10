@@ -239,7 +239,7 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun discoveredTrustedMacRequiresExplicitSelectionBeforeConnecting() = runBlocking {
+    fun singleDiscoveredTrustedMacConnectsAutomatically() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
         }
@@ -247,16 +247,25 @@ class AndroidComposerViewModelTest {
 
         repository.publishServices(listOf(repository.mac))
 
-        assertEquals(0, repository.connectAttempts)
-        assertEquals(null, viewModel.uiState.value.selectedMac)
-        assertFalse(viewModel.uiState.value.canConnect)
-
-        viewModel.selectMac(repository.mac)
-        viewModel.connect().join()
-
         assertEquals(1, repository.connectAttempts)
         assertEquals(null, repository.lastPairingCode)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+    }
+
+    @Test
+    fun multipleDiscoveredTrustedMacsDoNotConnectAutomatically() {
+        val secondMac = MacService(name = "Other Mac", host = "127.0.0.2", port = 17641, macID = "mac-2")
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            hasTrustToken = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        repository.publishServices(listOf(repository.mac, secondMac))
+
+        assertEquals(0, repository.connectAttempts)
+        assertEquals(null, viewModel.uiState.value.selectedMac)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
     }
 
     @Test
@@ -279,7 +288,7 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun explicitInvalidSavedTrustTokenShowsRepairingState() = runBlocking {
+    fun automaticInvalidSavedTrustTokenShowsRepairingState() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
             nextConnectResponse = AndroidBridgeResponse(
@@ -291,8 +300,6 @@ class AndroidComposerViewModelTest {
 
         viewModel.start()
         repository.publishServices(listOf(repository.mac))
-        viewModel.selectMac(repository.mac)
-        viewModel.connect().join()
 
         assertFalse(repository.hasTrustToken)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
@@ -302,14 +309,13 @@ class AndroidComposerViewModelTest {
 
     @Test
     fun selectedTargetIsClearedWhenItLeavesCurrentDiscovery() {
-        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
-            hasTrustToken = true
-        }
+        val repository = FakeAndroidCarrierRepository(emptyList())
         val viewModel = makeViewModel(repository = repository)
 
         viewModel.start()
         repository.publishServices(listOf(repository.mac))
         viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
 
         assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
         assertTrue(viewModel.uiState.value.canConnect)
