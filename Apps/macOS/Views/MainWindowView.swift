@@ -7,7 +7,7 @@ struct MainWindowView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedSection: MainWindowSection? = .received
     @State private var selectedRecordID: UUID?
-    @State private var selectedSettingsSection: SettingsSection? = .diagnostics
+    @State private var selectedSettingsSection: SettingsSection? = .about
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -20,6 +20,9 @@ struct MainWindowView: View {
         .onAppear {
             store.refreshAccessibilityStatus()
             ensureSelectedRecord()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            store.refreshAccessibilityStatus()
         }
         .onChange(of: store.records) { _, _ in
             ensureSelectedRecord()
@@ -47,13 +50,18 @@ struct MainWindowView: View {
         selectedSection ?? .received
     }
 
+    private var hasAutomaticPasteWarning: Bool {
+        !store.accessibilityTrusted
+    }
+
     @ViewBuilder
     private var sidebar: some View {
         AppSidebar(
             selectedSection: $selectedSection,
             receivedCount: store.receivedHistory.count,
             connectionState: store.receiverDisplayConnectionState,
-            hasConnectionWarning: store.receiverHealthWarning != nil
+            hasConnectionWarning: store.receiverHealthWarning != nil,
+            hasSettingsWarning: hasAutomaticPasteWarning
         )
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
     }
@@ -84,7 +92,10 @@ struct MainWindowView: View {
     }
 
     private var settingsListColumn: some View {
-        SettingsListPane(selectedSection: $selectedSettingsSection)
+        SettingsListPane(
+            selectedSection: $selectedSettingsSection,
+            hasDiagnosticsWarning: hasAutomaticPasteWarning
+        )
             .navigationTitle("设置")
             .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
     }
@@ -119,6 +130,9 @@ struct MainWindowView: View {
         case .receiving:
             SettingsReceivingPage(store: store)
                 .navigationTitle("接收")
+        case .about:
+            SettingsAboutPage()
+                .navigationTitle("关于")
         case .diagnostics:
             SettingsDiagnosticsPage(store: store)
                 .navigationTitle("诊断")
@@ -152,6 +166,7 @@ private enum MainWindowSection: String, Hashable, Identifiable {
 
 private enum SettingsSection: String, Hashable, Identifiable {
     case receiving
+    case about
     case diagnostics
 
     var id: Self {
@@ -164,6 +179,7 @@ private struct AppSidebar: View {
     let receivedCount: Int
     let connectionState: ConnectionState
     let hasConnectionWarning: Bool
+    let hasSettingsWarning: Bool
 
     var body: some View {
         List(selection: $selectedSection) {
@@ -184,7 +200,19 @@ private struct AppSidebar: View {
             .help(connectionState.localizedDisplayText)
                 .tag(MainWindowSection.connectionStatus)
 
-            Label("设置", systemImage: "gearshape")
+            HStack(spacing: 8) {
+                Label("设置", systemImage: "gearshape")
+
+                Spacer(minLength: 8)
+
+                if hasSettingsWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .imageScale(.small)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel("设置中有需要处理的问题")
+                }
+            }
+            .help(hasSettingsWarning ? "自动粘贴需要处理辅助功能权限" : "设置")
                 .tag(MainWindowSection.settings)
         }
         .listStyle(.sidebar)
@@ -499,6 +527,7 @@ private struct ReceiverStatusPage: View {
                     .font(.title2.weight(.semibold))
 
                 receiverReadinessSection
+                receiverActionsSection
                 if !summary.issues.isEmpty {
                     issuesSection
                 }
@@ -534,6 +563,23 @@ private struct ReceiverStatusPage: View {
             Image(systemName: receiverHealthSystemImage)
                 .font(.title2)
                 .foregroundStyle(receiverHealthTint)
+        }
+    }
+
+    private var receiverActionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("接收器操作")
+
+            Button {
+                store.restartFromUserAction()
+            } label: {
+                Label("重启接收器", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.bordered)
+
+            Text("重新启动 Apple 与 Android 接收服务；当前连接的设备可能需要重新连接。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -580,14 +626,6 @@ private struct ReceiverStatusPage: View {
                         Image(systemName: issue.severity.systemImageName)
                     }
                     .foregroundStyle(issue.severity == .actionRequired ? .orange : .secondary)
-                }
-
-                if summary.requiresGlobalAttention {
-                    Button {
-                        store.restartFromUserAction()
-                    } label: {
-                        Label("重启接收器", systemImage: "arrow.clockwise")
-                    }
                 }
             }
         }
@@ -665,6 +703,9 @@ private struct ReceiverStatusPage: View {
 
             if let lastError = diagnostics.lastErrorMessage {
                 statusLine("最近错误", lastError)
+            }
+            if let androidLastError = store.androidBridge.lastErrorMessage {
+                statusLine("Android 最近错误", androidLastError)
             }
         }
     }
@@ -791,6 +832,7 @@ private struct ReceiverStatusPage: View {
 
 private struct SettingsListPane: View {
     @Binding var selectedSection: SettingsSection?
+    let hasDiagnosticsWarning: Bool
 
     var body: some View {
         ScrollView {
@@ -812,10 +854,21 @@ private struct SettingsListPane: View {
                 .padding(.horizontal, 14)
 
                 SettingsSidebarRow(
+                    title: "关于",
+                    systemImage: "info.circle",
+                    tint: .purple,
+                    isSelected: selectedSection == .about
+                ) {
+                    selectedSection = .about
+                }
+                .padding(.horizontal, 14)
+
+                SettingsSidebarRow(
                     title: "诊断",
                     systemImage: "stethoscope",
                     tint: .blue,
-                    isSelected: selectedSection == .diagnostics
+                    isSelected: selectedSection == .diagnostics,
+                    showsWarning: hasDiagnosticsWarning
                 ) {
                     selectedSection = .diagnostics
                 }
@@ -824,6 +877,115 @@ private struct SettingsListPane: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+private enum PlatformDownloadLinks {
+    static let appStorePlaceholderURL = URL(string: "https://apps.apple.com/app/typecarrier")!
+    static let latestGitHubReleaseURL = URL(string: "https://github.com/AK22AK/TypeCarrier/releases/latest")!
+}
+
+private struct SettingsAboutPage: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("关于")
+                    .font(.title2.weight(.semibold))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    statusLine("应用", "TypeCarrier")
+                    statusLine("版本", appVersionText)
+                }
+                .frame(maxWidth: 640, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("更多平台")
+                        .font(.headline)
+
+                    PlatformDownloadItem(
+                        title: "iOS",
+                        detail: "前往 App Store 下载。App Store 页面尚未上架，当前链接是占位位置；正式上架后替换为真实商店地址。",
+                        systemImage: "iphone",
+                        url: PlatformDownloadLinks.appStorePlaceholderURL
+                    )
+
+                    Divider()
+
+                    PlatformDownloadItem(
+                        title: "Android",
+                        detail: "在 GitHub 最新 Release 下载 APK 侧载包。",
+                        systemImage: "app",
+                        url: PlatformDownloadLinks.latestGitHubReleaseURL
+                    )
+
+                    Divider()
+
+                    PlatformDownloadItem(
+                        title: "macOS",
+                        detail: "在 GitHub 最新 Release 下载 Mac 侧载包。",
+                        systemImage: "laptopcomputer",
+                        url: PlatformDownloadLinks.latestGitHubReleaseURL
+                    )
+                }
+                .frame(maxWidth: 640, alignment: .leading)
+            }
+            .frame(maxWidth: 640, alignment: .leading)
+            .padding(.horizontal, 42)
+            .padding(.top, 48)
+            .padding(.bottom, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var appVersionText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+
+        switch (version, build) {
+        case let (version?, build?) where !version.isEmpty && !build.isEmpty:
+            return "\(version) (\(build))"
+        case let (version?, _) where !version.isEmpty:
+            return version
+        default:
+            return "未知"
+        }
+    }
+
+    private func statusLine(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct PlatformDownloadItem: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                    Text(detail)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } icon: {
+                Image(systemName: systemImage)
+                    .font(.title3)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -862,17 +1024,42 @@ private struct SettingsDiagnosticsPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                Button {
-                    store.exportConnectionDiagnosticsToFinder()
-                } label: {
-                    Label("导出诊断", systemImage: "square.and.arrow.up")
+                HStack(spacing: 10) {
+                    Button {
+                        store.runManualDiagnostics()
+                    } label: {
+                        Label("主动诊断", systemImage: "stethoscope")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button {
+                        store.exportConnectionDiagnosticsToFinder()
+                    } label: {
+                        Label("导出诊断", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
 
                 if let exportError = store.lastDiagnosticExportErrorMessage {
                     statusLine("导出错误", exportError)
                 } else if let exportURL = store.lastDiagnosticExportURL {
                     statusLine("最近导出", exportURL.path)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("连接自检")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(selfCheckFindings) { finding in
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsSelfCheckFindingRow(finding: finding)
+
+                            if finding.id.hasPrefix("mac.accessibility") {
+                                AccessibilityRecoveryActions(store: store)
+                            }
+                        }
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -900,13 +1087,21 @@ private struct SettingsDiagnosticsPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    private var selfCheckFindings: [SelfCheckFinding] {
+        ConnectionSelfCheck.findings(
+            receiverSummary: store.receiverStatusSummary,
+            accessibilityTrusted: store.accessibilityTrusted
+        )
+    }
+
     private var recentEvents: [SettingsDiagnosticEvent] {
         store.recentConnectionDiagnosticLogEntries(limit: 50).enumerated().map { offset, entry in
             SettingsDiagnosticEvent(
                 id: offset,
                 timestamp: entry.timestamp,
                 name: entry.name,
-                message: entry.message
+                message: entry.message,
+                summary: entry.compactDiagnosticSummary
             )
         }
     }
@@ -929,6 +1124,7 @@ private struct SettingsSidebarRow: View {
     let systemImage: String
     let tint: Color
     let isSelected: Bool
+    var showsWarning = false
     let action: () -> Void
 
     var body: some View {
@@ -949,6 +1145,13 @@ private struct SettingsSidebarRow: View {
                     .foregroundStyle(isSelected ? .white : .primary)
 
                 Spacer(minLength: 0)
+
+                if showsWarning {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .imageScale(.small)
+                        .foregroundStyle(isSelected ? .white : .red)
+                        .accessibilityLabel("\(title)中有需要处理的问题")
+                }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .padding(.horizontal, 10)
@@ -964,11 +1167,93 @@ private struct SettingsSidebarRow: View {
     }
 }
 
+private struct SettingsSelfCheckFindingRow: View {
+    let finding: SelfCheckFinding
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(finding.title.localizedDiagnosticMessageText)
+                    .font(.body.weight(.semibold))
+                Text(finding.detail.localizedDiagnosticMessageText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle = finding.actionTitle {
+                    Text(actionTitle.localizedDiagnosticMessageText)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Image(systemName: finding.systemImageName)
+                .foregroundStyle(finding.tint)
+        }
+        .padding(finding.requiresAttention ? 12 : 0)
+        .background {
+            if finding.requiresAttention {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(finding.tint.opacity(0.09))
+            }
+        }
+        .overlay {
+            if finding.requiresAttention {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(finding.tint.opacity(0.35), lineWidth: 1)
+            }
+        }
+    }
+}
+
+private struct AccessibilityRecoveryActions: View {
+    @ObservedObject var store: MacCarrierStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    store.openAccessibilitySettings()
+                } label: {
+                    Label("打开辅助功能设置", systemImage: "gearshape")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    store.resetAccessibilityAuthorization()
+                } label: {
+                    Label("重置辅助功能授权", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    store.revealCurrentApplicationInFinder()
+                } label: {
+                    Label("显示当前 App", systemImage: "app.dashed")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Text("授权后返回 TypeCarrier 会自动刷新；也可以点顶部“主动诊断”立即检查。重置会把 TypeCarrier 从辅助功能列表中移除；如果列表里找不到它，点击“显示当前 App”，再用系统设置左下角 + 添加该 app。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let message = store.lastAccessibilityResetMessage {
+                Text(message)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+}
+
 private struct SettingsDiagnosticEvent: Identifiable {
     let id: Int
     let timestamp: Date
     let name: String
     let message: String
+    let summary: String
 }
 
 private struct DiagnosticEventListRow: View {
@@ -979,12 +1264,49 @@ private struct DiagnosticEventListRow: View {
             Text(event.name)
                 .font(.caption.weight(.semibold))
 
+            Text(event.summary)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .textSelection(.enabled)
+
             Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }
         .padding(.vertical, 2)
+    }
+}
+
+private extension SelfCheckFinding {
+    var requiresAttention: Bool {
+        severity == .warning || severity == .blocking
+    }
+
+    var systemImageName: String {
+        switch severity {
+        case .ok:
+            "checkmark.circle.fill"
+        case .warning:
+            "exclamationmark.triangle.fill"
+        case .blocking:
+            "xmark.octagon.fill"
+        case .unknown:
+            "questionmark.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch severity {
+        case .ok:
+            .green
+        case .warning:
+            .orange
+        case .blocking:
+            .red
+        case .unknown:
+            .secondary
+        }
     }
 }
 

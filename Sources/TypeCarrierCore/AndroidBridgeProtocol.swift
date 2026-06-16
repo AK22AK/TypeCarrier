@@ -121,3 +121,33 @@ public struct AndroidBridgeActiveSenderGate: Equatable, Sendable {
         activeDeviceID = nil
     }
 }
+
+public struct AndroidBridgeListenerRecovery: Equatable, Sendable {
+    private let maximumConsecutiveFailures: Int
+    private let retryDelay: Duration
+    private var consecutiveFailures = 0
+
+    public init(maximumConsecutiveFailures: Int = 3, retryDelay: Duration = .seconds(2)) {
+        self.maximumConsecutiveFailures = max(1, maximumConsecutiveFailures)
+        self.retryDelay = retryDelay
+    }
+
+    public mutating func failed() -> Duration? {
+        consecutiveFailures += 1
+        return retryDelay.takeIf(consecutiveFailures <= maximumConsecutiveFailures)
+    }
+
+    public mutating func ready() {
+        consecutiveFailures = 0
+    }
+
+    public mutating func stopped() {
+        consecutiveFailures = 0
+    }
+}
+
+private extension Duration {
+    func takeIf(_ condition: Bool) -> Duration? {
+        condition ? self : nil
+    }
+}

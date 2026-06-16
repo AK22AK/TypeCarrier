@@ -41,28 +41,34 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 官方 App Store 或 Mac 版本应从可信本机或私有发布环境归档。不要把证书、provisioning profile、App Store Connect API key 或私有发布配置提交到公开仓库。
 
+## 用户下载入口
+
+- iOS：前往 App Store 下载。App Store 页面尚未上架，当前占位链接为 [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier)，正式上架后替换为真实商店地址。
+- Android：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 APK 侧载包。
+- macOS：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 Mac 侧载包。
+
 ## GitHub Beta 发布
 
-首个 0.1 Beta 可以按 GitHub prerelease 处理：
+GitHub Release 提供 Android / macOS 侧载包，并保留到最新 Release 的自引用入口：
 
 - iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；正式获取方式是 App Store / TestFlight。
 - Android 端随 release 上传 APK 侧载包。
 - macOS 端在 release workflow 中生成 Developer ID signed + notarized DMG，并随 release 上传 `.dmg` 和 `.sha256`。
 - 不要把 beta 侧载包描述成对普通用户即开即用的正式安装包。
 
-0.1.1 建议 tag 命名：
+0.1.2 建议 tag 命名：
 
 ```sh
-git tag -a v0.1.1 -m "TypeCarrier 0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "TypeCarrier 0.1.2"
+git push origin v0.1.2
 ```
 
 创建 GitHub prerelease：
 
 ```sh
-gh release create v0.1.1 \
-  --title "TypeCarrier 0.1.1" \
-  --notes-file docs/releases/0.1.1.md \
+gh release create v0.1.2 \
+  --title "TypeCarrier 0.1.2" \
+  --notes-file docs/releases/0.1.2.md \
   --prerelease
 ```
 
@@ -89,9 +95,9 @@ script/package_macos_release.sh
 
 脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>-development.zip` 及 SHA-256。
 
-0.1.1 默认生成 development 测试包：
+0.1.2 默认生成 development 测试包：
 
-- 文件名：`TypeCarrierMac-0.1.1-2-development.zip`。
+- 文件名：`TypeCarrierMac-0.1.2-3-development.zip`。
 - 签名：Apple Development / Personal Team。
 - Gatekeeper assessment 可能失败；脚本会输出 warning，但不会把它当作 0.1 development 包的构建失败。
 

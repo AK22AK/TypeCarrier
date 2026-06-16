@@ -5,6 +5,7 @@ package org.typecarrier.android.ui
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -96,6 +97,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -124,6 +126,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -136,7 +141,10 @@ import org.typecarrier.android.domain.AndroidRecordKind
 import org.typecarrier.android.domain.AndroidRecordStatus
 import org.typecarrier.android.transport.MacService
 import org.typecarrier.android.viewmodel.AndroidComposerUiState
+import org.typecarrier.android.viewmodel.AndroidConnectionSelfCheck
 import org.typecarrier.android.viewmodel.AndroidConnectionStatus
+import org.typecarrier.android.viewmodel.AndroidSelfCheckFinding
+import org.typecarrier.android.viewmodel.AndroidSelfCheckSeverity
 import org.typecarrier.android.viewmodel.AndroidSendState
 import org.typecarrier.android.viewmodel.AndroidComposerViewModel
 
@@ -144,6 +152,7 @@ private object AppRoutes {
     const val Home = "home"
     const val History = "history"
     const val Settings = "settings"
+    const val About = "about"
     const val Debug = "debug"
     const val Detail = "detail/{recordId}"
 
@@ -157,14 +166,29 @@ private enum class HistoryTab {
 
 private const val NavigationEnterDurationMillis = 320
 private const val NavigationExitDurationMillis = 160
+private const val TypeCarrierAppStorePlaceholderUrl = "https://apps.apple.com/app/typecarrier"
+private const val TypeCarrierLatestReleaseUrl = "https://github.com/AK22AK/TypeCarrier/releases/latest"
 
 @Composable
 fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val clipboard = LocalClipboardManager.current
     val navController = rememberNavController()
     var shouldApplyLaunchFocus by remember { mutableStateOf(true) }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.handleAppBecameActive()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         NavHost(
@@ -213,6 +237,7 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onRefresh = viewModel::refreshDiscovery,
                     onOpenHistory = { navController.navigate(AppRoutes.History) },
                     onOpenSettings = { navController.navigate(AppRoutes.Settings) },
+                    onOpenAbout = { navController.navigate(AppRoutes.About) },
                     onOpenDebug = { navController.navigate(AppRoutes.Debug) },
                 onSelectMac = viewModel::selectMac,
                 onManualHostChange = viewModel::updateManualHost,
@@ -253,6 +278,12 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                     onBack = { navController.popBackStack() },
                 onSenderDisplayNameChange = viewModel::updateSenderDisplayName,
                 onLaunchesIntoInputModeChange = viewModel::updateLaunchesIntoInputMode,
+                )
+            }
+
+            composable(AppRoutes.About) {
+                AboutScreen(
+                    onBack = { navController.popBackStack() },
                 )
             }
 
@@ -315,6 +346,7 @@ private fun HomeScreen(
     onRefresh: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAbout: () -> Unit,
     onOpenDebug: () -> Unit,
     onSelectMac: (MacService) -> Unit,
     onManualHostChange: (String) -> Unit,
@@ -369,6 +401,10 @@ private fun HomeScreen(
                 leaveInputMode()
                 onOpenSettings()
             },
+            onOpenAbout = {
+                leaveInputMode()
+                onOpenAbout()
+            },
             onOpenDebug = {
                 leaveInputMode()
                 onOpenDebug()
@@ -401,10 +437,10 @@ private fun HomeScreen(
 
     if (showsConnectionDialog) {
         ConnectionDialog(
-            state = state,
-            onDismiss = { showsConnectionDialog = false },
-            onSelectMac = onSelectMac,
-            onManualHostChange = onManualHostChange,
+                state = state,
+                onDismiss = { showsConnectionDialog = false },
+                onSelectMac = onSelectMac,
+                onManualHostChange = onManualHostChange,
             onManualPortChange = onManualPortChange,
             onPairingCodeChange = onPairingCodeChange,
             onConnect = {
@@ -423,6 +459,7 @@ private fun Header(
     onOpenHistory: () -> Unit,
     onOpenConnection: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAbout: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -449,6 +486,7 @@ private fun Header(
                     onOpenHistory = onOpenHistory,
                     onOpenConnection = onOpenConnection,
                     onOpenSettings = onOpenSettings,
+                    onOpenAbout = onOpenAbout,
                     onOpenDebug = onOpenDebug,
                 )
             }
@@ -524,6 +562,7 @@ private fun Header(
             onOpenHistory = onOpenHistory,
             onOpenConnection = onOpenConnection,
             onOpenSettings = onOpenSettings,
+            onOpenAbout = onOpenAbout,
             onOpenDebug = onOpenDebug,
         )
     }
@@ -539,6 +578,7 @@ private fun HeaderActions(
     onOpenHistory: () -> Unit,
     onOpenConnection: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenAbout: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -577,6 +617,14 @@ private fun HeaderActions(
                     onClick = {
                         onDismissMenu()
                         onOpenConnection()
+                    },
+                )
+                CompactMenuItem(
+                    icon = Icons.Default.Info,
+                    text = "关于",
+                    onClick = {
+                        onDismissMenu()
+                        onOpenAbout()
                     },
                 )
                 CompactMenuItem(
@@ -632,11 +680,11 @@ private fun LogoMark(size: Dp, iconSize: Dp) {
     }
 }
 
-private fun connectionDisplayText(state: AndroidComposerUiState): String =
+internal fun connectionDisplayText(state: AndroidComposerUiState): String =
     when (state.connectionStatus) {
         AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "Mac 已连接"
-        AndroidConnectionStatus.Connecting -> "正在连接"
-        AndroidConnectionStatus.Searching -> if (state.services.isEmpty()) "正在查找 Mac" else "发现 ${state.services.size} 台 Mac"
+        AndroidConnectionStatus.Connecting -> state.headerStatusText
+        AndroidConnectionStatus.Searching -> state.headerStatusText
         AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
     }
 
@@ -768,6 +816,14 @@ private fun ConnectionPanel(
     onConnect: () -> Unit,
 ) {
     var showAdvanced by remember { mutableStateOf(false) }
+    val connectedMac = state.selectedMac.takeIf { state.connectionStatus == AndroidConnectionStatus.Connected }
+    val visibleServices = remember(state.services, connectedMac) {
+        if (connectedMac == null || state.services.any { it.id == connectedMac.id }) {
+            state.services
+        } else {
+            listOf(connectedMac) + state.services
+        }
+    }
     val selectedHasTrust = state.selectedMac?.let { selected ->
         state.trustedMacs.any { it.id == selected.id }
     } == true
@@ -781,7 +837,11 @@ private fun ConnectionPanel(
                 Text("连接 Mac", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    if (state.services.isEmpty()) "手动连接可用" else "${state.services.size} 台",
+                    when {
+                        connectedMac != null -> "已连接"
+                        visibleServices.isEmpty() -> "未发现设备"
+                        else -> "${visibleServices.size} 台"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -807,26 +867,31 @@ private fun ConnectionPanel(
                 }
             }
 
-            if (state.services.isNotEmpty()) {
-                Text("发现的 Mac", style = MaterialTheme.typography.labelLarge)
+            if (visibleServices.isNotEmpty()) {
+                Text(if (connectedMac != null) "当前 Mac" else "发现的 Mac", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 112.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(state.services, key = { it.id }) { service ->
+                    items(visibleServices, key = { it.id }) { service ->
+                        val isConnectedService = connectedMac?.id == service.id
                         MacServiceRow(
                             service = service,
                             selected = service.id == state.selectedMac?.id,
-                            subtitle = if (state.trustedMacs.any { it.id == service.id }) "已配对，可免配对连接" else "首次连接需要配对码",
+                            subtitle = when {
+                                isConnectedService -> "已连接"
+                                state.trustedMacs.any { it.id == service.id } -> "已配对，可免配对连接"
+                                else -> "首次连接需要配对码"
+                            },
                             onClick = { onSelectMac(service) },
                         )
                     }
                 }
             } else {
                 Text(
-                    "未发现当前网络中的 Mac。请确认 Mac 和 Android 在同一局域网或同一热点；自动发现失败时可展开高级连接输入 Mac 地址。",
+                    "未发现当前网络中的 Mac。正常情况下这里会直接显示 Mac 名称；只有自动发现失败时，才需要展开高级连接使用地址兜底。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -883,17 +948,28 @@ private fun ConnectionPanel(
                     )
                 }
                 Text(
-                    "仅用于自动发现失败时兜底。输入地址后仍会使用已保存的信任信息或匹配码完成连接。",
+                    "这是自动发现失败时的本次兜底入口。正常连接不需要手动查看或输入 IP/端口；换网络或换 Mac 后不要沿用旧地址。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (state.manualHost.isNotBlank()) {
+                    TextButton(onClick = { onManualHostChange("") }) {
+                        Text("清除手动地址")
+                    }
+                }
             }
 
-            Button(onClick = onConnect, enabled = state.canConnect, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onConnect,
+                enabled = state.connectionStatus != AndroidConnectionStatus.Connected && state.canConnect,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Icon(Icons.Default.Link, contentDescription = null)
                 Text(
                     when {
+                        state.connectionStatus == AndroidConnectionStatus.Connected -> "已连接"
                         state.isBusy && state.connectionStatus == AndroidConnectionStatus.Connecting -> "正在连接"
+                        state.selectedMac == null && state.manualHost.isNotBlank() -> "用手动地址连接"
                         selectedHasTrust -> "免配对连接"
                         else -> "配对并连接"
                     },
@@ -903,7 +979,12 @@ private fun ConnectionPanel(
 }
 
 @Composable
-private fun MacServiceRow(service: MacService, selected: Boolean, subtitle: String? = null, onClick: () -> Unit) {
+private fun MacServiceRow(
+    service: MacService,
+    selected: Boolean,
+    subtitle: String? = null,
+    onClick: () -> Unit,
+) {
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(
@@ -1318,6 +1399,61 @@ private fun SettingsScreen(
     }
 }
 
+@Composable
+private fun AboutScreen(
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    ScreenScaffold(title = "关于", onBack = onBack) {
+        SectionCard {
+            Text("TypeCarrier", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            SettingsListItem("应用", "TypeCarrier")
+            HorizontalDivider()
+            SettingsListItem("版本", currentAppVersionText(context))
+        }
+
+        SectionCard {
+            Text("更多平台", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            PlatformDownloadItem(
+                title = "iOS",
+                supporting = "前往 App Store 下载。App Store 页面尚未上架，当前链接是占位位置；正式上架后替换为真实商店地址。",
+                onOpen = { openExternalUrl(context, TypeCarrierAppStorePlaceholderUrl) },
+            )
+            HorizontalDivider()
+            PlatformDownloadItem(
+                title = "Android",
+                supporting = "在 GitHub 最新 Release 下载 APK 侧载包。",
+                onOpen = { openExternalUrl(context, TypeCarrierLatestReleaseUrl) },
+            )
+            HorizontalDivider()
+            PlatformDownloadItem(
+                title = "macOS",
+                supporting = "在 GitHub 最新 Release 下载 Mac 侧载包。",
+                onOpen = { openExternalUrl(context, TypeCarrierLatestReleaseUrl) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlatformDownloadItem(
+    title: String,
+    supporting: String,
+    onOpen: () -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(supporting) },
+        trailingContent = {
+            TextButton(onClick = onOpen) {
+                Text("打开")
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DebugScreen(
@@ -1342,6 +1478,18 @@ private fun DebugScreen(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item {
+                SectionCard {
+                    Text("连接自检", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    AndroidConnectionSelfCheck.findings(state).forEachIndexed { index, finding ->
+                        if (index > 0) {
+                            HorizontalDivider()
+                        }
+                        AndroidSelfCheckFindingRow(finding)
+                    }
+                }
+            }
+
             item {
                 SectionCard {
                     Text("连接", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -1403,6 +1551,41 @@ private fun DebugScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AndroidSelfCheckFindingRow(finding: AndroidSelfCheckFinding) {
+    ListItem(
+        headlineContent = {
+            Text(finding.title, fontWeight = FontWeight.SemiBold)
+        },
+        supportingContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(finding.detail)
+                finding.actionTitle?.let {
+                    Text(it, fontWeight = FontWeight.Medium)
+                }
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = when (finding.severity) {
+                    AndroidSelfCheckSeverity.Ok -> Icons.Default.CheckCircle
+                    AndroidSelfCheckSeverity.Warning -> Icons.Default.Info
+                    AndroidSelfCheckSeverity.Blocking -> Icons.Default.Close
+                    AndroidSelfCheckSeverity.Unknown -> Icons.Default.Info
+                },
+                contentDescription = null,
+                tint = when (finding.severity) {
+                    AndroidSelfCheckSeverity.Ok -> Color(0xFF16A34A)
+                    AndroidSelfCheckSeverity.Warning -> Color(0xFFD97706)
+                    AndroidSelfCheckSeverity.Blocking -> Color(0xFFDC2626)
+                    AndroidSelfCheckSeverity.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1512,6 +1695,23 @@ private fun shareDiagnosticsFile(context: Context, file: File) {
         Toast.makeText(context, "没有可用的导出应用", Toast.LENGTH_SHORT).show()
     }
 }
+
+private fun openExternalUrl(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "没有可用的浏览器", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun currentAppVersionText(context: Context): String =
+    try {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        packageInfo.versionName ?: "未知"
+    } catch (_: Exception) {
+        "未知"
+    }
 
 @Composable
 fun TypeCarrierTheme(content: @Composable () -> Unit) {

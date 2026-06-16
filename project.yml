@@ -11,8 +11,8 @@ settings:
     CLANG_ENABLE_MODULE_VERIFIER: YES
     DEAD_CODE_STRIPPING: YES
     SWIFT_VERSION: 6.0
-    MARKETING_VERSION: 0.1.1
-    CURRENT_PROJECT_VERSION: 2
+    MARKETING_VERSION: 0.1.2
+    CURRENT_PROJECT_VERSION: 3
     ENABLE_USER_SCRIPT_SANDBOXING: NO
 configFiles:
   Debug: Configs/TypeCarrier.xcconfig
@@ -78,14 +78,16 @@ targets:
         CFBundleDisplayName: TypeCarrier
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMultipleInstancesProhibited: true
         NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，接收附近手机发来的文本。
         NSBonjourServices:
           - _typecarrier._tcp
-          - _typecarrier-json._tcp
     entitlements:
       path: Apps/macOS/TypeCarrierMac.entitlements
       properties:
         com.apple.security.app-sandbox: false
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac

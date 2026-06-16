@@ -9,7 +9,7 @@ on:
       tag:
         description: "Release tag to prepare"
         required: true
-        default: "v0.1.1"
+        default: "v0.1.2"
 
 permissions:
   contents: write
@@ -42,9 +42,13 @@ jobs:
               release_title="TypeCarrier 0.1.1"
               notes_file="docs/releases/0.1.1.md"
               ;;
+            v0.1.2)
+              release_title="TypeCarrier 0.1.2"
+              notes_file="docs/releases/0.1.2.md"
+              ;;
             *)
               release_title="TypeCarrier ${release_tag#v}"
-              notes_file="docs/releases/0.1.1.md"
+              notes_file="docs/releases/0.1.2.md"
               ;;
           esac
 

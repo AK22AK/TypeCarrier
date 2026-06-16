@@ -1,6 +1,7 @@
 package org.typecarrier.android.viewmodel
 
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
+import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
 import org.typecarrier.android.transport.MacService
 
 class AndroidComposerViewModelTest {
@@ -102,6 +104,64 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
+    fun connectingStateNamesSelectedMacBeforeConnectionCompletes() = runBlocking {
+        val connectGate = CompletableDeferred<Unit>()
+        val repository = FakeAndroidCarrierRepository().apply {
+            connectGateBeforeResponse = connectGate
+        }
+        val viewModel = makeViewModel(repository = repository)
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
+
+        val connectJob = viewModel.connect()
+
+        assertEquals(AndroidConnectionStatus.Connecting, viewModel.uiState.value.connectionStatus)
+        assertEquals("正在连接到 Test Mac", viewModel.uiState.value.headerStatusText)
+
+        connectGate.complete(Unit)
+        connectJob.join()
+    }
+
+    @Test
+    fun connectingStateNamesManualHostBeforeConnectionCompletes() = runBlocking {
+        val connectGate = CompletableDeferred<Unit>()
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            hasTrustToken = true
+            manualHost = "10.116.251.181"
+            connectGateBeforeResponse = connectGate
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        val connectJob = viewModel.connect()
+
+        assertEquals(AndroidConnectionStatus.Connecting, viewModel.uiState.value.connectionStatus)
+        assertEquals("正在连接到手动输入的 Mac", viewModel.uiState.value.headerStatusText)
+
+        connectGate.complete(Unit)
+        connectJob.join()
+    }
+
+    @Test
+    fun manualConnectionFailureShowsUserFacingMessageAndKeepsRawDiagnostic() = runBlocking {
+        val rawFailure = "failed to connect to /10.116.251.181 (port 17641) after 5000ms"
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            hasTrustToken = true
+            manualHost = "10.116.251.181"
+            connectFailure = IllegalStateException(rawFailure)
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        viewModel.connect().join()
+
+        assertEquals("连接失败", viewModel.uiState.value.headerStatusText)
+        assertEquals(
+            "无法连接到手动输入的 Mac。请确认连接管理里的 Mac 地址是当前这台 Mac 的局域网地址。",
+            viewModel.uiState.value.connectionFailureMessage,
+        )
+        assertTrue(viewModel.exportDiagnosticsText().contains(rawFailure))
+    }
+
+    @Test
     fun acceptedPairingClearsPairingCodeAndMarksMacTrusted() = runBlocking {
         val repository = FakeAndroidCarrierRepository()
         val viewModel = makeViewModel(repository = repository)
@@ -112,7 +172,7 @@ class AndroidComposerViewModelTest {
 
         assertEquals("", viewModel.uiState.value.pairingCode)
         assertTrue(repository.hasTrustToken)
-        assertTrue(viewModel.uiState.value.canConnect)
+        assertFalse(viewModel.uiState.value.canConnect)
     }
 
     @Test
@@ -180,7 +240,7 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun discoveredTrustedMacConnectsAutomaticallyWithoutPairingCode() {
+    fun singleDiscoveredTrustedMacConnectsAutomatically() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
         }
@@ -191,10 +251,71 @@ class AndroidComposerViewModelTest {
         assertEquals(1, repository.connectAttempts)
         assertEquals(null, repository.lastPairingCode)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
     }
 
     @Test
-    fun startAttemptsRememberedMacWithoutWaitingForDiscovery() {
+    fun singleDiscoveredUntrustedMacBecomesCurrentPairingTarget() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository)
+
+        repository.publishServices(listOf(repository.mac))
+
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+        assertEquals(0, repository.connectAttempts)
+        assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
+        assertFalse(viewModel.uiState.value.canConnect)
+
+        viewModel.updatePairingCode("123456")
+        assertTrue(viewModel.uiState.value.canConnect)
+
+        viewModel.connect().join()
+
+        assertEquals(1, repository.connectAttempts)
+        assertEquals("123456", repository.lastPairingCode)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertTrue(viewModel.exportDiagnosticsText().contains("discovery.autoSelected"))
+    }
+
+    @Test
+    fun multipleDiscoveredTrustedMacsDoNotConnectAutomatically() {
+        val secondMac = MacService(name = "Other Mac", host = "127.0.0.2", port = 17641, macID = "mac-2")
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            hasTrustToken = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        repository.publishServices(listOf(repository.mac, secondMac))
+
+        assertEquals(0, repository.connectAttempts)
+        assertEquals(null, viewModel.uiState.value.selectedMac)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+    }
+
+    @Test
+    fun trustedMacCanAutoConnectAfterUntrustedMacWasAutoSelected() {
+        val trustedMac = MacService(name = "Trusted Mac", host = "127.0.0.2", port = 17641, macID = "mac-2")
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            trustedServices = listOf(trustedMac)
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        repository.publishServices(listOf(repository.mac))
+
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+        assertEquals(0, repository.connectAttempts)
+
+        repository.publishServices(listOf(repository.mac, trustedMac))
+
+        assertEquals(1, repository.connectAttempts)
+        assertEquals(trustedMac, repository.lastConnectedService)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(trustedMac, viewModel.uiState.value.selectedMac)
+    }
+
+    @Test
+    fun startDoesNotExposeRememberedMacAsCurrentTargetWhenItIsNotDiscovered() {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
         }
@@ -202,13 +323,64 @@ class AndroidComposerViewModelTest {
 
         viewModel.start()
 
-        assertEquals(1, repository.connectAttempts)
+        assertEquals(0, repository.connectAttempts)
         assertEquals(null, repository.lastPairingCode)
-        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(listOf(repository.mac), viewModel.uiState.value.trustedMacs)
+        assertEquals(emptyList<MacService>(), viewModel.uiState.value.services)
+        assertEquals(null, viewModel.uiState.value.selectedMac)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+        assertEquals("未发现 Mac", viewModel.uiState.value.headerStatusText)
+        assertFalse(viewModel.uiState.value.canConnect)
     }
 
     @Test
-    fun automaticInvalidSavedTrustTokenShowsRepairingState() {
+    fun becomingActiveRefreshesDiscoveryWhenDisconnected() {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository)
+
+        viewModel.handleAppBecameActive()
+
+        assertEquals(1, repository.refreshDiscoveryAttempts)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+        assertEquals("正在查找 Mac", viewModel.uiState.value.headerStatusText)
+        assertTrue(viewModel.exportDiagnosticsText().contains("app.foregroundDiscoveryRefresh"))
+    }
+
+    @Test
+    fun becomingActiveReconnectsSelectedTrustedMac() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
+            hasTrustToken = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        viewModel.selectMac(repository.mac)
+        viewModel.handleAppBecameActive()
+
+        assertEquals(1, repository.connectAttempts)
+        assertEquals(null, repository.lastPairingCode)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
+        assertTrue(viewModel.exportDiagnosticsText().contains("app.foregroundTrustedReconnect"))
+    }
+
+    @Test
+    fun becomingActiveKeepsConnectedMacWithoutRefreshingDiscovery() = runBlocking {
+        val repository = FakeAndroidCarrierRepository().apply {
+            hasTrustToken = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        viewModel.selectMac(repository.mac)
+        viewModel.connect().join()
+        viewModel.handleAppBecameActive()
+
+        assertEquals(0, repository.refreshDiscoveryAttempts)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
+    }
+
+    @Test
+    fun automaticInvalidSavedTrustTokenShowsRepairingState() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
             nextConnectResponse = AndroidBridgeResponse(
@@ -219,6 +391,7 @@ class AndroidComposerViewModelTest {
         val viewModel = makeViewModel(repository = repository)
 
         viewModel.start()
+        repository.publishServices(listOf(repository.mac))
 
         assertFalse(repository.hasTrustToken)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
@@ -227,18 +400,54 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun automaticConnectionFailureWithoutDiscoveredServicesStopsSearchingText() {
-        val repository = FakeAndroidCarrierRepository(emptyList()).apply {
-            hasTrustToken = true
-            connectFailure = IllegalStateException("offline")
-        }
+    fun selectedTargetIsClearedWhenItLeavesCurrentDiscovery() {
+        val repository = FakeAndroidCarrierRepository(emptyList())
         val viewModel = makeViewModel(repository = repository)
 
         viewModel.start()
+        repository.publishServices(listOf(repository.mac))
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
 
-        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+        assertTrue(viewModel.uiState.value.canConnect)
+
+        repository.publishServices(emptyList())
+
+        assertEquals(null, viewModel.uiState.value.selectedMac)
+        assertFalse(viewModel.uiState.value.canConnect)
         assertEquals("未发现 Mac", viewModel.uiState.value.headerStatusText)
-        assertEquals(null, viewModel.uiState.value.connectionFailureMessage)
+    }
+
+    @Test
+    fun discoveryPreconditionUpdatesUiSelfCheck() {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository)
+
+        repository.publishDiscoveryPrecondition(AndroidDiscoveryPrecondition.NotLocalNetwork)
+
+        assertEquals(AndroidDiscoveryPrecondition.NotLocalNetwork, viewModel.uiState.value.discoveryPrecondition)
+        assertEquals(
+            "当前网络无法发现局域网 Mac",
+            AndroidConnectionSelfCheck.findings(viewModel.uiState.value).first().title,
+        )
+    }
+
+    @Test
+    fun connectedTargetStaysVisibleWhenDiscoveryListClears() = runBlocking {
+        val repository = FakeAndroidCarrierRepository().apply {
+            hasTrustToken = true
+        }
+        val viewModel = makeViewModel(repository = repository)
+
+        viewModel.selectMac(repository.mac)
+        viewModel.connect().join()
+        repository.publishServices(emptyList())
+
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
+        assertFalse(viewModel.uiState.value.canConnect)
     }
 
     private fun makeViewModel(
@@ -261,8 +470,10 @@ private class FakeAndroidCarrierRepository(
     val mac = MacService(name = "Test Mac", host = "127.0.0.1", port = 17641)
     private val mutableServices = MutableStateFlow(initialServices ?: listOf(mac))
     private val mutableDiscoveryErrors = MutableStateFlow<String?>(null)
+    private val mutableDiscoveryPrecondition = MutableStateFlow(AndroidDiscoveryPrecondition.Available)
     override val services: StateFlow<List<MacService>> = mutableServices
     override val discoveryError: StateFlow<String?> = mutableDiscoveryErrors
+    override val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition> = mutableDiscoveryPrecondition
     override val deviceName: String = "Android Test"
     override val localPairingCode: String = "654321"
     override val trustedMacs: List<MacService>
@@ -272,12 +483,16 @@ private class FakeAndroidCarrierRepository(
     override var senderDisplayName: String = ""
     override var launchesIntoInputMode: Boolean = true
     var hasTrustToken = false
+    var trustedServices: List<MacService>? = null
     var sendFailure: Throwable? = null
     var connectFailure: Throwable? = null
     var requiresReconnectBeforeSend = false
+    var lastConnectedService: MacService? = null
     var lastPairingCode: String? = null
     var connectAttempts = 0
     var sendAttempts = 0
+    var refreshDiscoveryAttempts = 0
+    var connectGateBeforeResponse: CompletableDeferred<Unit>? = null
     var nextConnectResponse = AndroidBridgeResponse(status = AndroidBridgeResponseStatus.Accepted, message = "connected")
 
     fun publishServices(services: List<MacService>) {
@@ -288,10 +503,17 @@ private class FakeAndroidCarrierRepository(
         mutableDiscoveryErrors.value = message
     }
 
+    fun publishDiscoveryPrecondition(precondition: AndroidDiscoveryPrecondition) {
+        mutableDiscoveryPrecondition.value = precondition
+    }
+
     override fun startDiscovery() = Unit
     override fun stopDiscovery() = Unit
-    override fun refreshDiscovery() = Unit
-    override fun hasSavedTrustToken(service: MacService): Boolean = hasTrustToken
+    override fun refreshDiscovery() {
+        refreshDiscoveryAttempts += 1
+    }
+    override fun hasSavedTrustToken(service: MacService): Boolean =
+        trustedServices?.any { it.id == service.id } ?: hasTrustToken
     override fun forgetTrustedMac(service: MacService) {
         hasTrustToken = false
     }
@@ -299,7 +521,9 @@ private class FakeAndroidCarrierRepository(
     override suspend fun connect(service: MacService, pairingCode: String?): AndroidBridgeResponse {
         connectFailure?.let { throw it }
         connectAttempts += 1
+        lastConnectedService = service
         lastPairingCode = pairingCode
+        connectGateBeforeResponse?.await()
         if (pairingCode != null && nextConnectResponse.status == AndroidBridgeResponseStatus.Accepted) {
             hasTrustToken = true
         }

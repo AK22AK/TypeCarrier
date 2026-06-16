@@ -25,14 +25,19 @@ class MacDiscovery(
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private val services = linkedMapOf<String, MacService>()
+    private val serviceIDsByDiscoveryName = linkedMapOf<String, String>()
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
-    private var resolving = false
+    private val resolutionQueue = MacDiscoveryResolutionQueue<NsdServiceInfo> { it.serviceName }
+    private val recovery = NsdServiceRecovery()
+    private val resolveRetryPolicy = NsdResolveRetryPolicy()
+    private var scheduledRetry: Runnable? = null
 
     fun start() {
         if (discoveryListener != null) {
             return
         }
+        cancelScheduledRetry()
 
         multicastLock = wifiManager?.createMulticastLock("typecarrier-mdns")?.apply {
             setReferenceCounted(false)
@@ -40,18 +45,22 @@ class MacDiscovery(
         }
 
         val listener = object : NsdManager.DiscoveryListener {
-            override fun onDiscoveryStarted(serviceType: String) = Unit
+            override fun onDiscoveryStarted(serviceType: String) {
+                recovery.started()
+            }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                if (serviceInfo.serviceType == serviceType && !resolving) {
-                    resolve(serviceInfo)
+                if (MacDiscoveryServiceType.matches(serviceInfo.serviceType)) {
+                    resolutionQueue.enqueue(serviceInfo)?.let(::resolve)
                 }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val key = services.values.firstOrNull { it.name == serviceInfo.serviceName }?.id
-                if (key != null) {
-                    services.remove(key)
+                resolutionQueue.removePending(serviceInfo.serviceName)
+                resolveRetryPolicy.clear(serviceInfo.serviceName)
+                val serviceID = serviceIDsByDiscoveryName.remove(serviceInfo.serviceName)
+                if (serviceID != null) {
+                    services.remove(serviceID)
                     publishServices()
                 }
             }
@@ -60,7 +69,8 @@ class MacDiscovery(
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 onError("发现服务失败：$errorCode")
-                stop()
+                stop(clearsScheduledRetry = false)
+                scheduleRestartAfterStartFailure()
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -73,40 +83,99 @@ class MacDiscovery(
     }
 
     fun stop() {
+        stop(clearsScheduledRetry = true)
+    }
+
+    private fun stop(clearsScheduledRetry: Boolean) {
+        if (clearsScheduledRetry) {
+            cancelScheduledRetry()
+        }
         val listener = discoveryListener ?: return
         runCatching { nsdManager.stopServiceDiscovery(listener) }
         discoveryListener = null
-        resolving = false
+        resolutionQueue.clear()
+        resolveRetryPolicy.clearAll()
         multicastLock?.release()
         multicastLock = null
         services.clear()
+        serviceIDsByDiscoveryName.clear()
         publishServices()
     }
 
+    private fun scheduleRestartAfterStartFailure() {
+        val delayMillis = recovery.failed()
+        val retry = Runnable {
+            scheduledRetry = null
+            if (recovery.shouldRunScheduledRetry()) {
+                start()
+            }
+        }
+        scheduledRetry = retry
+        mainHandler.postDelayed(retry, delayMillis)
+    }
+
+    private fun cancelScheduledRetry() {
+        scheduledRetry?.let(mainHandler::removeCallbacks)
+        scheduledRetry = null
+        recovery.userRestarted()
+    }
+
     private fun resolve(serviceInfo: NsdServiceInfo) {
-        resolving = true
         nsdManager.resolveService(
             serviceInfo,
             object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    resolving = false
                     onError("解析服务失败：$errorCode")
+                    scheduleResolveRetryIfNeeded(serviceInfo)
+                    resolveNextPendingService()
                 }
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    resolving = false
-                    val host = serviceInfo.host?.hostAddress ?: return
+                    val host = serviceInfo.host?.hostAddress
+                    if (host == null) {
+                        resolveNextPendingService()
+                        return
+                    }
+                    val androidPort = serviceInfo.attributes["androidPort"]
+                        ?.toString(Charsets.UTF_8)
+                        ?.toIntOrNull()
+                        ?: run {
+                            resolveNextPendingService()
+                            return
+                        }
+                    val macName = serviceInfo.attributes["macName"]
+                        ?.toString(Charsets.UTF_8)
+                        ?.takeIf { it.isNotBlank() }
                     val service = MacService(
-                        name = serviceInfo.serviceName,
+                        name = macName ?: serviceInfo.serviceName,
                         host = host,
-                        port = serviceInfo.port,
+                        port = androidPort,
                         macID = serviceInfo.attributes["macID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
                     )
                     services[service.id] = service
+                    serviceIDsByDiscoveryName[serviceInfo.serviceName] = service.id
+                    resolveRetryPolicy.clear(serviceInfo.serviceName)
                     publishServices()
+                    resolveNextPendingService()
                 }
             },
         )
+    }
+
+    private fun scheduleResolveRetryIfNeeded(serviceInfo: NsdServiceInfo) {
+        val delayMillis = resolveRetryPolicy.failed(serviceInfo.serviceName) ?: return
+        mainHandler.postDelayed(
+            {
+                if (discoveryListener != null) {
+                    resolutionQueue.enqueue(serviceInfo)?.let(::resolve)
+                }
+            },
+            delayMillis,
+        )
+    }
+
+    private fun resolveNextPendingService() {
+        resolutionQueue.finishCurrent()?.let(::resolve)
     }
 
     private fun publishServices() {
@@ -117,6 +186,6 @@ class MacDiscovery(
     }
 
     private companion object {
-        const val serviceType = "_typecarrier-json._tcp."
+        const val serviceType = MacDiscoveryServiceType.value
     }
 }

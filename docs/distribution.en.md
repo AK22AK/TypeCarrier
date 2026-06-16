@@ -37,28 +37,34 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 `Configs/Signing.local.xcconfig` is gitignored and should stay local.
 
+## User Download Entry Points
+
+- iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
+- Android: download the sideloadable APK from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+- macOS: download the sideloadable Mac package from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+
 ## GitHub Beta Release
 
-The first 0.1 Beta should be published as a GitHub prerelease:
+GitHub Release provides Android / macOS sideload packages and should keep a self-link to the latest Release:
 
 - iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store / TestFlight.
 - Android uploads a sideloadable APK.
 - macOS builds a Developer ID signed + notarized DMG in the release workflow and uploads the `.dmg` plus `.sha256`.
 - Do not describe beta sideload packages as regular user-ready installers.
 
-Recommended tag for 0.1.1:
+Recommended tag for 0.1.2:
 
 ```sh
-git tag -a v0.1.1 -m "TypeCarrier 0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "TypeCarrier 0.1.2"
+git push origin v0.1.2
 ```
 
 Create the GitHub prerelease:
 
 ```sh
-gh release create v0.1.1 \
-  --title "TypeCarrier 0.1.1" \
-  --notes-file docs/releases/0.1.1.md \
+gh release create v0.1.2 \
+  --title "TypeCarrier 0.1.2" \
+  --notes-file docs/releases/0.1.2.md \
   --prerelease
 ```
 
@@ -85,9 +91,9 @@ script/package_macos_release.sh
 
 The script runs a Release build, verifies code signing, runs Gatekeeper assessment, and prints the SHA-256 checksum.
 
-0.1.1 generates a development testing package by default:
+0.1.2 generates a development testing package by default:
 
-- File name: `TypeCarrierMac-0.1.1-2-development.zip`.
+- File name: `TypeCarrierMac-0.1.2-3-development.zip`.
 - Signing: Apple Development / Personal Team.
 - Gatekeeper assessment may fail. The script prints a warning, but this is not treated as a packaging failure for the 0.1 development package.
 

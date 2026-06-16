@@ -4,6 +4,8 @@ import TypeCarrierCore
 
 @MainActor
 final class AndroidCarrierBridge: ObservableObject {
+    typealias EnvelopeHandler = (CarrierEnvelope, String, @escaping (CarrierEnvelope) -> Void) -> Void
+
     enum BridgeState: Equatable {
         case stopped
         case listening(port: UInt16?)
@@ -17,7 +19,7 @@ final class AndroidCarrierBridge: ObservableObject {
         }
     }
 
-    static let serviceType = "_typecarrier-json._tcp"
+    static let serviceType = AndroidBonjourAdvertisement.serviceType
     static let defaultPort: NWEndpoint.Port = 17641
     private static let macIDDefaultsKey = "AndroidBridgeMacID"
     private static let pairingCodeDefaultsKey = "AndroidBridgePairingCode"
@@ -30,6 +32,14 @@ final class AndroidCarrierBridge: ObservableObject {
 
     var pairingCode: String {
         localPairingCode
+    }
+
+    var bonjourDiscoveryInfo: [String: String] {
+        AndroidBonjourAdvertisement.discoveryInfo(
+            macID: macID,
+            macName: displayName,
+            port: Self.defaultPort.rawValue
+        )
     }
 
     var manualConnectionHints: String {
@@ -45,41 +55,70 @@ final class AndroidCarrierBridge: ObservableObject {
         guard !addresses.isEmpty else {
             return "端口 \(portText)"
         }
-        return addresses.map { "\($0):\(portText)" }.joined(separator: "\n")
+        return addresses.map { "\($0.address):\(portText)（\($0.interfaceName)）" }.joined(separator: "\n")
     }
 
     private let displayName: String
     private let macID: String
     private let localPairingCode: String
     private let trustTokenStore: AndroidTrustTokenStore
+    private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var listener: NWListener?
-    private var bonjourPublisher: AndroidBonjourPublisher?
     private var pairingBrowser: AndroidPairingBrowser?
     private var connections: [ObjectIdentifier: BridgeConnectionState] = [:]
     private var activeSenderGate = AndroidBridgeActiveSenderGate()
-    private var envelopeHandler: ((CarrierEnvelope, String, @escaping (CarrierEnvelope) -> Void) -> Void)?
+    private var envelopeHandler: EnvelopeHandler?
+    private var pendingStartHandler: EnvelopeHandler?
+    private var isStoppingListener = false
+    private var listenerRecovery = AndroidBridgeListenerRecovery()
+    private var listenerRestartTask: Task<Void, Never>?
 
     init(
         displayName: String,
         pairingCode: String = AndroidCarrierBridge.resolvePairingCode(),
         trustTokenStore: AndroidTrustTokenStore = AndroidTrustTokenStore(),
-        macID: String = AndroidCarrierBridge.resolveMacID()
+        macID: String = AndroidCarrierBridge.resolveMacID(),
+        diagnosticLogFileURL: URL? = nil
     ) {
         self.displayName = displayName
         self.macID = macID
         self.localPairingCode = pairingCode
         self.trustTokenStore = trustTokenStore
+        diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
     }
 
-    func start(onEnvelope: @escaping (CarrierEnvelope, String, @escaping (CarrierEnvelope) -> Void) -> Void) {
-        stop()
+    func start(onEnvelope: @escaping EnvelopeHandler) {
+        if hasActiveResources {
+            stop(thenStart: onEnvelope)
+            return
+        }
+        startFresh(onEnvelope: onEnvelope)
+    }
+
+    func restart(onEnvelope: @escaping EnvelopeHandler) {
+        stop(thenStart: onEnvelope)
+    }
+
+    private func restartAfterListenerFailure(onEnvelope: @escaping EnvelopeHandler) {
+        stop(thenStart: onEnvelope, resetsListenerRecovery: false)
+    }
+
+    private func startFresh(onEnvelope: @escaping EnvelopeHandler) {
         envelopeHandler = onEnvelope
+        lastErrorMessage = nil
 
         do {
             let listener = try NWListener(using: .tcp, on: Self.defaultPort)
-            listener.stateUpdateHandler = { [weak self] state in
+            recordDiagnosticEvent(
+                "androidBridge.bonjour.publish.delegated",
+                message: "Android discovery metadata is advertised by the Apple receiver over \(Self.serviceType)."
+            )
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
+                guard let listener else {
+                    return
+                }
                 Task { @MainActor in
-                    self?.handleListenerState(state)
+                    self?.handleListenerState(state, for: listener)
                 }
             }
             listener.newConnectionHandler = { [weak self] connection in
@@ -87,20 +126,34 @@ final class AndroidCarrierBridge: ObservableObject {
                     self?.accept(connection)
                 }
             }
-            listener.start(queue: .main)
+            recordDiagnosticEvent(
+                "androidBridge.listener.start",
+                message: "Starting Android TCP listener on port \(Self.defaultPort.rawValue)."
+            )
             self.listener = listener
-            startPairingBrowser()
+            listener.start(queue: .main)
             state = .listening(port: nil)
         } catch {
             fail(error.localizedDescription)
+            scheduleListenerRestartAfterFailure(message: error.localizedDescription)
         }
     }
 
     func stop() {
+        stop(thenStart: nil)
+    }
+
+    private func stop(thenStart nextStartHandler: EnvelopeHandler?, resetsListenerRecovery: Bool = true) {
+        cancelListenerRestart()
+        if resetsListenerRecovery {
+            listenerRecovery.stopped()
+        }
+        pendingStartHandler = nextStartHandler
+        let existingListener = listener
+        if existingListener != nil {
+            isStoppingListener = true
+        }
         listener?.cancel()
-        listener = nil
-        bonjourPublisher?.stop()
-        bonjourPublisher = nil
         pairingBrowser?.stop()
         pairingBrowser = nil
         discoveredAndroidPairingDevices = []
@@ -110,7 +163,10 @@ final class AndroidCarrierBridge: ObservableObject {
         activeSenderGate = AndroidBridgeActiveSenderGate()
         envelopeHandler = nil
         lastErrorMessage = nil
-        state = .stopped
+        recordDiagnosticEvent("androidBridge.listener.stop", message: "Stopped Android bridge listener.")
+        if existingListener == nil {
+            finishListenerStop()
+        }
     }
 
     func associateAndroidDevice(pairingCode: String) {
@@ -148,24 +204,65 @@ final class AndroidCarrierBridge: ObservableObject {
         }
     }
 
-    private func handleListenerState(_ listenerState: NWListener.State) {
+    private func handleListenerState(_ listenerState: NWListener.State, for listener: NWListener) {
+        guard listener === self.listener else {
+            return
+        }
+
+        if isStoppingListener {
+            switch listenerState {
+            case .cancelled, .failed:
+                recordDiagnosticEvent("androidBridge.listener.cancelled", message: "Android bridge listener cancelled.")
+                finishListenerStop()
+            default:
+                break
+            }
+            return
+        }
+
         switch listenerState {
         case .ready:
-            let port = listener?.port?.rawValue
+            listenerRecovery.ready()
+            let port = listener.port?.rawValue
             state = .listening(port: port)
-            publishBonjour(port: port)
+            recordDiagnosticEvent(
+                "androidBridge.listener.ready",
+                message: "Android bridge listening on \(manualConnectionHints)."
+            )
         case .failed(let error):
             fail(error.localizedDescription)
+            scheduleListenerRestartAfterFailure(message: error.localizedDescription)
         case .cancelled:
-            state = .stopped
+            recordDiagnosticEvent("androidBridge.listener.cancelled", message: "Android bridge listener cancelled.")
+            finishListenerStop()
         default:
             break
         }
     }
 
+    private var hasActiveResources: Bool {
+        listener != nil || pairingBrowser != nil || !connections.isEmpty
+    }
+
+    private func finishListenerStop() {
+        listener = nil
+        isStoppingListener = false
+        state = .stopped
+
+        guard let nextStartHandler = pendingStartHandler else {
+            return
+        }
+        pendingStartHandler = nil
+        startFresh(onEnvelope: nextStartHandler)
+    }
+
     private func accept(_ connection: NWConnection) {
         let id = ObjectIdentifier(connection)
         connections[id] = BridgeConnectionState(connection: connection)
+        recordDiagnosticEvent(
+            "androidBridge.connection.accepted",
+            message: "Accepted Android bridge TCP connection from \(String(describing: connection.endpoint))."
+        )
         connection.stateUpdateHandler = { [weak self, weak connection] state in
             guard let connection else {
                 return
@@ -180,7 +277,25 @@ final class AndroidCarrierBridge: ObservableObject {
 
     private func handleConnectionState(_ state: NWConnection.State, connection: NWConnection) {
         switch state {
-        case .failed, .cancelled:
+        case .ready:
+            recordDiagnosticEvent(
+                "androidBridge.connection.ready",
+                message: "Android bridge TCP connection is ready.",
+                peerName: connections[ObjectIdentifier(connection)]?.deviceName
+            )
+        case .failed(let error):
+            recordDiagnosticEvent(
+                "androidBridge.connection.failed",
+                message: error.localizedDescription,
+                peerName: connections[ObjectIdentifier(connection)]?.deviceName
+            )
+            remove(connection)
+        case .cancelled:
+            recordDiagnosticEvent(
+                "androidBridge.connection.cancelled",
+                message: "Android bridge TCP connection cancelled.",
+                peerName: connections[ObjectIdentifier(connection)]?.deviceName
+            )
             remove(connection)
         default:
             break
@@ -223,6 +338,11 @@ final class AndroidCarrierBridge: ObservableObject {
             connections[id] = connectionState
             updateConnectedAndroidDevices()
         } catch {
+            recordDiagnosticEvent(
+                "androidBridge.connection.payloadRejected",
+                message: error.localizedDescription,
+                peerName: connectionState.deviceName
+            )
             sendAndRemove(AndroidBridgeResponse(status: .rejected, message: error.localizedDescription), to: connection)
         }
     }
@@ -246,6 +366,11 @@ final class AndroidCarrierBridge: ObservableObject {
 
     private func handle(_ handshake: AndroidBridgeHandshake, from connection: NWConnection, state connectionState: inout BridgeConnectionState) {
         guard activeSenderGate.claim(deviceID: handshake.deviceID) else {
+            recordDiagnosticEvent(
+                "androidBridge.handshake.busy",
+                message: "Rejected Android handshake because another sender is active.",
+                peerName: handshake.deviceName
+            )
             sendAndRemove(.busy("Mac is already serving another device."), to: connection)
             return
         }
@@ -254,6 +379,11 @@ final class AndroidCarrierBridge: ObservableObject {
             let trustToken = (try? AndroidTrustToken.generate()) ?? AndroidTrustToken(rawValue: UUID().uuidString)
             trustTokenStore.remember(trustToken, for: handshake.deviceID)
             accept(handshake: handshake, from: connection, state: &connectionState)
+            recordDiagnosticEvent(
+                "androidBridge.handshake.paired",
+                message: "Accepted Android pairing code handshake.",
+                peerName: handshake.deviceName
+            )
             send(AndroidBridgeResponse(status: .accepted, message: "Paired.", trustToken: trustToken.rawValue, macID: macID, macName: displayName), to: connection)
             return
         }
@@ -262,13 +392,23 @@ final class AndroidCarrierBridge: ObservableObject {
            let tokenProof = handshake.tokenProof,
            let challenge = handshake.challenge,
            let trustToken = trustTokenStore.token(for: handshake.deviceID),
-           AndroidTrustToken.verify(token: trustToken, challenge: Data(challenge.utf8), proof: tokenProof) {
+            AndroidTrustToken.verify(token: trustToken, challenge: Data(challenge.utf8), proof: tokenProof) {
             accept(handshake: handshake, from: connection, state: &connectionState)
+            recordDiagnosticEvent(
+                "androidBridge.handshake.trusted",
+                message: "Accepted Android trust token handshake.",
+                peerName: handshake.deviceName
+            )
             send(AndroidBridgeResponse(status: .accepted, message: "Trusted.", macID: macID, macName: displayName), to: connection)
             return
         }
 
         activeSenderGate.release(deviceID: handshake.deviceID)
+        recordDiagnosticEvent(
+            "androidBridge.handshake.rejected",
+            message: "Invalid Android pairing code or trust token.",
+            peerName: handshake.deviceName
+        )
         sendAndRemove(AndroidBridgeResponse(status: .invalidPairing, message: "Invalid pairing code or trust token."), to: connection)
     }
 
@@ -365,23 +505,45 @@ final class AndroidCarrierBridge: ObservableObject {
     private func fail(_ message: String) {
         lastErrorMessage = message
         state = .failed(message)
+        recordDiagnosticEvent("androidBridge.listener.failed", message: message)
     }
 
-    private func publishBonjour(port: UInt16?) {
-        let resolvedPort = port ?? Self.defaultPort.rawValue
-        bonjourPublisher?.stop()
-        let publisher = AndroidBonjourPublisher(
-            name: displayName,
-            type: Self.serviceType + ".",
-            port: resolvedPort,
-            macID: macID
-        ) { [weak self] message in
-            Task { @MainActor in
-                self?.lastErrorMessage = message
-            }
+    private func scheduleListenerRestartAfterFailure(message: String) {
+        guard let envelopeHandler else {
+            return
         }
-        bonjourPublisher = publisher
-        publisher.start()
+
+        guard let retryDelay = listenerRecovery.failed() else {
+            recordDiagnosticEvent(
+                "androidBridge.listener.restartBudgetExceeded",
+                message: "Stopped automatic listener restart attempts after repeated failures: \(message)"
+            )
+            return
+        }
+
+        cancelListenerRestart()
+        recordDiagnosticEvent(
+            "androidBridge.listener.restartScheduled",
+            message: "Restarting Android bridge listener after \(String(describing: retryDelay)). Last failure: \(message)"
+        )
+        listenerRestartTask = Task { @MainActor [weak self, retryDelay, envelopeHandler] in
+            do {
+                try await Task.sleep(for: retryDelay)
+            } catch {
+                return
+            }
+
+            guard let self else {
+                return
+            }
+            self.listenerRestartTask = nil
+            self.restartAfterListenerFailure(onEnvelope: envelopeHandler)
+        }
+    }
+
+    private func cancelListenerRestart() {
+        listenerRestartTask?.cancel()
+        listenerRestartTask = nil
     }
 
     private func startPairingBrowser() {
@@ -391,21 +553,57 @@ final class AndroidCarrierBridge: ObservableObject {
             }
         } onError: { [weak self] message in
             Task { @MainActor in
-                self?.lastErrorMessage = message
+                self?.recordDiagnosticEvent("androidBridge.pairingBrowser.failed", message: message)
             }
         }
         pairingBrowser = browser
         browser.start()
     }
 
-    private static func localIPv4Addresses() -> [String] {
+    private var diagnosticConnectionState: ConnectionState {
+        if let deviceName = connectedAndroidDeviceNames.first {
+            return .connected(deviceName)
+        }
+
+        switch state {
+        case .stopped:
+            return .idle
+        case .listening:
+            return .advertising
+        case .failed(let message):
+            return .failed(message)
+        }
+    }
+
+    private func recordDiagnosticEvent(_ name: String, message: String, peerName: String? = nil) {
+        let connectionState = diagnosticConnectionState
+        let diagnostics = CarrierDiagnostics(
+            role: "receiver.android",
+            localPeerName: displayName,
+            serviceType: Self.serviceType,
+            connectionState: connectionState,
+            discoveredPeers: discoveredAndroidPairingDevices.map(\.name).sorted(),
+            connectedPeers: connectedAndroidDeviceNames,
+            lastErrorMessage: lastErrorMessage
+        )
+        let event = CarrierDiagnosticEvent(
+            name: name,
+            message: message,
+            peerName: peerName,
+            connectionState: connectionState,
+            connectedPeers: connectedAndroidDeviceNames
+        )
+        try? diagnosticLogStore?.append(event: event, diagnostics: diagnostics)
+    }
+
+    private static func localIPv4Addresses() -> [LocalIPv4Address] {
         var interfaces: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
             return []
         }
         defer { freeifaddrs(interfaces) }
 
-        var addresses: [String] = []
+        var addresses: [LocalIPv4Address] = []
         var current: UnsafeMutablePointer<ifaddrs>? = firstInterface
         while let interface = current {
             defer { current = interface.pointee.ifa_next }
@@ -428,11 +626,16 @@ final class AndroidCarrierBridge: ObservableObject {
                 NI_NUMERICHOST
             )
             if result == 0 {
-                addresses.append(String(cString: hostname))
+                addresses.append(LocalIPv4Address(
+                    interfaceName: String(cString: interface.pointee.ifa_name),
+                    address: String(cString: hostname)
+                ))
             }
         }
 
-        return Array(Set(addresses)).sorted()
+        return Dictionary(grouping: addresses, by: { "\($0.interfaceName)|\($0.address)" })
+            .compactMap { $0.value.first }
+            .sorted()
     }
 
     private static func resolveMacID(defaults: UserDefaults = .standard) -> String {
@@ -476,7 +679,7 @@ private final class AndroidPairingBrowser: NSObject, NetServiceBrowserDelegate, 
     }
 
     func start() {
-        browser.searchForServices(ofType: "_typecarrier-android-pair._tcp.", inDomain: "local.")
+        browser.searchForServices(ofType: "_tcpair._tcp", inDomain: "local.")
     }
 
     func stop() {
@@ -646,54 +849,40 @@ private enum AndroidAssociationError: LocalizedError {
     }
 }
 
-private final class AndroidBonjourPublisher: NSObject, NetServiceDelegate {
-    private let name: String
-    private let type: String
-    private let port: UInt16
-    private let macID: String
-    private let onError: (String) -> Void
-    private var service: NetService?
-
-    init(name: String, type: String, port: UInt16, macID: String, onError: @escaping (String) -> Void) {
-        self.name = name
-        self.type = type
-        self.port = port
-        self.macID = macID
-        self.onError = onError
-    }
-
-    func start() {
-        let nextService = NetService(
-            domain: "local.",
-            type: type,
-            name: name,
-            port: Int32(port)
-        )
-        nextService.setTXTRecord(
-            NetService.data(fromTXTRecord: [
-                "macID": Data(macID.utf8),
-                "macName": Data(name.utf8),
-            ])
-        )
-        nextService.delegate = self
-        nextService.publish()
-        service = nextService
-    }
-
-    func stop() {
-        service?.stop()
-        service?.delegate = nil
-        service = nil
-    }
-
-    func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
-        onError("Android 自动发现发布失败：\(errorDict)")
-    }
-}
-
 private struct BridgeConnectionState {
     let connection: NWConnection
     var buffer = Data()
     var deviceID: String?
     var deviceName: String?
+}
+
+private struct LocalIPv4Address: Comparable {
+    let interfaceName: String
+    let address: String
+
+    static func < (lhs: LocalIPv4Address, rhs: LocalIPv4Address) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority < rhs.priority
+        }
+        if lhs.interfaceName != rhs.interfaceName {
+            return lhs.interfaceName < rhs.interfaceName
+        }
+        return lhs.address < rhs.address
+    }
+
+    private var priority: Int {
+        if interfaceName == "en0" {
+            return 0
+        }
+        if interfaceName.hasPrefix("en") {
+            return 1
+        }
+        if interfaceName.hasPrefix("bridge") {
+            return 2
+        }
+        if interfaceName.hasPrefix("utun") || interfaceName.hasPrefix("awdl") || interfaceName.hasPrefix("llw") {
+            return 9
+        }
+        return 5
+    }
 }

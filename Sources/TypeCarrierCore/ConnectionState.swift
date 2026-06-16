@@ -51,6 +51,15 @@ public enum ConnectionState: Equatable, Sendable {
         return false
     }
 
+    public var isManualRestartEligible: Bool {
+        switch self {
+        case .idle, .searching, .connecting, .reconnecting, .failed:
+            true
+        case .advertising, .connected:
+            false
+        }
+    }
+
     var isWaitingToRetryKnownPeer: Bool {
         switch self {
         case .searching, .reconnecting:

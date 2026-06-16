@@ -17,6 +17,7 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
+    @Published private(set) var lastAccessibilityResetMessage: String?
     @Published private(set) var restoresClipboardAfterAutomaticPaste: Bool
 
     @Published private(set) var carrierService: MultipeerCarrierService
@@ -37,11 +38,16 @@ final class MacCarrierStore: ObservableObject {
         )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
         receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
-        carrierService = Self.makeCarrierService(
+        let bridge = AndroidCarrierBridge(
             displayName: receiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
+        androidBridge = bridge
+        carrierService = Self.makeCarrierService(
+            displayName: receiverDisplayName,
+            receiverDiscoveryInfoExtras: bridge.bonjourDiscoveryInfo,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
@@ -53,6 +59,7 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
+        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
         bindAndroidBridge()
         refreshAccessibilityStatus()
@@ -119,36 +126,54 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func start() {
+        startCarrierService()
+        startAndroidBridge()
+    }
+
+    private func startCarrierService() {
         carrierService.start { [weak self] envelope, peerID in
             self?.handle(envelope, from: peerID.displayName) { receipt in
                 try? self?.carrierService.send(receipt)
             }
         }
+    }
+
+    private func startAndroidBridge() {
         androidBridge.start { [weak self] envelope, deviceName, reply in
             self?.handle(envelope, from: deviceName, sendReceipt: reply)
         }
     }
 
     func restart() {
-        rebuildReceiverService(rebuiltReason: "receiver.restart.rebuilt")
+        rebuildReceiverService(
+            rebuiltReason: "receiver.restart.rebuilt",
+            restartsAndroidBridge: true
+        )
     }
 
-    private func rebuildReceiverService(rebuiltReason: String) {
+    private func rebuildReceiverService(rebuiltReason: String, restartsAndroidBridge: Bool) {
         carrierService.stop()
         carrierServiceCancellable = nil
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
+            receiverDiscoveryInfoExtras: androidBridge.bonjourDiscoveryInfo,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        androidBridge.stop()
-        androidBridgeCancellable = nil
-        androidBridge = AndroidCarrierBridge(displayName: receiverDisplayName)
+        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
-        bindAndroidBridge()
-        start()
+        startCarrierService()
+
+        if restartsAndroidBridge {
+            androidBridge.restart { [weak self] envelope, deviceName, reply in
+                self?.handle(envelope, from: deviceName, sendReceipt: reply)
+            }
+        }
+
         carrierService.recordDiagnosticMarker(
             rebuiltReason,
-            message: "Created a fresh receiver service after restart."
+            message: restartsAndroidBridge
+                ? "Created fresh Apple and Android receiver services after restart."
+                : "Created a fresh Apple receiver service after Multipeer session invalidation."
         )
     }
 
@@ -214,9 +239,64 @@ final class MacCarrierStore: ObservableObject {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
     }
 
+    func runManualDiagnostics() {
+        refreshAccessibilityStatus()
+        carrierService.recordDiagnosticMarker(
+            "diagnostic.manualCheck",
+            message: "Manual diagnostics completed. accessibilityTrusted=\(accessibilityTrusted)."
+        )
+    }
+
     func requestAccessibilityAccess() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: true)
         permissionChecker.openAccessibilitySettings()
+    }
+
+    func openAccessibilitySettings() {
+        permissionChecker.openAccessibilitySettings()
+    }
+
+    func resetAccessibilityAuthorization() {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty else {
+            lastAccessibilityResetMessage = "无法确认当前应用的 Bundle ID，不能重置辅助功能授权。"
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleIdentifier]
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            lastAccessibilityResetMessage = "重置辅助功能授权失败：\(error.localizedDescription)"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.failed",
+                message: "Failed to reset Accessibility authorization for \(bundleIdentifier): \(error.localizedDescription)"
+            )
+            return
+        }
+
+        if process.terminationStatus == 0 {
+            accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
+            lastAccessibilityResetMessage = "已重置 \(bundleIdentifier) 的辅助功能授权。列表里找不到 TypeCarrier 时，用 + 手动添加当前 App。"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.succeeded",
+                message: "Reset Accessibility authorization for \(bundleIdentifier)."
+            )
+            permissionChecker.openAccessibilitySettings()
+        } else {
+            lastAccessibilityResetMessage = "重置辅助功能授权失败：tccutil 退出码 \(process.terminationStatus)。"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.failed",
+                message: "tccutil reset Accessibility \(bundleIdentifier) exited with \(process.terminationStatus)."
+            )
+        }
+    }
+
+    func revealCurrentApplicationInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
 
     func setRestoresClipboardAfterAutomaticPaste(_ restoresClipboard: Bool) {
@@ -232,15 +312,34 @@ final class MacCarrierStore: ObservableObject {
         restart()
     }
 
+    private func restartAfterReceiverSessionInvalidated(peerName: String, previousState: ConnectionState) {
+        carrierService.recordDiagnosticMarker(
+            "receiver.restart.sessionInvalidated",
+            message: "Automatically rebuilding receiver after \(peerName) changed from \(previousState.displayText) to not connected."
+        )
+        rebuildReceiverService(
+            rebuiltReason: "receiver.restart.appleSessionRebuilt",
+            restartsAndroidBridge: false
+        )
+    }
+
     private static func makeCarrierService(
         displayName: String,
+        receiverDiscoveryInfoExtras: [String: String],
         diagnosticLogFileURL: URL?
     ) -> MultipeerCarrierService {
         MultipeerCarrierService(
             role: .receiver,
             displayName: displayName,
+            receiverDiscoveryInfoExtras: receiverDiscoveryInfoExtras,
             diagnosticLogFileURL: diagnosticLogFileURL
         )
+    }
+
+    private func configureCarrierServiceRecoveryHandler() {
+        carrierService.receiverSessionInvalidatedHandler = { [weak self] peerName, previousState in
+            self?.restartAfterReceiverSessionInvalidated(peerName: peerName, previousState: previousState)
+        }
     }
 
     private func bindCarrierService() {
@@ -317,7 +416,7 @@ final class MacCarrierStore: ObservableObject {
             text: record.text,
             restoreDelay: clipboardRestoreDelayIfEnabled
         )
-        recordPasteDiagnostic(lastPasteResult)
+        recordPasteDiagnostic(lastPasteResult, peerName: record.sourceDeviceName)
     }
 
     func updateText(for record: CarrierRecord, text: String) {
@@ -366,6 +465,11 @@ final class MacCarrierStore: ObservableObject {
         lastPayloadText = payload.text
         let now = Date()
         let sourceDeviceName = envelope.sender?.displayName ?? peerDisplayName
+        carrierService.recordDiagnosticMarker(
+            "receiver.payload.received",
+            message: "Received text payload \(payload.id) from \(sourceDeviceName).",
+            peerName: sourceDeviceName
+        )
         let record = CarrierRecord(
             payloadID: payload.id,
             kind: .incoming,
@@ -397,7 +501,7 @@ final class MacCarrierStore: ObservableObject {
             restoreDelay: clipboardRestoreDelayIfEnabled
         )
         lastPasteResult = pasteResult
-        recordPasteDiagnostic(pasteResult)
+        recordPasteDiagnostic(pasteResult, peerName: sourceDeviceName)
 
         var updatedRecord = record
         updatedRecord.status = Self.recordStatus(for: pasteResult.pasteStatus)
@@ -420,10 +524,11 @@ final class MacCarrierStore: ObservableObject {
         )))
     }
 
-    private func recordPasteDiagnostic(_ result: PasteInjectionResult) {
+    private func recordPasteDiagnostic(_ result: PasteInjectionResult, peerName: String? = nil) {
         carrierService.recordDiagnosticMarker(
             result.diagnosticEventName,
-            message: result.fullDetail
+            message: result.fullDetail,
+            peerName: peerName
         )
     }
 

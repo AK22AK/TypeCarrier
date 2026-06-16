@@ -1,18 +1,29 @@
 import AppKit
+import Darwin
 import SwiftUI
 
 @main
 struct TypeCarrierMacApp: App {
-    @StateObject private var coordinator = MacAppCoordinator()
+    @StateObject private var coordinator: MacAppCoordinator
+
+    init() {
+        if Self.activateExistingInstanceIfNeeded() {
+            exit(0)
+        }
+        _coordinator = StateObject(wrappedValue: MacAppCoordinator())
+    }
 
     var body: some Scene {
-        WindowGroup("TypeCarrier", id: "main") {
+        Window("TypeCarrier", id: "main") {
             MainWindowView(store: coordinator.store)
                 .background(MainWindowRequestInstaller(coordinator: coordinator))
         }
         .defaultSize(width: 900, height: 620)
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.presented)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+        }
 
         MenuBarExtra {
             MenuBarContentView(coordinator: coordinator)
@@ -20,6 +31,27 @@ struct TypeCarrierMacApp: App {
             MenuBarStatusIcon(store: coordinator.store)
         }
         .menuBarExtraStyle(.menu)
+    }
+
+    private static func activateExistingInstanceIfNeeded() -> Bool {
+        guard ProcessInfo.processInfo.environment["TYPECARRIER_ALLOW_MULTIPLE_INSTANCES"] != "1",
+              let bundleIdentifier = Bundle.main.bundleIdentifier else {
+            return false
+        }
+
+        let currentProcessIdentifier = getpid()
+        let existingInstance = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleIdentifier)
+            .first { application in
+                application.processIdentifier != currentProcessIdentifier && !application.isTerminated
+            }
+
+        guard let existingInstance else {
+            return false
+        }
+
+        existingInstance.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        return true
     }
 }
 

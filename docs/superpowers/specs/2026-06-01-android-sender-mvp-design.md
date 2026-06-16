@@ -48,7 +48,7 @@ Android MVP 采用局域网优先路径：
 
 - 保留现有 `MultipeerCarrierService`，继续服务 iPhone -> Mac 路径。
 - 新增 Android bridge receiver，使用 `NWListener` 监听本地 TCP 端口。
-- 新增 Bonjour service type，例如 `_typecarrier-json._tcp`，用于 Android NSD 发现；但 MVP 不依赖 Bonjour 发布来完成手动连接。
+- Android 自动发现使用独立 `_tcjson._tcp` Bonjour service type，在独立 TXT 信息中携带 `androidPort`、`macID`、`macName`；iOS/macOS Multipeer 的 `_typecarrier._tcp` 广播只保留 Apple 端连接信息。手动连接仍作为兜底。
 - 当 macOS 返回 `Network.NWError error -65555 - NoAuth` 时，Android bridge 不应因为 Bonjour 发布失败而停止手动 TCP 监听。
 - 抽出 Mac 收到文本后的共用处理函数，供 Multipeer 和 Android bridge 共用：
   - 保存接收历史。

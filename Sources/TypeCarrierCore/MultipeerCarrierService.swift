@@ -95,7 +95,8 @@ public struct CarrierDiagnostics: Equatable, Sendable {
             return nil
         }
 
-        if events.contains(where: { $0.name == "browser.foundBusyPeer" }) {
+        let latestFailureEvent = events.last { $0.connectionState.isFailed }
+        if latestFailureEvent?.name == "browser.foundBusyPeer" {
             return "Disconnect the other iPhone or simulator from this Mac, then retry here."
         }
 
@@ -134,6 +135,8 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     @Published public private(set) var lastErrorMessage: String?
     @Published public private(set) var diagnostics: CarrierDiagnostics
 
+    public var receiverSessionInvalidatedHandler: ((_ peerName: String, _ previousState: ConnectionState) -> Void)?
+
     public var diagnosticLogFileURL: URL? {
         diagnosticLogStore?.fileURL
     }
@@ -145,6 +148,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let connectionRetryDelay: Duration
     private let inviteTimeout: TimeInterval
     private let maxConnectionAttempts: Int
+    private let receiverDiscoveryInfoExtras: [String: String]
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private nonisolated(unsafe) var session: MCSession
     private nonisolated(unsafe) var activeReceiverPeerName: String?
@@ -172,6 +176,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectionRetryDelay: Duration = .seconds(1),
         inviteTimeout: TimeInterval = 6,
         maxConnectionAttempts: Int = 3,
+        receiverDiscoveryInfoExtras: [String: String] = [:],
         diagnosticLogFileURL: URL? = nil
     ) {
         self.role = role
@@ -180,6 +185,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.connectionRetryDelay = connectionRetryDelay
         self.inviteTimeout = inviteTimeout
         self.maxConnectionAttempts = max(1, maxConnectionAttempts)
+        self.receiverDiscoveryInfoExtras = receiverDiscoveryInfoExtras
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
         let localPeerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
         peerID = localPeerID
@@ -321,14 +327,23 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         )
     }
 
+    private static func receiverNeedsServiceRebuildAfterNotConnected(from previousState: ConnectionState) -> Bool {
+        switch previousState {
+        case .connecting, .connected:
+            true
+        case .idle, .searching, .advertising, .reconnecting, .failed:
+            false
+        }
+    }
+
     private var receiverDiscoveryInfo: [String: String]? {
         guard case .receiver = role else {
             return nil
         }
 
-        return [
-            ReceiverDiscoveryInfo.availabilityKey: receiverAvailabilityDiscoveryValue
-        ]
+        var info = receiverDiscoveryInfoExtras
+        info[ReceiverDiscoveryInfo.availabilityKey] = receiverAvailabilityDiscoveryValue
+        return info
     }
 
     private var receiverAvailabilityDiscoveryValue: String {
@@ -386,14 +401,13 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private func handleBusyDiscoveredPeer(_ peerID: MCPeerID) {
         let peerName = peerID.displayName
         rememberDiscoveredPeer(peerID)
-        cancelSearchTimeout()
         cancelConnectionTimeout()
-        cancelConnectionRetry()
-        stopBrowsing()
         invitedPeerIDs.remove(peerName)
         connectingPeerName = nil
-        lastErrorMessage = "\(peerName) is already connected to another device."
-        connectionState = .failed(lastErrorMessage ?? "Could not connect.")
+        lastErrorMessage = nil
+        if case .failed = connectionState {
+            connectionState = .searching
+        }
         recordDiagnosticEvent(
             "browser.foundBusyPeer",
             message: "Receiver advertised busy availability",
@@ -432,8 +446,10 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             invitedPeerIDs.remove(peerID.displayName)
             cancelConnectionTimeout()
             connectingPeerName = nil
+            var shouldRequestReceiverRebuild = false
 
             if case .receiver = role {
+                shouldRequestReceiverRebuild = Self.receiverNeedsServiceRebuildAfterNotConnected(from: previousState)
                 if activeReceiverPeerName == peerID.displayName {
                     activeReceiverPeerName = nil
                 }
@@ -450,6 +466,14 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
                 returnToSearchingAfterConnectionAttempt()
             }
             recordDiagnosticEvent("session.notConnected", message: "Previous state: \(previousState.displayText)", peerName: peerID.displayName)
+            if shouldRequestReceiverRebuild {
+                recordDiagnosticEvent(
+                    "receiver.rebuildRequested",
+                    message: "Receiver session ended from \(previousState.displayText); requesting service rebuild.",
+                    peerName: peerID.displayName
+                )
+                receiverSessionInvalidatedHandler?(peerID.displayName, previousState)
+            }
         @unknown default:
             connectionState = .failed("Unknown connection state")
             recordDiagnosticEvent("session.unknownState", message: "Unknown connection state", peerName: peerID.displayName)
@@ -580,8 +604,21 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
 
         logger.info("Search timed out after \(String(describing: self.searchTimeout), privacy: .public)")
-        stopBrowsingAndDisconnect()
         recordDiagnosticEvent("search.timeout", message: "Search timed out after \(String(describing: searchTimeout))")
+        refreshBrowsingAfterSearchTimeout()
+    }
+
+    private func refreshBrowsingAfterSearchTimeout() {
+        cancelSearchTimeout()
+#if DEBUG
+        if usesSimulatedDiscoveryForTesting || browser == nil {
+            connectionState = .searching
+            scheduleSearchTimeout()
+            updateDiagnostics()
+            return
+        }
+#endif
+        startBrowsing()
     }
 
     private func handleConnectionTimeout(for peerName: String) {

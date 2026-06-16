@@ -111,13 +111,48 @@ check_mac_record_action_toolbar() {
 }
 
 check_mac_main_window_uses_single_scene_path() {
+  if grep -q 'WindowGroup("TypeCarrier"' Apps/macOS/App/TypeCarrierMacApp.swift; then
+    echo "TypeCarrierMacApp must use a single SwiftUI Window scene for the main window, not WindowGroup."
+    return 1
+  fi
+
   if grep -q 'NSWindow(' Apps/macOS/App/MacAppCoordinator.swift; then
-    echo "Mac main window must be reopened through the SwiftUI WindowGroup, not a second manual NSWindow path."
+    echo "Mac main window must be reopened through the SwiftUI scene, not a second manual NSWindow path."
     return 1
   fi
 
   if grep -q 'NSHostingView(rootView: MainWindowView' Apps/macOS/App/MacAppCoordinator.swift; then
     echo "MacAppCoordinator must not construct a second MainWindowView hosting tree."
+    return 1
+  fi
+}
+
+check_mac_connection_management_has_restart_action() {
+  local block
+  block="$(
+    awk '
+      /^private struct ReceiverStatusPage: View/ { in_block = 1 }
+      /^private struct SettingsListPane: View/ { in_block = 0 }
+      in_block { print }
+    ' Apps/macOS/Views/MainWindowView.swift
+  )"
+
+  if ! grep -q 'receiverActionsSection' <<<"$block"; then
+    echo "ReceiverStatusPage must expose receiverActionsSection in the always-visible connection management page."
+    return 1
+  fi
+
+  local actions_block
+  actions_block="$(
+    awk '
+      /private var receiverActionsSection: some View/ { in_block = 1 }
+      in_block { print }
+      in_block && /^    private var / && !/receiverActionsSection/ { exit }
+    ' Apps/macOS/Views/MainWindowView.swift
+  )"
+
+  if ! grep -q 'store.restartFromUserAction()' <<<"$actions_block"; then
+    echo "ReceiverStatusPage receiverActionsSection must call store.restartFromUserAction()."
     return 1
   fi
 }
@@ -158,6 +193,7 @@ run_check "Secret patterns are absent" check_secret_patterns
 run_check "Swift source hygiene" check_swift_source_hygiene
 run_check "Mac received record actions stay in the toolbar" check_mac_record_action_toolbar
 run_check "Mac main window uses the SwiftUI scene path" check_mac_main_window_uses_single_scene_path
+run_check "Mac connection management exposes receiver restart" check_mac_connection_management_has_restart_action
 run_check "Paste diagnostics capture focus and restore timing" check_paste_diagnostics_capture_focus_and_restore_timing
 run_check "Clipboard restore is opt-in" check_clipboard_restore_is_opt_in
 

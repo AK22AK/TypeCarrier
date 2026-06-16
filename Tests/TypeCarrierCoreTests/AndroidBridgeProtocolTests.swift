@@ -105,4 +105,25 @@ final class AndroidBridgeProtocolTests: XCTestCase {
 
         XCTAssertTrue(gate.claim(deviceID: "android-b"))
     }
+
+    func testListenerRecoverySchedulesBoundedRestartAttempts() {
+        var recovery = AndroidBridgeListenerRecovery(maximumConsecutiveFailures: 2, retryDelay: .seconds(1))
+
+        XCTAssertEqual(recovery.failed(), .seconds(1))
+        XCTAssertEqual(recovery.failed(), .seconds(1))
+        XCTAssertNil(recovery.failed())
+    }
+
+    func testListenerRecoveryClearsFailureBudgetAfterReadyOrStop() {
+        var recovery = AndroidBridgeListenerRecovery(maximumConsecutiveFailures: 1, retryDelay: .seconds(1))
+
+        XCTAssertEqual(recovery.failed(), .seconds(1))
+        XCTAssertNil(recovery.failed())
+
+        recovery.ready()
+        XCTAssertEqual(recovery.failed(), .seconds(1))
+
+        recovery.stopped()
+        XCTAssertEqual(recovery.failed(), .seconds(1))
+    }
 }
