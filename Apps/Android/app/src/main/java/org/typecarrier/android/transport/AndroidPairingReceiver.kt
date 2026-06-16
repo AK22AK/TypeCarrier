@@ -3,6 +3,8 @@ package org.typecarrier.android.transport
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Handler
+import android.os.Looper
 import java.io.Closeable
 import java.io.EOFException
 import java.net.ServerSocket
@@ -32,14 +34,18 @@ class AndroidPairingReceiver(
     private val appContext = context.applicationContext
     private val nsdManager = appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val registrationRecovery = NsdServiceRecovery()
     private var serverSocket: ServerSocket? = null
     private var acceptJob: Job? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
+    private var scheduledRegistrationRetry: Runnable? = null
 
     fun start() {
         if (serverSocket != null) {
             return
         }
+        cancelScheduledRegistrationRetry()
 
         runCatching {
             val nextSocket = ServerSocket(0)
@@ -55,6 +61,13 @@ class AndroidPairingReceiver(
     }
 
     override fun close() {
+        close(clearsScheduledRetry = true)
+    }
+
+    private fun close(clearsScheduledRetry: Boolean) {
+        if (clearsScheduledRetry) {
+            cancelScheduledRegistrationRetry()
+        }
         acceptJob?.cancel()
         acceptJob = null
         runCatching { serverSocket?.close() }
@@ -124,10 +137,14 @@ class AndroidPairingReceiver(
             setAttribute("deviceName", deviceName())
         }
         val listener = object : NsdManager.RegistrationListener {
-            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) = Unit
+            override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                registrationRecovery.started()
+            }
 
             override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 onError("Android 匹配服务发布失败：$errorCode")
+                close(clearsScheduledRetry = false)
+                scheduleRegistrationRestartAfterFailure()
             }
 
             override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) = Unit
@@ -138,6 +155,24 @@ class AndroidPairingReceiver(
         }
         registrationListener = listener
         nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, listener)
+    }
+
+    private fun scheduleRegistrationRestartAfterFailure() {
+        val delayMillis = registrationRecovery.failed()
+        val retry = Runnable {
+            scheduledRegistrationRetry = null
+            if (registrationRecovery.shouldRunScheduledRetry()) {
+                start()
+            }
+        }
+        scheduledRegistrationRetry = retry
+        mainHandler.postDelayed(retry, delayMillis)
+    }
+
+    private fun cancelScheduledRegistrationRetry() {
+        scheduledRegistrationRetry?.let(mainHandler::removeCallbacks)
+        scheduledRegistrationRetry = null
+        registrationRecovery.userRestarted()
     }
 
     private fun java.io.InputStream.readFrame(): ByteArray {
@@ -166,7 +201,7 @@ class AndroidPairingReceiver(
     }
 
     companion object {
-        const val serviceTypeName = "_typecarrier-android-pair._tcp."
+        const val serviceTypeName = "_tcpair._tcp."
     }
 }
 

@@ -15,6 +15,7 @@ import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 interface AndroidCarrierRepository : Closeable {
     val services: StateFlow<List<MacService>>
     val discoveryError: StateFlow<String?>
+    val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition>
     val deviceName: String
     val localPairingCode: String
     val trustedMacs: List<MacService>
@@ -40,6 +41,7 @@ class AndroidCarrierRepositoryImpl(
     private val prefs = appContext.getSharedPreferences("typecarrier", Context.MODE_PRIVATE)
     private val _services = MutableStateFlow(emptyList<MacService>())
     private val _discoveryError = MutableStateFlow<String?>(null)
+    private val _discoveryPrecondition = MutableStateFlow(AndroidNetworkDiscoveryPreconditions.current(appContext))
     private var client: AndroidCarrierClient? = null
     private var manualHostValue = ""
     private var manualPortValue = defaultAndroidBridgePort.toString()
@@ -71,10 +73,18 @@ class AndroidCarrierRepositoryImpl(
         },
         onError = { errorMessage = it },
     )
+    private val discoveryLifecycle = AndroidDiscoveryLifecycle(
+        startMacDiscovery = discovery::start,
+        stopMacDiscovery = discovery::stop,
+        startPairingReceiver = pairingReceiver::start,
+        stopPairingReceiver = pairingReceiver::close,
+        disposePairingReceiver = pairingReceiver::dispose,
+    )
     private var errorMessage: String? = null
 
     override val services: StateFlow<List<MacService>> = _services
     override val discoveryError: StateFlow<String?> = _discoveryError
+    override val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition> = _discoveryPrecondition
 
     override val deviceName: String = localDeviceName()
 
@@ -116,18 +126,17 @@ class AndroidCarrierRepositoryImpl(
         }
 
     override fun startDiscovery() {
-        discovery.start()
-        pairingReceiver.start()
+        refreshDiscoveryPrecondition()
+        discoveryLifecycle.start()
     }
 
     override fun stopDiscovery() {
-        discovery.stop()
-        pairingReceiver.close()
+        discoveryLifecycle.stop()
     }
 
     override fun refreshDiscovery() {
-        discovery.stop()
-        discovery.start()
+        refreshDiscoveryPrecondition()
+        discoveryLifecycle.refresh()
     }
 
     override fun hasSavedTrustToken(service: MacService): Boolean =
@@ -194,13 +203,16 @@ class AndroidCarrierRepositoryImpl(
     }
 
     override fun close() {
-        discovery.stop()
-        pairingReceiver.dispose()
+        discoveryLifecycle.close()
         closeConnection()
     }
 
     private val displayName: String
         get() = senderDisplayName.ifBlank { deviceName }
+
+    private fun refreshDiscoveryPrecondition() {
+        _discoveryPrecondition.value = AndroidNetworkDiscoveryPreconditions.current(appContext)
+    }
 
     private fun savedTrustToken(service: MacService): String? {
         val endpointToken = prefs.getString(AndroidTrustTokenKeys.tokenKey(service), null)

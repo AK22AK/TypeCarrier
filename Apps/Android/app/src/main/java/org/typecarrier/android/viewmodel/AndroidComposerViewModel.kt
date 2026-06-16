@@ -22,6 +22,7 @@ import org.typecarrier.android.protocol.AndroidPairingCode
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
+import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
 import org.typecarrier.android.transport.MacService
 import org.typecarrier.android.transport.manualService
 
@@ -51,6 +52,7 @@ data class AndroidComposerUiState(
     val deviceName: String = "Android",
     val canConnect: Boolean = false,
     val isBusy: Boolean = false,
+    val discoveryPrecondition: AndroidDiscoveryPrecondition = AndroidDiscoveryPrecondition.Available,
     val diagnostics: List<AndroidDiagnosticEvent> = emptyList(),
 )
 
@@ -77,6 +79,7 @@ class AndroidComposerViewModel(
     private val textHistory = TextEditHistory()
     private var connectedMac: MacService? = null
     private var autoConnectAttemptedServiceIDs: Set<String> = emptySet()
+    private var autoSelectedServiceID: String? = null
     private var lastServicesDiagnosticSignature: String? = null
     private var lastDiscoveryError: String? = null
 
@@ -91,6 +94,7 @@ class AndroidComposerViewModel(
             drafts = recordStore.drafts,
             outgoingHistory = recordStore.outgoingHistory,
             draftCount = recordStore.drafts.size,
+            discoveryPrecondition = repository.discoveryPrecondition.value,
             diagnostics = diagnosticLogStore.recent(),
             localPairingCode = repository.localPairingCode,
             trustedMacs = repository.trustedMacs,
@@ -104,12 +108,18 @@ class AndroidComposerViewModel(
             val trustedMacs = repository.trustedMacs
             autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs.intersect(services.map { it.id }.toSet())
             var autoConnectTarget: MacService? = null
+            var autoSelectedTarget: MacService? = null
             _uiState.update { current ->
-                val selected = current.selectedMac?.let { selected ->
+                val currentSelected = current.selectedMac?.let { selected ->
                     services.firstOrNull { it.id == selected.id }
                         ?: selected.takeIf { connectedMac?.id == selected.id }
                 }
-                autoConnectTarget = autoConnectTarget(services = services, current = current, selected = selected)
+                autoConnectTarget = autoConnectTarget(services = services, current = current, selected = currentSelected)
+                val selected = currentSelected ?: autoSelectTarget(services = services, current = current)
+                if (currentSelected == null) {
+                    autoSelectedTarget = selected
+                    autoSelectedServiceID = selected?.id
+                }
                 current.copy(
                     services = services,
                     trustedMacs = trustedMacs,
@@ -123,6 +133,9 @@ class AndroidComposerViewModel(
                     },
                 ).withDerivedValues(repository)
             }
+            autoSelectedTarget?.let { service ->
+                recordDiagnostic("discovery.autoSelected", "Selected sole discovered Mac ${service.name}.")
+            }
             autoConnectTarget?.let { service ->
                 autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs + service.id
                 connectToService(service, requestedPairingCode = null)
@@ -135,6 +148,15 @@ class AndroidComposerViewModel(
             if (!message.isNullOrBlank() && message != lastDiscoveryError) {
                 lastDiscoveryError = message
                 recordDiagnostic("discovery.error", message)
+            }
+        }
+    }
+
+    private val discoveryPreconditionJob: Job = scope.launch {
+        repository.discoveryPrecondition.collect { precondition ->
+            _uiState.update { it.copy(discoveryPrecondition = precondition) }
+            if (precondition != AndroidDiscoveryPrecondition.Available) {
+                recordDiagnostic("network.precondition", precondition.diagnosticMessage)
             }
         }
     }
@@ -156,9 +178,39 @@ class AndroidComposerViewModel(
         recordDiagnostic("discovery.refresh", "Restarted Mac discovery.")
     }
 
+    fun handleAppBecameActive() {
+        val state = _uiState.value
+        if (state.isBusy || state.connectionStatus == AndroidConnectionStatus.Connected) {
+            return
+        }
+
+        val trustedSelectedMac = state.selectedMac?.takeIf(repository::hasSavedTrustToken)
+        if (trustedSelectedMac != null) {
+            recordDiagnostic(
+                "app.foregroundTrustedReconnect",
+                "Reconnecting to ${trustedSelectedMac.name} after app became active.",
+            )
+            scope.launch {
+                connectToService(trustedSelectedMac, requestedPairingCode = null)
+            }
+            return
+        }
+
+        repository.refreshDiscovery()
+        _uiState.update {
+            it.copy(
+                connectionStatus = AndroidConnectionStatus.Searching,
+                headerStatusText = "正在查找 Mac",
+                connectionFailureMessage = null,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic("app.foregroundDiscoveryRefresh", "Restarted Mac discovery after app became active.")
+    }
+
     fun selectMac(service: MacService) {
         repository.closeConnection()
         connectedMac = null
+        autoSelectedServiceID = null
         _uiState.update {
             it.copy(
                 selectedMac = service,
@@ -173,6 +225,7 @@ class AndroidComposerViewModel(
         repository.manualHost = value
         repository.closeConnection()
         connectedMac = null
+        autoSelectedServiceID = null
         _uiState.update {
             it.copy(
                 selectedMac = null,
@@ -187,6 +240,7 @@ class AndroidComposerViewModel(
         repository.manualPort = value
         repository.closeConnection()
         connectedMac = null
+        autoSelectedServiceID = null
         _uiState.update {
             it.copy(
                 selectedMac = null,
@@ -291,6 +345,7 @@ class AndroidComposerViewModel(
                         (trusted.host == service.host && trusted.port == service.port)
                 } ?: service
                 connectedMac = connectedService
+                autoSelectedServiceID = null
                 _uiState.update {
                     it.copy(
                         isBusy = false,
@@ -459,6 +514,7 @@ class AndroidComposerViewModel(
                 (trusted.host == service.host && trusted.port == service.port)
         } ?: service
         connectedMac = connectedService
+        autoSelectedServiceID = null
         _uiState.update {
             it.copy(
                 connectionStatus = AndroidConnectionStatus.Connected,
@@ -607,7 +663,7 @@ class AndroidComposerViewModel(
             current.isBusy ||
             current.connectionStatus == AndroidConnectionStatus.Connecting ||
             current.connectionStatus == AndroidConnectionStatus.Connected ||
-            selected != null
+            (selected != null && selected.id != autoSelectedServiceID)
         ) {
             return null
         }
@@ -616,6 +672,21 @@ class AndroidComposerViewModel(
             service.id !in autoConnectAttemptedServiceIDs && repository.hasSavedTrustToken(service)
         }
         return trustedServices.singleOrNull()
+    }
+
+    private fun autoSelectTarget(
+        services: List<MacService>,
+        current: AndroidComposerUiState,
+    ): MacService? {
+        if (connectedMac != null ||
+            current.isBusy ||
+            current.connectionStatus == AndroidConnectionStatus.Connecting ||
+            current.connectionStatus == AndroidConnectionStatus.Connected
+        ) {
+            return null
+        }
+
+        return services.singleOrNull()
     }
 
     private fun connectingStatusText(service: MacService): String {
@@ -631,6 +702,13 @@ class AndroidComposerViewModel(
         }
         return "无法连接到手动输入的 Mac。请确认连接管理里的 Mac 地址是当前这台 Mac 的局域网地址。"
     }
+
+    private val AndroidDiscoveryPrecondition.diagnosticMessage: String
+        get() = when (this) {
+            AndroidDiscoveryPrecondition.Available -> "Network can support local discovery."
+            AndroidDiscoveryPrecondition.NoNetwork -> "No active network; Mac discovery cannot run."
+            AndroidDiscoveryPrecondition.NotLocalNetwork -> "Active network is not Wi-Fi or Ethernet; Mac discovery may not reach the LAN."
+        }
 
     private fun MacService.isManualMac(): Boolean = name == "手动 Mac"
 

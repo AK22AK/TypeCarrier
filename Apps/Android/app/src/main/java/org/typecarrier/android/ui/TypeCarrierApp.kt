@@ -97,6 +97,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -125,6 +126,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -137,7 +141,10 @@ import org.typecarrier.android.domain.AndroidRecordKind
 import org.typecarrier.android.domain.AndroidRecordStatus
 import org.typecarrier.android.transport.MacService
 import org.typecarrier.android.viewmodel.AndroidComposerUiState
+import org.typecarrier.android.viewmodel.AndroidConnectionSelfCheck
 import org.typecarrier.android.viewmodel.AndroidConnectionStatus
+import org.typecarrier.android.viewmodel.AndroidSelfCheckFinding
+import org.typecarrier.android.viewmodel.AndroidSelfCheckSeverity
 import org.typecarrier.android.viewmodel.AndroidSendState
 import org.typecarrier.android.viewmodel.AndroidComposerViewModel
 
@@ -166,9 +173,22 @@ private const val TypeCarrierLatestReleaseUrl = "https://github.com/AK22AK/TypeC
 fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val clipboard = LocalClipboardManager.current
     val navController = rememberNavController()
     var shouldApplyLaunchFocus by remember { mutableStateOf(true) }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                viewModel.handleAppBecameActive()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         NavHost(
@@ -1460,6 +1480,18 @@ private fun DebugScreen(
         ) {
             item {
                 SectionCard {
+                    Text("连接自检", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    AndroidConnectionSelfCheck.findings(state).forEachIndexed { index, finding ->
+                        if (index > 0) {
+                            HorizontalDivider()
+                        }
+                        AndroidSelfCheckFindingRow(finding)
+                    }
+                }
+            }
+
+            item {
+                SectionCard {
                     Text("连接", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     SettingsListItem("状态", state.connectionStatus.name)
                     HorizontalDivider()
@@ -1519,6 +1551,41 @@ private fun DebugScreen(
             }
         }
     }
+}
+
+@Composable
+private fun AndroidSelfCheckFindingRow(finding: AndroidSelfCheckFinding) {
+    ListItem(
+        headlineContent = {
+            Text(finding.title, fontWeight = FontWeight.SemiBold)
+        },
+        supportingContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(finding.detail)
+                finding.actionTitle?.let {
+                    Text(it, fontWeight = FontWeight.Medium)
+                }
+            }
+        },
+        leadingContent = {
+            Icon(
+                imageVector = when (finding.severity) {
+                    AndroidSelfCheckSeverity.Ok -> Icons.Default.CheckCircle
+                    AndroidSelfCheckSeverity.Warning -> Icons.Default.Info
+                    AndroidSelfCheckSeverity.Blocking -> Icons.Default.Close
+                    AndroidSelfCheckSeverity.Unknown -> Icons.Default.Info
+                },
+                contentDescription = null,
+                tint = when (finding.severity) {
+                    AndroidSelfCheckSeverity.Ok -> Color(0xFF16A34A)
+                    AndroidSelfCheckSeverity.Warning -> Color(0xFFD97706)
+                    AndroidSelfCheckSeverity.Blocking -> Color(0xFFDC2626)
+                    AndroidSelfCheckSeverity.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
