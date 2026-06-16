@@ -51,7 +51,7 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 GitHub Release 提供 Android / macOS 侧载包，并保留到最新 Release 的自引用入口：
 
-- iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；正式获取方式是 App Store。
+- iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；正式获取方式是 App Store / TestFlight。
 - Android 端随 release 上传 APK 侧载包。
 - macOS 端在 release workflow 中生成 Developer ID signed + notarized DMG，并随 release 上传 `.dmg` 和 `.sha256`。
 - 不要把 beta 侧载包描述成对普通用户即开即用的正式安装包。
@@ -79,7 +79,7 @@ gh release create v0.1.1 \
 1. GitHub Release 标记为 prerelease，不是正式 stable release。
 2. Release 页面显示 Android APK、macOS notarized DMG 以及对应校验文件。
 3. 校验文件内容与本地 `shasum -a 256` 输出一致。
-4. Release body 保留 beta 定位、iOS App Store 获取方式、Android / macOS 侧载说明和 macOS 权限提示。
+4. Release body 保留 beta 定位、iOS App Store / TestFlight 获取方式、Android / macOS 侧载说明和 macOS 权限提示。
 5. 当前 tag 指向预期的发布 commit，而不是临时本地 commit。
 6. 如果 GitHub Actions 因 runner Xcode 版本跳过 build，发布前必须使用本机 Xcode 重新跑完 release note 里的验证命令。
 7. 发布后下载一次 GitHub asset，确认 DMG 可以挂载，app bundle 版本号与 release tag 对应。

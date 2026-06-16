@@ -437,19 +437,10 @@ final class AndroidCarrierBridge: ObservableObject {
     }
 
     private func send(_ payload: Data, to connection: NWConnection) {
-        send(payload, to: connection, completion: nil)
-    }
-
-    private func send(_ payload: Data, to connection: NWConnection, completion: (() -> Void)?) {
         guard let frame = try? CarrierWireFrame.encode(payload) else {
-            completion?()
             return
         }
-        connection.send(content: frame, completion: .contentProcessed { _ in
-            Task { @MainActor in
-                completion?()
-            }
-        })
+        connection.send(content: frame, completion: .contentProcessed { _ in })
     }
 
     private func sendAndRemove(_ response: AndroidBridgeResponse, to connection: NWConnection) {
@@ -457,12 +448,18 @@ final class AndroidCarrierBridge: ObservableObject {
             remove(connection)
             return
         }
-        send(data, to: connection) { [weak self, weak connection] in
-            guard let self, let connection else {
-                return
-            }
-            self.remove(connection)
+        guard let frame = try? CarrierWireFrame.encode(data) else {
+            remove(connection)
+            return
         }
+        connection.send(content: frame, completion: .contentProcessed { [weak self, weak connection] _ in
+            Task { @MainActor in
+                guard let self, let connection else {
+                    return
+                }
+                self.remove(connection)
+            }
+        })
     }
 
     private func remove(_ connection: NWConnection) {

@@ -47,7 +47,7 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 GitHub Release provides Android / macOS sideload packages and should keep a self-link to the latest Release:
 
-- iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store.
+- iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store / TestFlight.
 - Android uploads a sideloadable APK.
 - macOS builds a Developer ID signed + notarized DMG in the release workflow and uploads the `.dmg` plus `.sha256`.
 - Do not describe beta sideload packages as regular user-ready installers.
@@ -75,7 +75,7 @@ After publishing, verify in this order:
 1. The GitHub Release is marked as a prerelease, not a stable release.
 2. The Release page shows the Android APK, macOS notarized DMG, and matching checksum files.
 3. The checksum files match local `shasum -a 256` output.
-4. The Release body keeps the beta positioning, iOS App Store acquisition path, Android / macOS sideload notes, and macOS permission guidance.
+4. The Release body keeps the beta positioning, iOS App Store / TestFlight acquisition path, Android / macOS sideload notes, and macOS permission guidance.
 5. The tag points at the intended release commit, not a temporary local commit.
 6. If GitHub Actions skipped builds because of the runner Xcode version, rerun the release note verification commands locally before publishing.
 7. Download the GitHub asset once after publishing, mount the DMG, and confirm the app bundle version matches the release tag.

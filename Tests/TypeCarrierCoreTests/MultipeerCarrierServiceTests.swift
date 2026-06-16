@@ -351,9 +351,10 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.foundPeer" && $0.peerName == "MacBook Pro" })
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.invitePeer" && $0.peerName == "MacBook Pro" })
 
-        try await Task.sleep(for: .milliseconds(50))
-
+        _ = try await waitForDiagnosticEvents(in: service, containing: "connection.timeout")
+        let state = try await waitForConnectionState(.reconnecting("MacBook Pro"), in: service)
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "connection.timeout" && $0.peerName == "MacBook Pro" })
+        XCTAssertEqual(state, .reconnecting("MacBook Pro"))
         XCTAssertEqual(service.diagnostics.connectionState, .reconnecting("MacBook Pro"))
     }
 
