@@ -73,6 +73,29 @@ final class CarrierDiagnosticExportTests: XCTestCase {
         XCTAssertEqual(entries.map(\.name), ["paste.command.posted", "advertiser.start"])
     }
 
+    func testDiagnosticLogEntryCompactSummaryIncludesRouteAndConnectionState() throws {
+        let entry = CarrierDiagnosticLogEntry(
+            logSessionID: UUID(uuidString: "E6D1F731-0A9A-4025-8DF0-8E49E95EE7D3")!,
+            timestamp: try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-06-03T09:02:00Z")),
+            role: "receiver.android",
+            localPeerName: "MacBook Pro",
+            serviceType: "typecarrier",
+            name: "androidBridge.connection.ready",
+            message: "Android bridge TCP connection is ready.",
+            peerName: "Pixel",
+            connectionState: "Connected to Pixel",
+            discoveredPeers: ["Pixel"],
+            invitedPeers: [],
+            connectedPeers: ["Pixel"],
+            lastErrorMessage: nil
+        )
+
+        XCTAssertEqual(
+            entry.compactDiagnosticSummary,
+            "receiver.android · peer=Pixel · state=Connected to Pixel · connected=Pixel"
+        )
+    }
+
     private func temporaryFileURL(fileName: String) throws -> URL {
         let directoryURL = try temporaryDirectoryURL()
         return directoryURL.appendingPathComponent(fileName)

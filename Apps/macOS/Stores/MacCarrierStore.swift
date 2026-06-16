@@ -17,6 +17,7 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
+    @Published private(set) var lastAccessibilityResetMessage: String?
     @Published private(set) var restoresClipboardAfterAutomaticPaste: Bool
 
     @Published private(set) var carrierService: MultipeerCarrierService
@@ -238,9 +239,64 @@ final class MacCarrierStore: ObservableObject {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
     }
 
+    func runManualDiagnostics() {
+        refreshAccessibilityStatus()
+        carrierService.recordDiagnosticMarker(
+            "diagnostic.manualCheck",
+            message: "Manual diagnostics completed. accessibilityTrusted=\(accessibilityTrusted)."
+        )
+    }
+
     func requestAccessibilityAccess() {
         accessibilityTrusted = permissionChecker.isTrusted(prompt: true)
         permissionChecker.openAccessibilitySettings()
+    }
+
+    func openAccessibilitySettings() {
+        permissionChecker.openAccessibilitySettings()
+    }
+
+    func resetAccessibilityAuthorization() {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty else {
+            lastAccessibilityResetMessage = "无法确认当前应用的 Bundle ID，不能重置辅助功能授权。"
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleIdentifier]
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            lastAccessibilityResetMessage = "重置辅助功能授权失败：\(error.localizedDescription)"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.failed",
+                message: "Failed to reset Accessibility authorization for \(bundleIdentifier): \(error.localizedDescription)"
+            )
+            return
+        }
+
+        if process.terminationStatus == 0 {
+            accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
+            lastAccessibilityResetMessage = "已重置 \(bundleIdentifier) 的辅助功能授权。列表里找不到 TypeCarrier 时，用 + 手动添加当前 App。"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.succeeded",
+                message: "Reset Accessibility authorization for \(bundleIdentifier)."
+            )
+            permissionChecker.openAccessibilitySettings()
+        } else {
+            lastAccessibilityResetMessage = "重置辅助功能授权失败：tccutil 退出码 \(process.terminationStatus)。"
+            carrierService.recordDiagnosticMarker(
+                "accessibility.reset.failed",
+                message: "tccutil reset Accessibility \(bundleIdentifier) exited with \(process.terminationStatus)."
+            )
+        }
+    }
+
+    func revealCurrentApplicationInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
 
     func setRestoresClipboardAfterAutomaticPaste(_ restoresClipboard: Bool) {
@@ -360,7 +416,7 @@ final class MacCarrierStore: ObservableObject {
             text: record.text,
             restoreDelay: clipboardRestoreDelayIfEnabled
         )
-        recordPasteDiagnostic(lastPasteResult)
+        recordPasteDiagnostic(lastPasteResult, peerName: record.sourceDeviceName)
     }
 
     func updateText(for record: CarrierRecord, text: String) {
@@ -409,6 +465,11 @@ final class MacCarrierStore: ObservableObject {
         lastPayloadText = payload.text
         let now = Date()
         let sourceDeviceName = envelope.sender?.displayName ?? peerDisplayName
+        carrierService.recordDiagnosticMarker(
+            "receiver.payload.received",
+            message: "Received text payload \(payload.id) from \(sourceDeviceName).",
+            peerName: sourceDeviceName
+        )
         let record = CarrierRecord(
             payloadID: payload.id,
             kind: .incoming,
@@ -440,7 +501,7 @@ final class MacCarrierStore: ObservableObject {
             restoreDelay: clipboardRestoreDelayIfEnabled
         )
         lastPasteResult = pasteResult
-        recordPasteDiagnostic(pasteResult)
+        recordPasteDiagnostic(pasteResult, peerName: sourceDeviceName)
 
         var updatedRecord = record
         updatedRecord.status = Self.recordStatus(for: pasteResult.pasteStatus)
@@ -463,10 +524,11 @@ final class MacCarrierStore: ObservableObject {
         )))
     }
 
-    private func recordPasteDiagnostic(_ result: PasteInjectionResult) {
+    private func recordPasteDiagnostic(_ result: PasteInjectionResult, peerName: String? = nil) {
         carrierService.recordDiagnosticMarker(
             result.diagnosticEventName,
-            message: result.fullDetail
+            message: result.fullDetail,
+            peerName: peerName
         )
     }
 

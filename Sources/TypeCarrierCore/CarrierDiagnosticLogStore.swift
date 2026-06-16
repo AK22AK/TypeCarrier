@@ -14,6 +14,18 @@ public struct CarrierDiagnosticLogEntry: Codable, Equatable, Sendable {
     public let invitedPeers: [String]
     public let connectedPeers: [String]
     public let lastErrorMessage: String?
+
+    public var compactDiagnosticSummary: String {
+        var parts = [role]
+        if let peerName, !peerName.isEmpty {
+            parts.append("peer=\(peerName)")
+        }
+        parts.append("state=\(connectionState)")
+        if !connectedPeers.isEmpty {
+            parts.append("connected=\(connectedPeers.joined(separator: ", "))")
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 public final class CarrierDiagnosticLogStore {

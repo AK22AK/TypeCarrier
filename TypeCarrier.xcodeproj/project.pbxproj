@@ -45,6 +45,7 @@
 		78173EFC23F647DACB89D979 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6BEA6EDEDEE872D07FB2C5B3 /* Assets.xcassets */; };
 		83944AC0357B36329DC743F4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */; };
+		895CF560E49FE9AF8C42DFB7 /* ConnectionSelfCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D31927EFFBDB3DD748370B1 /* ConnectionSelfCheckTests.swift */; };
 		939D5DF870F9EE336F73B9DF /* CarrierWireFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */; };
 		94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
@@ -57,6 +58,7 @@
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
 		C02533A2C136AC2F4E2E56FC /* PasteFailureGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */; };
 		C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */; };
+		C305F5817C71C619FBF8F045 /* ConnectionSelfCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB3ABC9F265C3EBE0D60969 /* ConnectionSelfCheck.swift */; };
 		C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */; };
 		C523232758A6D1BFE48E6EFA /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C6B1F653BE1074BB1E5A9921 /* AndroidBonjourAdvertisementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F5B760415544FDE9BD9126 /* AndroidBonjourAdvertisementTests.swift */; };
@@ -138,6 +140,7 @@
 		1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidTrustTokenStore.swift; sourceTree = "<group>"; };
 		1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrameTests.swift; sourceTree = "<group>"; };
 		23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierServiceTests.swift; sourceTree = "<group>"; };
+		2D31927EFFBDB3DD748370B1 /* ConnectionSelfCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelfCheckTests.swift; sourceTree = "<group>"; };
 		2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidCarrierBridge.swift; sourceTree = "<group>"; };
 		32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordTimestampFormatterTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
@@ -160,6 +163,7 @@
 		86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrame.swift; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrierMacApp.swift; sourceTree = "<group>"; };
+		8EB3ABC9F265C3EBE0D60969 /* ConnectionSelfCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelfCheck.swift; sourceTree = "<group>"; };
 		98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSUILocalization.swift; sourceTree = "<group>"; };
 		9BA8751B3877B14B54FCE73C /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeliveryReceipt.swift; sourceTree = "<group>"; };
@@ -229,6 +233,7 @@
 				AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */,
 				32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */,
 				1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */,
+				2D31927EFFBDB3DD748370B1 /* ConnectionSelfCheckTests.swift */,
 				FA79C58E61BC27F240D3BFB0 /* ConnectionStateTests.swift */,
 				C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */,
 				7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */,
@@ -317,6 +322,7 @@
 				F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */,
 				708D83E7B24F1C9D10F184CC /* CarrierRecordTimestampFormatter.swift */,
 				86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */,
+				8EB3ABC9F265C3EBE0D60969 /* ConnectionSelfCheck.swift */,
 				9BA8751B3877B14B54FCE73C /* ConnectionState.swift */,
 				CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */,
 				CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */,
@@ -594,6 +600,7 @@
 				969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */,
 				353593F89E9DBA4C7C89C3FA /* CarrierRecordTimestampFormatter.swift in Sources */,
 				939D5DF870F9EE336F73B9DF /* CarrierWireFrame.swift in Sources */,
+				C305F5817C71C619FBF8F045 /* ConnectionSelfCheck.swift in Sources */,
 				074B385AC3005E670720DE07 /* ConnectionState.swift in Sources */,
 				A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */,
 				2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */,
@@ -616,6 +623,7 @@
 				772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */,
 				C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */,
 				7620C3B631E3102CE953C549 /* CarrierWireFrameTests.swift in Sources */,
+				895CF560E49FE9AF8C42DFB7 /* ConnectionSelfCheckTests.swift in Sources */,
 				03AB9481AC2842A4B2906985 /* ConnectionStateTests.swift in Sources */,
 				54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */,
 				61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */,
