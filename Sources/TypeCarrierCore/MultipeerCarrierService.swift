@@ -604,8 +604,21 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
 
         logger.info("Search timed out after \(String(describing: self.searchTimeout), privacy: .public)")
-        stopBrowsingAndDisconnect()
         recordDiagnosticEvent("search.timeout", message: "Search timed out after \(String(describing: searchTimeout))")
+        refreshBrowsingAfterSearchTimeout()
+    }
+
+    private func refreshBrowsingAfterSearchTimeout() {
+        cancelSearchTimeout()
+#if DEBUG
+        if usesSimulatedDiscoveryForTesting || browser == nil {
+            connectionState = .searching
+            scheduleSearchTimeout()
+            updateDiagnostics()
+            return
+        }
+#endif
+        startBrowsing()
     }
 
     private func handleConnectionTimeout(for peerName: String) {

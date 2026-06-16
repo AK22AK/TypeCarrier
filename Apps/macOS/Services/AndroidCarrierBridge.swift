@@ -70,6 +70,8 @@ final class AndroidCarrierBridge: ObservableObject {
     private var envelopeHandler: EnvelopeHandler?
     private var pendingStartHandler: EnvelopeHandler?
     private var isStoppingListener = false
+    private var listenerRecovery = AndroidBridgeListenerRecovery()
+    private var listenerRestartTask: Task<Void, Never>?
 
     init(
         displayName: String,
@@ -95,6 +97,10 @@ final class AndroidCarrierBridge: ObservableObject {
 
     func restart(onEnvelope: @escaping EnvelopeHandler) {
         stop(thenStart: onEnvelope)
+    }
+
+    private func restartAfterListenerFailure(onEnvelope: @escaping EnvelopeHandler) {
+        stop(thenStart: onEnvelope, resetsListenerRecovery: false)
     }
 
     private func startFresh(onEnvelope: @escaping EnvelopeHandler) {
@@ -129,6 +135,7 @@ final class AndroidCarrierBridge: ObservableObject {
             state = .listening(port: nil)
         } catch {
             fail(error.localizedDescription)
+            scheduleListenerRestartAfterFailure(message: error.localizedDescription)
         }
     }
 
@@ -136,7 +143,11 @@ final class AndroidCarrierBridge: ObservableObject {
         stop(thenStart: nil)
     }
 
-    private func stop(thenStart nextStartHandler: EnvelopeHandler?) {
+    private func stop(thenStart nextStartHandler: EnvelopeHandler?, resetsListenerRecovery: Bool = true) {
+        cancelListenerRestart()
+        if resetsListenerRecovery {
+            listenerRecovery.stopped()
+        }
         pendingStartHandler = nextStartHandler
         let existingListener = listener
         if existingListener != nil {
@@ -211,6 +222,7 @@ final class AndroidCarrierBridge: ObservableObject {
 
         switch listenerState {
         case .ready:
+            listenerRecovery.ready()
             let port = listener.port?.rawValue
             state = .listening(port: port)
             recordDiagnosticEvent(
@@ -219,6 +231,7 @@ final class AndroidCarrierBridge: ObservableObject {
             )
         case .failed(let error):
             fail(error.localizedDescription)
+            scheduleListenerRestartAfterFailure(message: error.localizedDescription)
         case .cancelled:
             recordDiagnosticEvent("androidBridge.listener.cancelled", message: "Android bridge listener cancelled.")
             finishListenerStop()
@@ -496,6 +509,44 @@ final class AndroidCarrierBridge: ObservableObject {
         lastErrorMessage = message
         state = .failed(message)
         recordDiagnosticEvent("androidBridge.listener.failed", message: message)
+    }
+
+    private func scheduleListenerRestartAfterFailure(message: String) {
+        guard let envelopeHandler else {
+            return
+        }
+
+        guard let retryDelay = listenerRecovery.failed() else {
+            recordDiagnosticEvent(
+                "androidBridge.listener.restartBudgetExceeded",
+                message: "Stopped automatic listener restart attempts after repeated failures: \(message)"
+            )
+            return
+        }
+
+        cancelListenerRestart()
+        recordDiagnosticEvent(
+            "androidBridge.listener.restartScheduled",
+            message: "Restarting Android bridge listener after \(String(describing: retryDelay)). Last failure: \(message)"
+        )
+        listenerRestartTask = Task { @MainActor [weak self, retryDelay, envelopeHandler] in
+            do {
+                try await Task.sleep(for: retryDelay)
+            } catch {
+                return
+            }
+
+            guard let self else {
+                return
+            }
+            self.listenerRestartTask = nil
+            self.restartAfterListenerFailure(onEnvelope: envelopeHandler)
+        }
+    }
+
+    private func cancelListenerRestart() {
+        listenerRestartTask?.cancel()
+        listenerRestartTask = nil
     }
 
     private func startPairingBrowser() {

@@ -917,6 +917,12 @@ private struct DebugDiagnosticsView: View {
 
     var body: some View {
         List {
+            Section("连接自检") {
+                ForEach(ConnectionSelfCheck.findings(diagnostics: store.diagnostics)) { finding in
+                    SelfCheckFindingRow(finding: finding)
+                }
+            }
+
             Section("会话") {
                 diagnosticRow("角色", store.diagnostics.role.localizedRoleText)
                 diagnosticRow("本机设备", store.diagnostics.localPeerName)
@@ -1010,6 +1016,31 @@ private struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
+private struct SelfCheckFindingRow: View {
+    let finding: SelfCheckFinding
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(finding.title.localizedDiagnosticMessageText)
+                    .font(.body.weight(.semibold))
+                Text(finding.detail.localizedDiagnosticMessageText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionTitle = finding.actionTitle {
+                    Text(actionTitle.localizedDiagnosticMessageText)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Image(systemName: finding.systemImageName)
+                .foregroundStyle(finding.tint)
+        }
+    }
+}
+
 private struct DiagnosticEventRow: View {
     let event: CarrierDiagnosticEvent
 
@@ -1034,6 +1065,34 @@ private struct DiagnosticEventRow: View {
                     .foregroundStyle(.tertiary)
                     .textSelection(.enabled)
             }
+        }
+    }
+}
+
+private extension SelfCheckFinding {
+    var systemImageName: String {
+        switch severity {
+        case .ok:
+            "checkmark.circle.fill"
+        case .warning:
+            "exclamationmark.triangle.fill"
+        case .blocking:
+            "xmark.octagon.fill"
+        case .unknown:
+            "questionmark.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch severity {
+        case .ok:
+            .green
+        case .warning:
+            .orange
+        case .blocking:
+            .red
+        case .unknown:
+            .secondary
         }
     }
 }
