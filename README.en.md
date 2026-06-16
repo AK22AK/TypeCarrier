@@ -95,6 +95,8 @@ Current GitHub Actions perform baseline checks. Hosted runners may not always pr
 - [Technical Notes](docs/technical-notes.md)
 - [MVP Plan](docs/mvp-plan.md)
 - [Roadmap](docs/roadmap.md)
+- [0.1.2 Release Notes](docs/releases/0.1.2.en.md)
+- [0.1.1 Release Notes](docs/releases/0.1.1.en.md)
 - [0.1 Beta 1 Release Notes](docs/releases/0.1-beta.1.en.md)
 - [Multi-Device Management Plan](docs/multi-device-management-plan.md)
 - [Open Source and Official Build Policy](docs/open-source-policy.md)

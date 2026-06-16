@@ -56,19 +56,19 @@ GitHub Release 提供 Android / macOS 侧载包，并保留到最新 Release 的
 - macOS 端在 release workflow 中生成 Developer ID signed + notarized DMG，并随 release 上传 `.dmg` 和 `.sha256`。
 - 不要把 beta 侧载包描述成对普通用户即开即用的正式安装包。
 
-0.1.1 建议 tag 命名：
+0.1.2 建议 tag 命名：
 
 ```sh
-git tag -a v0.1.1 -m "TypeCarrier 0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "TypeCarrier 0.1.2"
+git push origin v0.1.2
 ```
 
 创建 GitHub prerelease：
 
 ```sh
-gh release create v0.1.1 \
-  --title "TypeCarrier 0.1.1" \
-  --notes-file docs/releases/0.1.1.md \
+gh release create v0.1.2 \
+  --title "TypeCarrier 0.1.2" \
+  --notes-file docs/releases/0.1.2.md \
   --prerelease
 ```
 
@@ -95,9 +95,9 @@ script/package_macos_release.sh
 
 脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>-development.zip` 及 SHA-256。
 
-0.1.1 默认生成 development 测试包：
+0.1.2 默认生成 development 测试包：
 
-- 文件名：`TypeCarrierMac-0.1.1-2-development.zip`。
+- 文件名：`TypeCarrierMac-0.1.2-3-development.zip`。
 - 签名：Apple Development / Personal Team。
 - Gatekeeper assessment 可能失败；脚本会输出 warning，但不会把它当作 0.1 development 包的构建失败。
 
