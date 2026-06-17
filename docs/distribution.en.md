@@ -37,6 +37,34 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 `Configs/Signing.local.xcconfig` is gitignored and should stay local.
 
+### Android Sideload Signing
+
+Android APKs still need signing even when distributed by sideloading. TypeCarrier's Android release build reads signing configuration from `Apps/Android/local.properties` or environment variables; `local.properties` is gitignored.
+
+Create a local release keystore once:
+
+```sh
+script/setup_android_release_signing.sh
+```
+
+The script creates `~/.typecarrier/android-release.jks` and writes these local settings to `Apps/Android/local.properties`:
+
+```properties
+typecarrier.android.release.storeFile=/absolute/path/to/android-release.jks
+typecarrier.android.release.storePassword=...
+typecarrier.android.release.keyAlias=typecarrier-release
+typecarrier.android.release.keyPassword=...
+```
+
+Build a local release APK:
+
+```sh
+cd Apps/Android
+./gradlew testDebugUnitTest assembleRelease
+```
+
+The output is `Apps/Android/app/build/outputs/apk/release/app-release.apk`. User-facing sideload APKs should keep using the same keystore; otherwise the same `applicationId` cannot upgrade an existing install in place.
+
 ## User Download Entry Points
 
 - iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
@@ -126,6 +154,10 @@ The `release-signing` environment requires these Secrets:
 
 | Secret | Content |
 | --- | --- |
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | Base64 content of the Android release keystore file |
+| `ANDROID_RELEASE_STORE_PASSWORD` | Android release keystore password |
+| `ANDROID_RELEASE_KEY_ALIAS` | Android release key alias, for example `typecarrier-release` |
+| `ANDROID_RELEASE_KEY_PASSWORD` | Android release key password |
 | `DEVELOPER_ID_CERTIFICATE_BASE64` | Base64 content of the Developer ID Application `.p12` certificate |
 | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
 | `APPLE_TEAM_ID` | Apple Developer Team ID, for example `4H8462MSN6` |
@@ -134,6 +166,12 @@ The `release-signing` environment requires these Secrets:
 | `APPSTORE_CONNECT_API_PRIVATE_KEY` | Full text of the App Store Connect API `.p8` private key |
 
 Create the API Key in App Store Connect under `Users and Access` -> `Integrations`. Use it for CI notarization. Do not store an Apple ID password or app-specific password in the repository.
+
+Export the Android keystore secret:
+
+```sh
+base64 -i ~/.typecarrier/android-release.jks | pbcopy
+```
 
 To export the Developer ID `.p12`, use Keychain Access, select the `Developer ID Application` certificate and its private key, export them as `.p12`, and set a strong password. Convert it for GitHub Secrets locally:
 
@@ -144,6 +182,8 @@ base64 -i DeveloperIDApplication.p12 | pbcopy
 The release workflow creates a temporary keychain on the macOS runner, imports the certificate, runs `script/package_macos_developer_id_dmg.sh`, and uploads the DMG plus `.sha256` to the draft prerelease. Because the job is bound to the `release-signing` environment, signing material is exposed to the runner only after the environment is approved.
 
 The release workflow pins the runner to `macos-26` to avoid receiving an incompatible Xcode version during `macos-latest` migrations.
+
+Android also has a dedicated `Android Release APK` workflow for signed APK verification and output only. It reads the same Android secrets, runs `./gradlew testDebugUnitTest assembleRelease`, and uploads `TypeCarrier-Android-<version>.apk` plus `.sha256` as Actions artifacts.
 
 ## GitHub Actions
 

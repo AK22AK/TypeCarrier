@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,6 +7,41 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.isFile) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun signingProperty(propertyName: String, environmentName: String): String? =
+    localProperties.getProperty(propertyName)
+        ?: providers.environmentVariable(environmentName).orNull
+            ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingProperty(
+    "typecarrier.android.release.storeFile",
+    "TYPECARRIER_ANDROID_RELEASE_STORE_FILE",
+)
+val releaseStorePassword = signingProperty(
+    "typecarrier.android.release.storePassword",
+    "TYPECARRIER_ANDROID_RELEASE_STORE_PASSWORD",
+)
+val releaseKeyAlias = signingProperty(
+    "typecarrier.android.release.keyAlias",
+    "TYPECARRIER_ANDROID_RELEASE_KEY_ALIAS",
+)
+val releaseKeyPassword = signingProperty(
+    "typecarrier.android.release.keyPassword",
+    "TYPECARRIER_ANDROID_RELEASE_KEY_PASSWORD",
+)
+val hasReleaseSigningConfig = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "org.typecarrier.android"
@@ -21,8 +57,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

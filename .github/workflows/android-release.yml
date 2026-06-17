@@ -1,0 +1,110 @@
+name: Android Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: "Version label used in the uploaded APK artifact name"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+    environment: release-signing
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Verify Android signing secrets
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in \
+            ANDROID_RELEASE_KEYSTORE_BASE64 \
+            ANDROID_RELEASE_STORE_PASSWORD \
+            ANDROID_RELEASE_KEY_ALIAS \
+            ANDROID_RELEASE_KEY_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret: $name"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Write Android release keystore
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          keystore_path="$RUNNER_TEMP/typecarrier-android-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "TYPECARRIER_ANDROID_RELEASE_STORE_FILE=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        working-directory: Apps/Android
+        env:
+          TYPECARRIER_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          TYPECARRIER_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          TYPECARRIER_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew testDebugUnitTest assembleRelease
+
+      - name: Prepare APK artifact
+        id: artifact
+        env:
+          VERSION_LABEL_INPUT: ${{ github.event.inputs.version_label || '' }}
+        run: |
+          if [ -n "$VERSION_LABEL_INPUT" ]; then
+            version_label="$VERSION_LABEL_INPUT"
+          elif [ -n "${GITHUB_REF_NAME:-}" ]; then
+            version_label="$GITHUB_REF_NAME"
+          else
+            version_label="${GITHUB_SHA:0:12}"
+          fi
+          version_label="$(printf '%s' "$version_label" | tr '/[:space:]' '-')"
+
+          mkdir -p dist
+          apk_path="dist/TypeCarrier-Android-${version_label}.apk"
+          sha_path="${apk_path}.sha256"
+          cp Apps/Android/app/build/outputs/apk/release/app-release.apk "$apk_path"
+          sha256sum "$apk_path" > "$sha_path"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+          echo "sha_path=$sha_path" >> "$GITHUB_OUTPUT"
+
+      - name: Verify APK signature
+        env:
+          APK_PATH: ${{ steps.artifact.outputs.apk_path }}
+        run: |
+          latest_build_tools="$(find "$ANDROID_HOME/build-tools" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)"
+          "$latest_build_tools/apksigner" verify --verbose --print-certs "$APK_PATH"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: typecarrier-android-release-apk
+          path: |
+            ${{ steps.artifact.outputs.apk_path }}
+            ${{ steps.artifact.outputs.sha_path }}
+          if-no-files-found: error

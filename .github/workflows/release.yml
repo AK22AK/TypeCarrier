@@ -114,15 +114,54 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Verify Android signing secrets
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in \
+            ANDROID_RELEASE_KEYSTORE_BASE64 \
+            ANDROID_RELEASE_STORE_PASSWORD \
+            ANDROID_RELEASE_KEY_ALIAS \
+            ANDROID_RELEASE_KEY_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret: $name"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Write Android release keystore
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          keystore_path="$RUNNER_TEMP/typecarrier-android-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          echo "TYPECARRIER_ANDROID_RELEASE_STORE_FILE=$keystore_path" >> "$GITHUB_ENV"
+
       - name: Build Android APK
         working-directory: Apps/Android
-        run: ./gradlew testDebugUnitTest assembleDebug
+        env:
+          TYPECARRIER_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          TYPECARRIER_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          TYPECARRIER_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: ./gradlew testDebugUnitTest assembleRelease
 
       - name: Prepare Android release asset
         run: |
           mkdir -p dist
-          cp Apps/Android/app/build/outputs/apk/debug/app-debug.apk "dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk"
-          echo "ANDROID_APK=dist/TypeCarrier-Android-${RELEASE_TAG}-debug.apk" >> "$GITHUB_ENV"
+          cp Apps/Android/app/build/outputs/apk/release/app-release.apk "dist/TypeCarrier-Android-${RELEASE_TAG}.apk"
+          shasum -a 256 "dist/TypeCarrier-Android-${RELEASE_TAG}.apk" > "dist/TypeCarrier-Android-${RELEASE_TAG}.apk.sha256"
+          echo "ANDROID_APK=dist/TypeCarrier-Android-${RELEASE_TAG}.apk" >> "$GITHUB_ENV"
+          echo "ANDROID_APK_SHA256=dist/TypeCarrier-Android-${RELEASE_TAG}.apk.sha256" >> "$GITHUB_ENV"
 
       - name: Verify macOS signing secrets
         if: steps.xcode.outputs.supports_build == 'true'
@@ -218,7 +257,7 @@ jobs:
       - name: Upload Android APK to draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$RELEASE_TAG" "$ANDROID_APK" --clobber
+        run: gh release upload "$RELEASE_TAG" "$ANDROID_APK" "$ANDROID_APK_SHA256" --clobber
 
       - name: Upload macOS DMG to draft prerelease
         if: steps.xcode.outputs.supports_build == 'true'
@@ -228,7 +267,7 @@ jobs:
 
       - name: Report release asset status
         run: |
-          echo "::notice::Draft prerelease is ready. Android debug APK uploaded as $(basename "$ANDROID_APK")."
+          echo "::notice::Draft prerelease is ready. Android release APK uploaded as $(basename "$ANDROID_APK")."
           if [ -n "${MACOS_DMG:-}" ]; then
             echo "::notice::Notarized macOS DMG uploaded as $(basename "$MACOS_DMG")."
           else
