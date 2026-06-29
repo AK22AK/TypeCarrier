@@ -5,6 +5,7 @@ DerivedData/
 *.xcuserdatad/
 .DS_Store
 .codex/
+docs/releases/.omo/
 Configs/Signing.local.xcconfig
 
 # Android local build state
