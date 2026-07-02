@@ -681,6 +681,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac";
 				SDKROOT = macosx;
+				TYPECARRIER_DISPLAY_NAME = TypeCarrier;
 			};
 			name = Release;
 		};
@@ -803,8 +804,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac.debug";
 				SDKROOT = macosx;
+				TYPECARRIER_DISPLAY_NAME = "TypeCarrier Debug";
 			};
 			name = Debug;
 		};
