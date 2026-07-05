@@ -17,6 +17,7 @@ import org.typecarrier.android.diagnostics.AndroidDiagnosticLogStore
 import org.typecarrier.android.protocol.AndroidBridgeResponse
 import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
+import org.typecarrier.android.protocol.CarrierPostPasteAction
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
 import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
@@ -52,6 +53,34 @@ class AndroidComposerViewModelTest {
         assertEquals("", viewModel.uiState.value.text)
         assertEquals(1, viewModel.uiState.value.outgoingHistory.size)
         assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
+    }
+
+    @Test
+    fun sendWithReturnModePassesPostPasteActionToRepository() = runBlocking {
+        val repository = FakeAndroidCarrierRepository()
+        val viewModel = makeViewModel(repository = repository)
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+
+        viewModel.updateEnablesSendReturnGesture(true)
+        viewModel.updateSendsReturnAfterPaste(true)
+        viewModel.updateText("hello")
+        viewModel.send().join()
+
+        assertEquals(CarrierPostPasteAction.PressReturn, repository.lastPostPasteAction)
+    }
+
+    @Test
+    fun disablingSendReturnModeResetsSelectedSendBehavior() {
+        val viewModel = makeViewModel()
+
+        viewModel.updateEnablesSendReturnGesture(true)
+        viewModel.updateSendsReturnAfterPaste(true)
+        viewModel.updateEnablesSendReturnGesture(false)
+
+        assertFalse(viewModel.uiState.value.enablesSendReturnGesture)
+        assertFalse(viewModel.uiState.value.sendsReturnAfterPaste)
     }
 
     @Test
@@ -482,11 +511,13 @@ private class FakeAndroidCarrierRepository(
     override var manualPort: String = "17641"
     override var senderDisplayName: String = ""
     override var launchesIntoInputMode: Boolean = true
+    override var enablesSendReturnGesture: Boolean = false
     var hasTrustToken = false
     var trustedServices: List<MacService>? = null
     var sendFailure: Throwable? = null
     var connectFailure: Throwable? = null
     var requiresReconnectBeforeSend = false
+    var lastPostPasteAction: CarrierPostPasteAction? = null
     var lastConnectedService: MacService? = null
     var lastPairingCode: String? = null
     var connectAttempts = 0
@@ -530,8 +561,13 @@ private class FakeAndroidCarrierRepository(
         return nextConnectResponse
     }
 
-    override suspend fun sendText(text: String, senderDisplayName: String): CarrierDeliveryReceipt {
+    override suspend fun sendText(
+        text: String,
+        senderDisplayName: String,
+        postPasteAction: CarrierPostPasteAction?,
+    ): CarrierDeliveryReceipt {
         sendAttempts += 1
+        lastPostPasteAction = postPasteAction
         if (requiresReconnectBeforeSend && connectAttempts < 2) {
             throw IllegalStateException("stale socket")
         }

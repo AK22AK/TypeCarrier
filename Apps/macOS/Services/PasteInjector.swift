@@ -38,7 +38,11 @@ struct PasteInjectionResult: Equatable {
 struct PasteInjector {
     private let accessibilityChecker = AccessibilityPermissionChecker()
 
-    func paste(text: String, restoreDelay: TimeInterval? = nil) -> PasteInjectionResult {
+    func paste(
+        text: String,
+        restoreDelay: TimeInterval? = nil,
+        postPasteAction: CarrierPostPasteAction? = nil
+    ) -> PasteInjectionResult {
         var trace = PasteInjectionTrace(text: text)
         guard accessibilityChecker.isTrusted(prompt: false) else {
             trace.add("accessibilityTrusted", "false")
@@ -79,6 +83,29 @@ struct PasteInjector {
         waitForPasteDelivery()
         trace.add("postWaitSeconds", "0.25")
         focusedTextTarget?.recordPostPasteState(expectedText: text, trace: &trace)
+        let status: String
+        let succeeded: Bool
+        let pasteStatus: CarrierDeliveryReceipt.PasteStatus
+        switch postPasteAction {
+        case .pressReturn:
+            trace.add("postPasteAction", "pressReturn")
+            if postReturn() {
+                trace.add("returnPosted", "true")
+                status = "已接收文本，已发送粘贴和回车指令"
+                succeeded = true
+                pasteStatus = .posted
+            } else {
+                trace.add("returnPosted", "false")
+                status = "已接收文本，已发送粘贴指令，但发送回车失败"
+                succeeded = false
+                pasteStatus = .unverifiedPosted
+            }
+        case nil:
+            status = "已接收文本，已发送粘贴指令"
+            succeeded = true
+            pasteStatus = .posted
+        }
+
         if let restoreDelay {
             trace.add("clipboardRestoreDelaySeconds", String(format: "%.2f", restoreDelay))
             trace.add("clipboardRestore", "scheduledAfterCommandV")
@@ -91,10 +118,10 @@ struct PasteInjector {
             trace.add("clipboardRestore", "disabledBySetting")
         }
         return PasteInjectionResult(
-            status: "已接收文本，已发送粘贴指令",
+            status: status,
             diagnosticDetail: trace.summary,
-            succeeded: true,
-            pasteStatus: .posted
+            succeeded: succeeded,
+            pasteStatus: pasteStatus
         )
     }
 
@@ -112,18 +139,26 @@ struct PasteInjector {
     }
 
     private func postCommandV() -> Bool {
-        let source = CGEventSource(stateID: .hidSystemState)
         let keyCodeForV: CGKeyCode = 9
+        return postKeyPress(keyCode: keyCodeForV, flags: .maskCommand)
+    }
 
+    private func postReturn() -> Bool {
+        let keyCodeForReturn: CGKeyCode = 36
+        return postKeyPress(keyCode: keyCodeForReturn)
+    }
+
+    private func postKeyPress(keyCode: CGKeyCode, flags: CGEventFlags = []) -> Bool {
+        let source = CGEventSource(stateID: .hidSystemState)
         guard
-            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCodeForV, keyDown: true),
-            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCodeForV, keyDown: false)
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
         else {
             return false
         }
 
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
+        keyDown.flags = flags
+        keyUp.flags = flags
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
         return true

@@ -53,7 +53,7 @@ fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
-DMG_NAME="TypeCarrierMac-${VERSION}-${BUILD}.dmg"
+DMG_NAME="TypeCarrierMac-${VERSION}.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
 
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"

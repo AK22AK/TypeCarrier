@@ -73,7 +73,7 @@ struct MainWindowView: View {
             receivedListColumn
         case .settings:
             settingsListColumn
-        case .connectionStatus:
+        case .connectionStatus, .functionTest:
             Color.clear
                 .accessibilityHidden(true)
                 .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
@@ -119,6 +119,9 @@ struct MainWindowView: View {
         case .connectionStatus:
             ReceiverStatusPage(store: store)
                 .navigationTitle("连接管理")
+        case .functionTest:
+            FunctionTestPage()
+                .navigationTitle("功能测试")
         case .settings:
             settingsDetailColumn
         }
@@ -157,6 +160,7 @@ struct MainWindowView: View {
 private enum MainWindowSection: String, Hashable, Identifiable {
     case received
     case connectionStatus
+    case functionTest
     case settings
 
     var id: Self {
@@ -199,6 +203,9 @@ private struct AppSidebar: View {
             }
             .help(connectionState.localizedDisplayText)
                 .tag(MainWindowSection.connectionStatus)
+
+            Label("功能测试", systemImage: "checkmark.seal")
+                .tag(MainWindowSection.functionTest)
 
             HStack(spacing: 8) {
                 Label("设置", systemImage: "gearshape")
@@ -517,7 +524,6 @@ private struct ReceivedRecordDetail: View {
 
 private struct ReceiverStatusPage: View {
     @ObservedObject var store: MacCarrierStore
-    @State private var devicePairingCode = ""
     @State private var showsAdvancedInfo = false
 
     var body: some View {
@@ -634,33 +640,14 @@ private struct ReceiverStatusPage: View {
     private var connectNewDeviceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("连接新设备")
-            Text("在手机端选择这台 Mac；如果没有看到它，可以使用匹配码连接。")
+            Text("在发送端选择这台 Mac，并在发送端输入下面的匹配码完成连接。")
                 .foregroundStyle(.secondary)
 
             statusLine("本机匹配码", store.androidBridge.pairingCode)
 
-            HStack(spacing: 10) {
-                TextField("输入手机匹配码", text: $devicePairingCode)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 180)
-                    .onChange(of: devicePairingCode) { _, newValue in
-                        devicePairingCode = String(newValue.filter(\.isNumber).prefix(6))
-                    }
-                Button {
-                    store.androidBridge.associateAndroidDevice(pairingCode: devicePairingCode)
-                } label: {
-                    Label("连接设备", systemImage: "display.and.arrow.down")
-                }
-                .disabled(devicePairingCode.count != 6)
-            }
-            Text("已信任设备会自动重连。")
+            Text("Mac 只负责提供匹配码并等待接收；连接由 iOS 或 Android 发送端发起。已信任设备会自动重连。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let message = store.androidBridge.associationStatusMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -698,7 +685,7 @@ private struct ReceiverStatusPage: View {
             sectionHeader("连接详情")
             statusLine("本机设备", diagnostics.localPeerName)
             statusLine("服务标识", diagnostics.serviceType)
-            statusLine("配对服务", pairingServiceAvailabilityText)
+            statusLine("Android 接收服务", pairingServiceAvailabilityText)
             statusLine("已发现设备", discoveredDevicesText)
 
             if let lastError = diagnostics.lastErrorMessage {
@@ -783,10 +770,6 @@ private struct ReceiverStatusPage: View {
             devices[peer] = "连接中"
         }
 
-        for device in store.androidBridge.discoveredAndroidPairingDevices where devices[device.name] == nil {
-            devices[device.name] = "未连接"
-        }
-
         guard !devices.isEmpty else {
             return "无"
         }
@@ -827,6 +810,227 @@ private struct ReceiverStatusPage: View {
                 .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct FunctionTestPage: View {
+    @State private var testText = ""
+    @State private var hasPressedReturn = false
+    @State private var focusRequest = 0
+    @State private var isRunningPasteSelfTest = false
+    @State private var pasteSelfTestResult: PasteInjectionResult?
+    @State private var lastPasteSelfTestText: String?
+
+    private let pasteInjector = PasteInjector()
+
+    private var didPassPasteSelfTest: Bool {
+        guard let lastPasteSelfTestText else {
+            return false
+        }
+        return testText.contains(lastPasteSelfTestText)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("功能测试")
+                        .font(.title2.weight(.semibold))
+                    Text("点击下方输入框，让它成为当前焦点。手机端发送普通文本时，内容应出现在输入框里；发送+回车时，内容应出现且回车状态变为已按下。也可以只测试本机辅助功能粘贴。")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        runPasteSelfTest()
+                    } label: {
+                        Label("仅测试辅助功能粘贴", systemImage: "doc.on.clipboard")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isRunningPasteSelfTest)
+
+                    Button {
+                    } label: {
+                        Label(
+                            hasPressedReturn ? "回车已按下" : "等待回车",
+                            systemImage: hasPressedReturn ? "return.left" : "return"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        reset()
+                    } label: {
+                        Label("重置", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if isRunningPasteSelfTest {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在把测试输入框设为焦点并发送 Command-V")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else if let pasteSelfTestResult {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(didPassPasteSelfTest ? "粘贴测试通过" : pasteSelfTestResult.status)
+                            Text(pasteSelfTestResult.fullDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .lineLimit(3)
+                        }
+                    } icon: {
+                        Image(systemName: didPassPasteSelfTest ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(didPassPasteSelfTest ? .green : .orange)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("测试输入框")
+                        .font(.headline)
+                    FunctionTestInputView(text: $testText, focusRequest: focusRequest) {
+                        hasPressedReturn = true
+                    }
+                    .frame(minHeight: 220)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(.separator, lineWidth: 1)
+                    }
+                }
+
+                Text("这个输入框只接收系统正常投递到当前焦点的键盘和粘贴事件；测试页不会直接读取手机发送内容，也不会绕过辅助功能粘贴路径。“仅测试辅助功能粘贴”会主动聚焦这个输入框，然后复用 Mac 接收端同一套辅助功能粘贴路径发送一段本机测试文本。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 640, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 48)
+        .padding(.top, 44)
+        .padding(.bottom, 28)
+    }
+
+    private func reset() {
+        testText = ""
+        hasPressedReturn = false
+        pasteSelfTestResult = nil
+        lastPasteSelfTestText = nil
+        isRunningPasteSelfTest = false
+    }
+
+    private func runPasteSelfTest() {
+        testText = ""
+        hasPressedReturn = false
+        pasteSelfTestResult = nil
+        isRunningPasteSelfTest = true
+
+        let testText = "TypeCarrier paste test \(Int(Date().timeIntervalSince1970))"
+        lastPasteSelfTestText = testText
+        focusRequest += 1
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            pasteSelfTestResult = pasteInjector.paste(text: testText)
+            isRunningPasteSelfTest = false
+        }
+    }
+}
+
+private struct FunctionTestInputView: NSViewRepresentable {
+    @Binding var text: String
+    let focusRequest: Int
+    let onReturn: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let textView = ReturnObservingTextView()
+        textView.delegate = context.coordinator
+        textView.onReturn = onReturn
+        textView.string = text
+        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.drawsBackground = true
+        textView.backgroundColor = .textBackgroundColor
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? ReturnObservingTextView else {
+            return
+        }
+
+        textView.onReturn = onReturn
+        if textView.string != text {
+            textView.string = text
+        }
+        context.coordinator.focusIfNeeded(
+            request: focusRequest,
+            textView: textView
+        )
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        @Binding private var text: String
+        private var lastHandledFocusRequest = 0
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else {
+                return
+            }
+
+            text = textView.string
+        }
+
+        func focusIfNeeded(request: Int, textView: NSTextView) {
+            guard request != lastHandledFocusRequest else {
+                return
+            }
+
+            lastHandledFocusRequest = request
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
+    }
+
+    final class ReturnObservingTextView: NSTextView {
+        var onReturn: (() -> Void)?
+
+        override func insertNewline(_ sender: Any?) {
+            onReturn?()
+            super.insertNewline(sender)
+        }
     }
 }
 

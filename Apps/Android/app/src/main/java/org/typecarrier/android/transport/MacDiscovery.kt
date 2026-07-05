@@ -12,8 +12,23 @@ data class MacService(
     val host: String,
     val port: Int,
     val macID: String? = null,
+    val appBundleID: String? = null,
+    val appVariant: String? = null,
 ) {
-    val id: String = macID ?: "$name@$host:$port"
+    val id: String = discoveryIdentity()
+
+    private fun discoveryIdentity(): String {
+        val normalizedMacID = macID?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedMacID == null) {
+            return "$name@$host:$port"
+        }
+
+        return buildList {
+            add("macID=$normalizedMacID")
+            appBundleID?.trim()?.takeIf { it.isNotEmpty() }?.let { add("appBundleID=$it") }
+            appVariant?.trim()?.takeIf { it.isNotEmpty() }?.let { add("appVariant=$it") }
+        }.joinToString("|")
+    }
 }
 
 class MacDiscovery(
@@ -133,6 +148,7 @@ class MacDiscovery(
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                     val host = serviceInfo.host?.hostAddress
                     if (host == null) {
+                        onError("解析服务缺少地址：${serviceInfo.serviceName}")
                         resolveNextPendingService()
                         return
                     }
@@ -140,6 +156,8 @@ class MacDiscovery(
                         ?.toString(Charsets.UTF_8)
                         ?.toIntOrNull()
                         ?: run {
+                            val keys = serviceInfo.attributes.keys.sorted().joinToString()
+                            onError("解析服务缺少 Android 端口：${serviceInfo.serviceName} txtKeys=[$keys]")
                             resolveNextPendingService()
                             return
                         }
@@ -151,6 +169,8 @@ class MacDiscovery(
                         host = host,
                         port = androidPort,
                         macID = serviceInfo.attributes["macID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
+                        appBundleID = serviceInfo.attributes["appBundleID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
+                        appVariant = serviceInfo.attributes["appVariant"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
                     )
                     services[service.id] = service
                     serviceIDsByDiscoveryName[serviceInfo.serviceName] = service.id

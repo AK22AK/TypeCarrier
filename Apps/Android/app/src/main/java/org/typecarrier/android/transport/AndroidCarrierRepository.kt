@@ -11,6 +11,7 @@ import org.typecarrier.android.protocol.AndroidBridgeResponse
 import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
 import org.typecarrier.android.protocol.AndroidPairingCode
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
+import org.typecarrier.android.protocol.CarrierPostPasteAction
 
 interface AndroidCarrierRepository : Closeable {
     val services: StateFlow<List<MacService>>
@@ -23,6 +24,7 @@ interface AndroidCarrierRepository : Closeable {
     var manualPort: String
     var senderDisplayName: String
     var launchesIntoInputMode: Boolean
+    var enablesSendReturnGesture: Boolean
 
     fun startDiscovery()
     fun stopDiscovery()
@@ -30,7 +32,11 @@ interface AndroidCarrierRepository : Closeable {
     fun hasSavedTrustToken(service: MacService): Boolean
     fun forgetTrustedMac(service: MacService)
     suspend fun connect(service: MacService, pairingCode: String?): AndroidBridgeResponse
-    suspend fun sendText(text: String, senderDisplayName: String): CarrierDeliveryReceipt?
+    suspend fun sendText(
+        text: String,
+        senderDisplayName: String,
+        postPasteAction: CarrierPostPasteAction? = null,
+    ): CarrierDeliveryReceipt?
     fun closeConnection()
 }
 
@@ -120,6 +126,12 @@ class AndroidCarrierRepositoryImpl(
             prefs.edit().putBoolean("launches_into_input_mode", value).apply()
         }
 
+    override var enablesSendReturnGesture: Boolean
+        get() = prefs.getBoolean("enables_send_return_gesture", false)
+        set(value) {
+            prefs.edit().putBoolean("enables_send_return_gesture", value).apply()
+        }
+
     private val deviceID: String
         get() = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
             prefs.edit().putString("device_id", it).apply()
@@ -194,8 +206,12 @@ class AndroidCarrierRepositoryImpl(
         return response
     }
 
-    override suspend fun sendText(text: String, senderDisplayName: String): CarrierDeliveryReceipt? =
-        client?.sendText(text, senderDisplayName.ifBlank { displayName }) ?: error("尚未连接 Mac")
+    override suspend fun sendText(
+        text: String,
+        senderDisplayName: String,
+        postPasteAction: CarrierPostPasteAction?,
+    ): CarrierDeliveryReceipt? =
+        client?.sendText(text, senderDisplayName.ifBlank { displayName }, postPasteAction) ?: error("尚未连接 Mac")
 
     override fun closeConnection() {
         client?.close()
@@ -220,6 +236,20 @@ class AndroidCarrierRepositoryImpl(
             return endpointToken
         }
 
+        val macIDToken = service.macID?.takeIf { it.isNotBlank() }
+            ?.let { prefs.getString(AndroidTrustTokenKeys.tokenKey(it), null) }
+        if (macIDToken != null) {
+            prefs.edit().putString(AndroidTrustTokenKeys.tokenKey(service), macIDToken).apply()
+            return macIDToken
+        }
+
+        val legacyMacIDToken = AndroidTrustTokenKeys.legacyMacIdentityTokenKey(service)
+            ?.let { prefs.getString(it, null) }
+        if (legacyMacIDToken != null) {
+            prefs.edit().putString(AndroidTrustTokenKeys.tokenKey(service), legacyMacIDToken).apply()
+            return legacyMacIDToken
+        }
+
         val legacyToken = prefs.getString(AndroidTrustTokenKeys.legacyTokenKey(service), null)
         if (legacyToken != null) {
             prefs.edit().putString(AndroidTrustTokenKeys.tokenKey(service), legacyToken).apply()
@@ -237,6 +267,8 @@ class AndroidCarrierRepositoryImpl(
             .putString("trusted_mac.$key.host", service.host)
             .putInt("trusted_mac.$key.port", service.port)
             .putString("trusted_mac.$key.mac_id", service.macID)
+            .putString("trusted_mac.$key.app_bundle_id", service.appBundleID)
+            .putString("trusted_mac.$key.app_variant", service.appVariant)
             .apply()
     }
 
@@ -247,7 +279,16 @@ class AndroidCarrierRepositoryImpl(
                 val port = prefs.getInt("trusted_mac.$key.port", -1).takeIf { it in 1..65_535 } ?: return@mapNotNull null
                 val name = prefs.getString("trusted_mac.$key.name", null)?.takeIf { it.isNotBlank() } ?: "已配对 Mac"
                 val macID = prefs.getString("trusted_mac.$key.mac_id", null)?.takeIf { it.isNotBlank() }
-                MacService(name = name, host = host, port = port, macID = macID)
+                val appBundleID = prefs.getString("trusted_mac.$key.app_bundle_id", null)?.takeIf { it.isNotBlank() }
+                val appVariant = prefs.getString("trusted_mac.$key.app_variant", null)?.takeIf { it.isNotBlank() }
+                MacService(
+                    name = name,
+                    host = host,
+                    port = port,
+                    macID = macID,
+                    appBundleID = appBundleID,
+                    appVariant = appVariant,
+                )
             }
             .sortedBy { it.name }
 
@@ -259,7 +300,13 @@ class AndroidCarrierRepositoryImpl(
 
 internal object AndroidTrustTokenKeys {
     fun endpointKey(service: MacService): String =
-        service.macID?.takeIf { it.isNotBlank() }?.let { "mac.${it.trim()}" }
+        service.macID?.takeIf { it.isNotBlank() }?.let { macID ->
+            buildList {
+                add("mac.${macID.trim()}")
+                service.appBundleID?.trim()?.takeIf { it.isNotEmpty() }?.let { add("bundle.$it") }
+                service.appVariant?.trim()?.takeIf { it.isNotEmpty() }?.let { add("variant.$it") }
+            }.joinToString("|")
+        }
             ?: endpointKey(service.host, service.port)
 
     fun endpointKey(host: String, port: Int): String = "endpoint.${host.trim().lowercase(Locale.ROOT)}:$port"
@@ -269,6 +316,9 @@ internal object AndroidTrustTokenKeys {
     fun tokenKey(service: MacService): String = "trust_token.${endpointKey(service)}"
 
     fun legacyTokenKey(service: MacService): String = "trust_token.${service.name}"
+
+    fun legacyMacIdentityTokenKey(service: MacService): String? =
+        service.macID?.takeIf { it.isNotBlank() }?.let { tokenKey(it) }
 
     fun tokenKey(macID: String): String = "trust_token.mac.${macID.trim()}"
 }

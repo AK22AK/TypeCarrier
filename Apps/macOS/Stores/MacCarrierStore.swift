@@ -45,7 +45,7 @@ final class MacCarrierStore: ObservableObject {
         androidBridge = bridge
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
-            receiverDiscoveryInfoExtras: bridge.bonjourDiscoveryInfo,
+            receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: bridge.bonjourDiscoveryInfo),
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         do {
@@ -68,6 +68,23 @@ final class MacCarrierStore: ObservableObject {
 
     var connectionState: ConnectionState {
         carrierService.connectionState
+    }
+
+    private static var appVariant: String {
+#if DEBUG
+        "debug"
+#else
+        "release"
+#endif
+    }
+
+    private static func receiverDiscoveryInfoExtras(androidDiscoveryInfo: [String: String]) -> [String: String] {
+        var info = androidDiscoveryInfo
+        if let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty {
+            info[CarrierReceiverDiscoveryInfo.appBundleIDKey] = bundleIdentifier
+        }
+        info[CarrierReceiverDiscoveryInfo.appVariantKey] = appVariant
+        return info
     }
 
     var receiverStatusSummary: ReceiverStatusSummary {
@@ -156,7 +173,7 @@ final class MacCarrierStore: ObservableObject {
         carrierServiceCancellable = nil
         carrierService = Self.makeCarrierService(
             displayName: receiverDisplayName,
-            receiverDiscoveryInfoExtras: androidBridge.bonjourDiscoveryInfo,
+            receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: androidBridge.bonjourDiscoveryInfo),
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         configureCarrierServiceRecoveryHandler()
@@ -498,7 +515,8 @@ final class MacCarrierStore: ObservableObject {
 
         let pasteResult = pasteInjector.paste(
             text: payload.text,
-            restoreDelay: clipboardRestoreDelayIfEnabled
+            restoreDelay: clipboardRestoreDelayIfEnabled,
+            postPasteAction: payload.postPasteAction
         )
         lastPasteResult = pasteResult
         recordPasteDiagnostic(pasteResult, peerName: sourceDeviceName)

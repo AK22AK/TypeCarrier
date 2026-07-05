@@ -26,9 +26,7 @@ final class AndroidCarrierBridge: ObservableObject {
 
     @Published private(set) var state: BridgeState = .stopped
     @Published private(set) var lastErrorMessage: String?
-    @Published private(set) var discoveredAndroidPairingDevices: [AndroidPairingDevice] = []
     @Published private(set) var connectedAndroidDeviceNames: [String] = []
-    @Published private(set) var associationStatusMessage: String?
 
     var pairingCode: String {
         localPairingCode
@@ -38,7 +36,9 @@ final class AndroidCarrierBridge: ObservableObject {
         AndroidBonjourAdvertisement.discoveryInfo(
             macID: macID,
             macName: displayName,
-            port: Self.defaultPort.rawValue
+            port: Self.defaultPort.rawValue,
+            appBundleID: Bundle.main.bundleIdentifier,
+            appVariant: Self.appVariant
         )
     }
 
@@ -64,7 +64,6 @@ final class AndroidCarrierBridge: ObservableObject {
     private let trustTokenStore: AndroidTrustTokenStore
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var listener: NWListener?
-    private var pairingBrowser: AndroidPairingBrowser?
     private var connections: [ObjectIdentifier: BridgeConnectionState] = [:]
     private var activeSenderGate = AndroidBridgeActiveSenderGate()
     private var envelopeHandler: EnvelopeHandler?
@@ -72,6 +71,14 @@ final class AndroidCarrierBridge: ObservableObject {
     private var isStoppingListener = false
     private var listenerRecovery = AndroidBridgeListenerRecovery()
     private var listenerRestartTask: Task<Void, Never>?
+
+    private static var appVariant: String {
+#if DEBUG
+        "debug"
+#else
+        "release"
+#endif
+    }
 
     init(
         displayName: String,
@@ -154,9 +161,6 @@ final class AndroidCarrierBridge: ObservableObject {
             isStoppingListener = true
         }
         listener?.cancel()
-        pairingBrowser?.stop()
-        pairingBrowser = nil
-        discoveredAndroidPairingDevices = []
         connectedAndroidDeviceNames = []
         connections.values.forEach { $0.connection.cancel() }
         connections = [:]
@@ -166,41 +170,6 @@ final class AndroidCarrierBridge: ObservableObject {
         recordDiagnosticEvent("androidBridge.listener.stop", message: "Stopped Android bridge listener.")
         if existingListener == nil {
             finishListenerStop()
-        }
-    }
-
-    func associateAndroidDevice(pairingCode: String) {
-        guard AndroidPairingCode.isValid(pairingCode) else {
-            associationStatusMessage = "请输入 6 位匹配码。"
-            return
-        }
-
-        guard let device = discoveredAndroidPairingDevices.first else {
-            associationStatusMessage = "未发现可关联的 Android 设备。请保持 Android 版 TypeCarrier 打开。"
-            return
-        }
-
-        associationStatusMessage = "正在关联 \(device.name)..."
-        let request = AndroidPairingAssociationRequest(
-            macID: macID,
-            macName: displayName,
-            pairingCode: pairingCode
-        )
-
-        Task { @MainActor in
-            do {
-                let response = try await AndroidPairingAssociationClient.associate(device: device, request: request)
-                if response.status == .accepted,
-                   let deviceID = response.deviceID,
-                   let trustToken = response.trustToken {
-                    trustTokenStore.remember(AndroidTrustToken(rawValue: trustToken), for: deviceID)
-                    associationStatusMessage = "已关联 \(response.deviceName ?? device.name)。"
-                } else {
-                    associationStatusMessage = response.message
-                }
-            } catch {
-                associationStatusMessage = error.localizedDescription
-            }
         }
     }
 
@@ -241,7 +210,7 @@ final class AndroidCarrierBridge: ObservableObject {
     }
 
     private var hasActiveResources: Bool {
-        listener != nil || pairingBrowser != nil || !connections.isEmpty
+        listener != nil || !connections.isEmpty
     }
 
     private func finishListenerStop() {
@@ -546,20 +515,6 @@ final class AndroidCarrierBridge: ObservableObject {
         listenerRestartTask = nil
     }
 
-    private func startPairingBrowser() {
-        let browser = AndroidPairingBrowser { [weak self] devices in
-            Task { @MainActor in
-                self?.discoveredAndroidPairingDevices = devices
-            }
-        } onError: { [weak self] message in
-            Task { @MainActor in
-                self?.recordDiagnosticEvent("androidBridge.pairingBrowser.failed", message: message)
-            }
-        }
-        pairingBrowser = browser
-        browser.start()
-    }
-
     private var diagnosticConnectionState: ConnectionState {
         if let deviceName = connectedAndroidDeviceNames.first {
             return .connected(deviceName)
@@ -582,7 +537,7 @@ final class AndroidCarrierBridge: ObservableObject {
             localPeerName: displayName,
             serviceType: Self.serviceType,
             connectionState: connectionState,
-            discoveredPeers: discoveredAndroidPairingDevices.map(\.name).sorted(),
+            discoveredPeers: [],
             connectedPeers: connectedAndroidDeviceNames,
             lastErrorMessage: lastErrorMessage
         )
@@ -654,198 +609,6 @@ final class AndroidCarrierBridge: ObservableObject {
         let next = AndroidPairingCode.generate()
         defaults.set(next, forKey: pairingCodeDefaultsKey)
         return next
-    }
-}
-
-struct AndroidPairingDevice: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let host: String
-    let port: UInt16
-}
-
-private final class AndroidPairingBrowser: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
-    private let browser = NetServiceBrowser()
-    private let onDevicesChanged: ([AndroidPairingDevice]) -> Void
-    private let onError: (String) -> Void
-    private var services: [String: NetService] = [:]
-    private var devices: [String: AndroidPairingDevice] = [:]
-
-    init(onDevicesChanged: @escaping ([AndroidPairingDevice]) -> Void, onError: @escaping (String) -> Void) {
-        self.onDevicesChanged = onDevicesChanged
-        self.onError = onError
-        super.init()
-        browser.delegate = self
-    }
-
-    func start() {
-        browser.searchForServices(ofType: "_tcpair._tcp", inDomain: "local.")
-    }
-
-    func stop() {
-        browser.stop()
-        services.values.forEach {
-            $0.stop()
-            $0.delegate = nil
-        }
-        services = [:]
-        devices = [:]
-        publish()
-    }
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        services[service.name] = service
-        service.delegate = self
-        service.resolve(withTimeout: 5)
-    }
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didRemove service: NetService, moreComing: Bool) {
-        services[service.name] = nil
-        devices[service.name] = nil
-        publish()
-    }
-
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
-        onError("Android 匹配设备发现失败：\(errorDict)")
-    }
-
-    func netServiceDidResolveAddress(_ sender: NetService) {
-        guard let hostName = sender.hostName,
-              sender.port > 0,
-              sender.port <= UInt16.max else {
-            return
-        }
-
-        devices[sender.name] = AndroidPairingDevice(
-            id: "\(sender.name)@\(hostName):\(sender.port)",
-            name: sender.name,
-            host: hostName,
-            port: UInt16(sender.port)
-        )
-        publish()
-    }
-
-    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
-        onError("Android 匹配设备解析失败：\(errorDict)")
-    }
-
-    private func publish() {
-        onDevicesChanged(devices.values.sorted { $0.name < $1.name })
-    }
-}
-
-@MainActor
-private final class AndroidPairingAssociationClient {
-    private let connection: NWConnection
-    private let frame: Data
-    private var continuation: CheckedContinuation<AndroidPairingAssociationResponse, Error>?
-    private var buffer = Data()
-    private var didFinish = false
-
-    private init(device: AndroidPairingDevice, frame: Data) throws {
-        guard let port = NWEndpoint.Port(rawValue: device.port) else {
-            throw AndroidAssociationError.invalidRequest
-        }
-        self.connection = NWConnection(host: NWEndpoint.Host(device.host), port: port, using: .tcp)
-        self.frame = frame
-    }
-
-    static func associate(
-        device: AndroidPairingDevice,
-        request: AndroidPairingAssociationRequest
-    ) async throws -> AndroidPairingAssociationResponse {
-        guard let requestData = try? JSONEncoder().encode(request),
-              let frame = try? CarrierWireFrame.encode(requestData) else {
-            throw AndroidAssociationError.invalidRequest
-        }
-
-        let client = try AndroidPairingAssociationClient(device: device, frame: frame)
-        return try await client.start()
-    }
-
-    private func start() async throws -> AndroidPairingAssociationResponse {
-        try await withCheckedThrowingContinuation { continuation in
-            self.continuation = continuation
-
-            connection.stateUpdateHandler = { state in
-                Task { @MainActor in
-                    self.handleState(state)
-                }
-            }
-            connection.start(queue: .main)
-        }
-    }
-
-    private func handleState(_ state: NWConnection.State) {
-        switch state {
-        case .ready:
-            connection.send(content: frame, completion: .contentProcessed { error in
-                Task { @MainActor in
-                    if let error {
-                        self.finish(.failure(error))
-                    } else {
-                        self.receive()
-                    }
-                }
-            })
-        case .failed(let error):
-            finish(.failure(error))
-        default:
-            break
-        }
-    }
-
-    private func receive() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, isComplete, error in
-            Task { @MainActor in
-                if let error {
-                    self.finish(.failure(error))
-                    return
-                }
-                if let data, !data.isEmpty {
-                    self.buffer.append(data)
-                    do {
-                        if let payload = try CarrierWireFrame.nextPayload(from: &self.buffer) {
-                            let response = try JSONDecoder().decode(AndroidPairingAssociationResponse.self, from: payload)
-                            self.finish(.success(response))
-                            return
-                        }
-                    } catch {
-                        self.finish(.failure(error))
-                        return
-                    }
-                }
-                if isComplete {
-                    self.finish(.failure(AndroidAssociationError.connectionClosed))
-                } else {
-                    self.receive()
-                }
-            }
-        }
-    }
-
-    private func finish(_ result: Result<AndroidPairingAssociationResponse, Error>) {
-        guard !didFinish else {
-            return
-        }
-        didFinish = true
-        connection.cancel()
-        continuation?.resume(with: result)
-        continuation = nil
-    }
-}
-
-private enum AndroidAssociationError: LocalizedError {
-    case invalidRequest
-    case connectionClosed
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidRequest:
-            "关联请求无效。"
-        case .connectionClosed:
-            "关联连接已关闭。"
-        }
     }
 }
 

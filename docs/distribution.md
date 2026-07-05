@@ -37,6 +37,34 @@ DEVELOPMENT_TEAM = YOURTEAMID
 
 `Configs/Signing.local.xcconfig` 已被 Git 忽略，应只保留在本机。
 
+### Android 侧载签名
+
+Android APK 即使走侧载路线也需要签名。TypeCarrier 的 Android release 构建会从 `Apps/Android/local.properties` 或环境变量读取签名配置；`local.properties` 已被 Git 忽略。
+
+首次在本机创建 release keystore：
+
+```sh
+script/setup_android_release_signing.sh
+```
+
+脚本会生成 `~/.typecarrier/android-release.jks`，并把下面这些本机配置写入 `Apps/Android/local.properties`：
+
+```properties
+typecarrier.android.release.storeFile=/absolute/path/to/android-release.jks
+typecarrier.android.release.storePassword=...
+typecarrier.android.release.keyAlias=typecarrier-release
+typecarrier.android.release.keyPassword=...
+```
+
+构建本机 release APK：
+
+```sh
+cd Apps/Android
+./gradlew testDebugUnitTest assembleRelease
+```
+
+输出文件为 `Apps/Android/app/build/outputs/apk/release/app-release.apk`。后续发布给用户侧载的 APK 应保持使用同一份 keystore，否则同一个 `applicationId` 不能覆盖升级已有安装。
+
 ## 官方发布
 
 官方 App Store 或 Mac 版本应从可信本机或私有发布环境归档。不要把证书、provisioning profile、App Store Connect API key 或私有发布配置提交到公开仓库。
@@ -130,6 +158,10 @@ Release workflow 会自动生成 Android APK 和 macOS Developer ID notarized DM
 
 | Secret | 内容 |
 | --- | --- |
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | Android release keystore 文件的 base64 内容 |
+| `ANDROID_RELEASE_STORE_PASSWORD` | Android release keystore 密码 |
+| `ANDROID_RELEASE_KEY_ALIAS` | Android release key alias，例如 `typecarrier-release` |
+| `ANDROID_RELEASE_KEY_PASSWORD` | Android release key 密码 |
 | `DEVELOPER_ID_CERTIFICATE_BASE64` | Developer ID Application `.p12` 证书的 base64 内容 |
 | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | 导出 `.p12` 时设置的密码 |
 | `APPLE_TEAM_ID` | Apple Developer Team ID，例如 `4H8462MSN6` |
@@ -138,6 +170,12 @@ Release workflow 会自动生成 Android APK 和 macOS Developer ID notarized DM
 | `APPSTORE_CONNECT_API_PRIVATE_KEY` | App Store Connect API `.p8` 私钥全文 |
 
 推荐在 App Store Connect 的 `Users and Access` -> `Integrations` 里创建 API Key，用于 CI notarization。不要把 Apple ID 密码或 app-specific password 写进仓库。
+
+导出 Android keystore secret：
+
+```sh
+base64 -i ~/.typecarrier/android-release.jks | pbcopy
+```
 
 导出 Developer ID `.p12` 时，用 Keychain Access 选中 `Developer ID Application` 证书及其私钥，导出为 `.p12`，设置一个强密码。然后在本机转换为 GitHub Secret 可用的 base64：
 
@@ -148,6 +186,8 @@ base64 -i DeveloperIDApplication.p12 | pbcopy
 Release workflow 会在 macOS runner 上创建临时 keychain、导入证书、执行 `script/package_macos_developer_id_dmg.sh`，并把生成的 DMG 与 `.sha256` 上传到 draft prerelease。由于 job 绑定了 `release-signing` environment，签名材料只有在该 environment 被批准后才会暴露给 runner。
 
 Release workflow 固定使用 `macos-26` runner，避免 `macos-latest` 迁移期间拿到不兼容的 Xcode 版本。
+
+Android 侧也提供独立的 `Android Release APK` workflow，用于只验证和产出签名 APK。该 workflow 读取同一组 Android secrets，执行 `./gradlew testDebugUnitTest assembleRelease`，并上传 `TypeCarrier-Android-<version>.apk` 与 `.sha256` 作为 Actions artifact。
 
 ## GitHub Actions
 

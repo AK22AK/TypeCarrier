@@ -6,10 +6,70 @@ import os
 extension MCPeerID: @unchecked @retroactive Sendable {}
 extension MCSessionState: @unchecked @retroactive Sendable {}
 
-private enum ReceiverDiscoveryInfo {
+public enum CarrierReceiverDiscoveryInfo {
     static let availabilityKey = "receiverAvailability"
     static let availableValue = "available"
     static let busyValue = "busy"
+    static let instanceStartedAtKey = "receiverInstanceStartedAt"
+    public static let appBundleIDKey = "appBundleID"
+    public static let appVariantKey = "appVariant"
+}
+
+private struct PeerDiscoveryIdentity: Equatable {
+    let key: String
+    let displayName: String
+    let diagnosticSummary: String
+
+    init(peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        self.init(
+            displayName: peerID.displayName,
+            discoveryInfo: discoveryInfo
+        )
+    }
+
+    init(displayName: String, discoveryInfo: [String: String]?) {
+        self.displayName = displayName
+        let parts = Self.identityParts(displayName: displayName, discoveryInfo: discoveryInfo)
+        key = parts.joined(separator: "|")
+        diagnosticSummary = parts.joined(separator: " ")
+    }
+
+    init(key: String, displayName: String) {
+        self.key = key
+        self.displayName = displayName
+        diagnosticSummary = key
+    }
+
+    private static func identityParts(displayName: String, discoveryInfo: [String: String]?) -> [String] {
+        if let macID = normalizedValue(AndroidBonjourAdvertisement.macIDKey, from: discoveryInfo) {
+            var parts = ["macID=\(macID)"]
+            append(CarrierReceiverDiscoveryInfo.appBundleIDKey, from: discoveryInfo, to: &parts)
+            append(CarrierReceiverDiscoveryInfo.appVariantKey, from: discoveryInfo, to: &parts)
+            return parts
+        }
+
+        var parts = ["name=\(displayName)"]
+        append(CarrierReceiverDiscoveryInfo.appBundleIDKey, from: discoveryInfo, to: &parts)
+        append(CarrierReceiverDiscoveryInfo.appVariantKey, from: discoveryInfo, to: &parts)
+        return parts
+    }
+
+    private static func append(_ key: String, from discoveryInfo: [String: String]?, to parts: inout [String]) {
+        guard let value = normalizedValue(key, from: discoveryInfo) else {
+            return
+        }
+
+        parts.append("\(key)=\(value)")
+    }
+
+    private static func normalizedValue(_ key: String, from discoveryInfo: [String: String]?) -> String? {
+        guard let value = discoveryInfo?[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+
+        return value
+    }
 }
 
 public struct CarrierDiagnosticEvent: Identifiable, Equatable, Sendable {
@@ -148,7 +208,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let connectionRetryDelay: Duration
     private let inviteTimeout: TimeInterval
     private let maxConnectionAttempts: Int
+    private let discoveryInviteDelay: Duration
     private let receiverDiscoveryInfoExtras: [String: String]
+    private let receiverInstanceStartedAt: String
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private nonisolated(unsafe) var session: MCSession
     private nonisolated(unsafe) var activeReceiverPeerName: String?
@@ -157,10 +219,15 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private var searchTimeoutTask: Task<Void, Never>?
     private var connectionTimeoutTask: Task<Void, Never>?
     private var connectionRetryTask: Task<Void, Never>?
+    private var pendingPeerInviteTasks: [String: Task<Void, Never>] = [:]
     private var knownPeerIDs: [String: MCPeerID] = [:]
+    private var peerDiscoveryFreshness: [String: Double] = [:]
     private var invitedPeerIDs: Set<String> = []
     private var connectionAttemptCounts: [String: Int] = [:]
+    private var peerIdentityKeysByObject: [ObjectIdentifier: String] = [:]
+    private var peerDisplayNamesByIdentity: [String: String] = [:]
     private var connectingPeerName: String?
+    private var connectingPeerIdentityKey: String?
     private var envelopeHandler: ((CarrierEnvelope, MCPeerID) -> Void)?
     private let logger = Logger(subsystem: "ak22ak.typecarrier", category: "MultipeerCarrierService")
     private let maxDiagnosticEventCount = 50
@@ -176,6 +243,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectionRetryDelay: Duration = .seconds(1),
         inviteTimeout: TimeInterval = 6,
         maxConnectionAttempts: Int = 3,
+        discoveryInviteDelay: Duration = .milliseconds(250),
         receiverDiscoveryInfoExtras: [String: String] = [:],
         diagnosticLogFileURL: URL? = nil
     ) {
@@ -185,7 +253,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.connectionRetryDelay = connectionRetryDelay
         self.inviteTimeout = inviteTimeout
         self.maxConnectionAttempts = max(1, maxConnectionAttempts)
+        self.discoveryInviteDelay = discoveryInviteDelay
         self.receiverDiscoveryInfoExtras = receiverDiscoveryInfoExtras
+        receiverInstanceStartedAt = String(Date().timeIntervalSince1970)
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
         let localPeerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
         peerID = localPeerID
@@ -224,12 +294,17 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         cancelSearchTimeout()
         cancelConnectionTimeout()
         cancelConnectionRetry()
+        cancelPendingPeerInvites()
         connectionState = .idle
         discoveredPeers = []
         knownPeerIDs = [:]
+        peerDiscoveryFreshness = [:]
         invitedPeerIDs = []
         connectionAttemptCounts = [:]
+        peerIdentityKeysByObject = [:]
+        peerDisplayNamesByIdentity = [:]
         connectingPeerName = nil
+        connectingPeerIdentityKey = nil
         activeReceiverPeerName = nil
         recordDiagnosticEvent("service.stop", message: "Stopped \(roleName)")
     }
@@ -329,9 +404,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     private static func receiverNeedsServiceRebuildAfterNotConnected(from previousState: ConnectionState) -> Bool {
         switch previousState {
-        case .connecting, .connected:
+        case .connected:
             true
-        case .idle, .searching, .advertising, .reconnecting, .failed:
+        case .idle, .searching, .advertising, .connecting, .reconnecting, .failed:
             false
         }
     }
@@ -342,12 +417,13 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
 
         var info = receiverDiscoveryInfoExtras
-        info[ReceiverDiscoveryInfo.availabilityKey] = receiverAvailabilityDiscoveryValue
+        info[CarrierReceiverDiscoveryInfo.availabilityKey] = receiverAvailabilityDiscoveryValue
+        info[CarrierReceiverDiscoveryInfo.instanceStartedAtKey] = receiverInstanceStartedAt
         return info
     }
 
     private var receiverAvailabilityDiscoveryValue: String {
-        isReceiverBusyForDiscovery ? ReceiverDiscoveryInfo.busyValue : ReceiverDiscoveryInfo.availableValue
+        isReceiverBusyForDiscovery ? CarrierReceiverDiscoveryInfo.busyValue : CarrierReceiverDiscoveryInfo.availableValue
     }
 
     private var isReceiverBusyForDiscovery: Bool {
@@ -366,117 +442,221 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         )
     }
 
-    private func rememberDiscoveredPeer(_ peerID: MCPeerID) {
-        let key = peerID.displayName
-        knownPeerIDs[key] = peerID
+    private func rememberDiscoveredPeer(_ peerID: MCPeerID, discoveryInfo: [String: String]?) -> (identity: PeerDiscoveryIdentity, accepted: Bool) {
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: discoveryInfo)
+        let accepted = shouldAcceptDiscoveredPeer(identity: identity, discoveryInfo: discoveryInfo)
+        if accepted {
+            remember(identity, for: peerID)
+            knownPeerIDs[identity.key] = peerID
+            if let freshness = Self.receiverInstanceStartedAt(from: discoveryInfo) {
+                peerDiscoveryFreshness[identity.key] = freshness
+            }
+        }
 
-        if !discoveredPeers.contains(where: { $0.id == key }) {
-            discoveredPeers.append(CarrierPeer(peerID: peerID))
+        if let index = discoveredPeers.firstIndex(where: { $0.id == identity.key }) {
+            if accepted, discoveredPeers[index].displayName != identity.displayName {
+                discoveredPeers[index] = CarrierPeer(id: identity.key, displayName: identity.displayName)
+                updateDiagnostics()
+            }
+        } else if accepted {
+            discoveredPeers.append(CarrierPeer(id: identity.key, displayName: identity.displayName))
             updateDiagnostics()
         }
+
+        return (identity, accepted)
     }
 
-    private func rememberAndInvite(_ peerID: MCPeerID) {
-        let key = peerID.displayName
-        rememberDiscoveredPeer(peerID)
-
-        guard !invitedPeerIDs.contains(key), session.connectedPeers.isEmpty else {
-            logger.debug("Skipping invite peer=\(key, privacy: .public) alreadyInvited=\(self.invitedPeerIDs.contains(key), privacy: .public) connectedCount=\(self.session.connectedPeers.count, privacy: .public)")
-            recordDiagnosticEvent("browser.inviteSkipped", message: "alreadyInvited=\(invitedPeerIDs.contains(key)) connectedCount=\(session.connectedPeers.count)", peerName: key)
+    private func rememberAndInvite(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        let rememberedPeer = rememberDiscoveredPeer(peerID, discoveryInfo: discoveryInfo)
+        guard rememberedPeer.accepted else {
+            recordDiagnosticEvent(
+                "browser.ignoredStalePeer",
+                message: "Ignored older discovery record \(rememberedPeer.identity.diagnosticSummary)",
+                peerName: rememberedPeer.identity.displayName
+            )
             return
         }
 
-        invitedPeerIDs.insert(key)
-        let attempt = (connectionAttemptCounts[key] ?? 0) + 1
-        connectionAttemptCounts[key] = attempt
-        cancelSearchTimeout()
-        connectingPeerName = key
-        connectionState = .connecting(peerID.displayName)
-        scheduleConnectionTimeout(for: key)
-        browser?.invitePeer(peerID, to: session, withContext: nil, timeout: inviteTimeout)
-        recordDiagnosticEvent("browser.invitePeer", message: "Invited peer attempt \(attempt)/\(maxConnectionAttempts)", peerName: key)
-        logger.info("Invited peer=\(key, privacy: .public)")
+        inviteRememberedPeer(peerID, identity: rememberedPeer.identity)
     }
 
-    private func handleBusyDiscoveredPeer(_ peerID: MCPeerID) {
-        let peerName = peerID.displayName
-        rememberDiscoveredPeer(peerID)
-        cancelConnectionTimeout()
-        invitedPeerIDs.remove(peerName)
-        connectingPeerName = nil
+    private func scheduleRememberAndInvite(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        let rememberedPeer = rememberDiscoveredPeer(peerID, discoveryInfo: discoveryInfo)
+        guard rememberedPeer.accepted else {
+            recordDiagnosticEvent(
+                "browser.ignoredStalePeer",
+                message: "Ignored older discovery record \(rememberedPeer.identity.diagnosticSummary)",
+                peerName: rememberedPeer.identity.displayName
+            )
+            return
+        }
+
+        pendingPeerInviteTasks[rememberedPeer.identity.key]?.cancel()
+        let identityKey = rememberedPeer.identity.key
+        pendingPeerInviteTasks[identityKey] = Task.detached { [weak self, discoveryInviteDelay] in
+            do {
+                try await Task.sleep(for: discoveryInviteDelay)
+            } catch {
+                return
+            }
+
+            await self?.finishPendingPeerInvite(identityKey: identityKey)
+        }
+    }
+
+    private func finishPendingPeerInvite(identityKey: String) {
+        pendingPeerInviteTasks[identityKey] = nil
+        guard let peerID = knownPeerIDs[identityKey] else {
+            return
+        }
+
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: nil)
+        inviteRememberedPeer(peerID, identity: identity)
+    }
+
+    private func inviteRememberedPeer(_ peerID: MCPeerID, identity: PeerDiscoveryIdentity) {
+        guard !invitedPeerIDs.contains(identity.key), session.connectedPeers.isEmpty else {
+            logger.debug("Skipping invite peer=\(identity.displayName, privacy: .public) alreadyInvited=\(self.invitedPeerIDs.contains(identity.key), privacy: .public) connectedCount=\(self.session.connectedPeers.count, privacy: .public)")
+            recordDiagnosticEvent("browser.inviteSkipped", message: "alreadyInvited=\(invitedPeerIDs.contains(identity.key)) connectedCount=\(session.connectedPeers.count) \(identity.diagnosticSummary)", peerName: identity.displayName)
+            return
+        }
+
+        invitedPeerIDs.insert(identity.key)
+        let attempt = (connectionAttemptCounts[identity.key] ?? 0) + 1
+        connectionAttemptCounts[identity.key] = attempt
+        cancelSearchTimeout()
+        connectingPeerName = identity.displayName
+        connectingPeerIdentityKey = identity.key
+        connectionState = .connecting(peerID.displayName)
+        scheduleConnectionTimeout(for: identity)
+        browser?.invitePeer(peerID, to: session, withContext: nil, timeout: inviteTimeout)
+        recordDiagnosticEvent("browser.invitePeer", message: "Invited peer attempt \(attempt)/\(maxConnectionAttempts) \(identity.diagnosticSummary)", peerName: identity.displayName)
+        logger.info("Invited peer=\(identity.displayName, privacy: .public)")
+    }
+
+    private func handleBusyDiscoveredPeer(_ peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        let rememberedPeer = rememberDiscoveredPeer(peerID, discoveryInfo: discoveryInfo)
+        let identity = rememberedPeer.identity
+        guard rememberedPeer.accepted else {
+            recordDiagnosticEvent(
+                "browser.ignoredStaleBusyPeer",
+                message: "Ignored older busy discovery record \(identity.diagnosticSummary)",
+                peerName: identity.displayName
+            )
+            return
+        }
+
+        pendingPeerInviteTasks[identity.key]?.cancel()
+        pendingPeerInviteTasks[identity.key] = nil
+        let isCurrentConnectionAttempt = connectingPeerIdentityKey == identity.key
+        if isCurrentConnectionAttempt {
+            cancelConnectionTimeout()
+            connectingPeerName = nil
+            connectingPeerIdentityKey = nil
+        }
+        invitedPeerIDs.remove(identity.key)
         lastErrorMessage = nil
         if case .failed = connectionState {
             connectionState = .searching
         }
         recordDiagnosticEvent(
             "browser.foundBusyPeer",
-            message: "Receiver advertised busy availability",
-            peerName: peerName
+            message: "Receiver advertised busy availability \(identity.diagnosticSummary)",
+            peerName: identity.displayName
         )
+    }
+
+    private func handleLostPeer(_ peerID: MCPeerID) {
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: nil)
+        logger.info("Lost peer=\(identity.displayName, privacy: .public)")
+        let lostPeerIsCurrentKnownPeer = knownPeerIDs[identity.key].map(ObjectIdentifier.init) == ObjectIdentifier(peerID)
+        if lostPeerIsCurrentKnownPeer || knownPeerIDs[identity.key] == nil {
+            discoveredPeers.removeAll { $0.id == identity.key }
+        }
+        peerIdentityKeysByObject[ObjectIdentifier(peerID)] = nil
+        if lostPeerIsCurrentKnownPeer {
+            knownPeerIDs[identity.key] = nil
+            peerDiscoveryFreshness[identity.key] = nil
+            invitedPeerIDs.remove(identity.key)
+            connectionAttemptCounts[identity.key] = nil
+            pendingPeerInviteTasks[identity.key]?.cancel()
+            pendingPeerInviteTasks[identity.key] = nil
+            peerDisplayNamesByIdentity[identity.key] = nil
+        }
+        if knownPeerIDs.isEmpty {
+            cancelConnectionRetry()
+        }
+        recordDiagnosticEvent("browser.lostPeer", message: "Lost peer \(identity.diagnosticSummary)", peerName: identity.displayName)
     }
 
     private func handleSessionState(_ state: MCSessionState, peerID: MCPeerID) {
         logger.info("Session state peer=\(peerID.displayName, privacy: .public) state=\(self.sessionStateName(state), privacy: .public)")
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: nil)
 
         switch state {
         case .connected:
-            knownPeerIDs[peerID.displayName] = peerID
+            knownPeerIDs[identity.key] = peerID
             cancelSearchTimeout()
             cancelConnectionTimeout()
             cancelConnectionRetry()
             connectingPeerName = nil
+            connectingPeerIdentityKey = nil
             lastErrorMessage = nil
-            connectionAttemptCounts[peerID.displayName] = nil
-            connectionState = .connected(peerID.displayName)
+            connectionAttemptCounts[identity.key] = nil
+            connectionState = .connected(identity.displayName)
             if case .receiver = role {
-                activeReceiverPeerName = peerID.displayName
+                activeReceiverPeerName = identity.displayName
                 refreshReceiverDiscoveryInfoIfAdvertising()
             }
-            recordDiagnosticEvent("session.connected", message: "Session connected", peerName: peerID.displayName)
+            recordDiagnosticEvent("session.connected", message: "Session connected \(identity.diagnosticSummary)", peerName: identity.displayName)
         case .connecting:
-            knownPeerIDs[peerID.displayName] = peerID
+            knownPeerIDs[identity.key] = peerID
             cancelSearchTimeout()
             cancelConnectionRetry()
-            connectingPeerName = peerID.displayName
-            scheduleConnectionTimeout(for: peerID.displayName)
-            connectionState = .connecting(peerID.displayName)
-            recordDiagnosticEvent("session.connecting", message: "Session connecting", peerName: peerID.displayName)
+            connectingPeerName = identity.displayName
+            connectingPeerIdentityKey = identity.key
+            scheduleConnectionTimeout(for: identity)
+            connectionState = .connecting(identity.displayName)
+            recordDiagnosticEvent("session.connecting", message: "Session connecting \(identity.diagnosticSummary)", peerName: identity.displayName)
         case .notConnected:
             let previousState = connectionState
-            invitedPeerIDs.remove(peerID.displayName)
+            invitedPeerIDs.remove(identity.key)
             cancelConnectionTimeout()
             connectingPeerName = nil
+            connectingPeerIdentityKey = nil
             var shouldRequestReceiverRebuild = false
 
             if case .receiver = role {
                 shouldRequestReceiverRebuild = Self.receiverNeedsServiceRebuildAfterNotConnected(from: previousState)
-                if activeReceiverPeerName == peerID.displayName {
+                if activeReceiverPeerName == identity.displayName {
                     activeReceiverPeerName = nil
                 }
                 connectionState = .advertising
-                refreshReceiverDiscoveryInfoIfAdvertising()
+                if shouldRequestReceiverRebuild {
+                    refreshReceiverDiscoveryInfoIfAdvertising()
+                }
             } else if case .connected = previousState {
-                replaceSession(reason: "session.resetAfterNotConnected", peerName: peerID.displayName)
+                replaceSession(reason: "session.resetAfterNotConnected", peerName: identity.displayName)
                 returnToSearchingAfterConnectionAttempt()
             } else if case .connecting = previousState {
-                replaceSession(reason: "session.resetAfterNotConnected", peerName: peerID.displayName)
+                replaceSession(reason: "session.resetAfterNotConnected", peerName: identity.displayName)
                 returnToSearchingAfterConnectionAttempt()
             } else if case .reconnecting = previousState {
-                replaceSession(reason: "session.resetAfterNotConnected", peerName: peerID.displayName)
+                replaceSession(reason: "session.resetAfterNotConnected", peerName: identity.displayName)
                 returnToSearchingAfterConnectionAttempt()
             }
-            recordDiagnosticEvent("session.notConnected", message: "Previous state: \(previousState.displayText)", peerName: peerID.displayName)
+            recordDiagnosticEvent("session.notConnected", message: "Previous state: \(previousState.displayText) \(identity.diagnosticSummary)", peerName: identity.displayName)
             if shouldRequestReceiverRebuild {
                 recordDiagnosticEvent(
                     "receiver.rebuildRequested",
                     message: "Receiver session ended from \(previousState.displayText); requesting service rebuild.",
-                    peerName: peerID.displayName
+                    peerName: identity.displayName
                 )
-                receiverSessionInvalidatedHandler?(peerID.displayName, previousState)
+                receiverSessionInvalidatedHandler?(identity.displayName, previousState)
             }
         @unknown default:
             connectionState = .failed("Unknown connection state")
-            recordDiagnosticEvent("session.unknownState", message: "Unknown connection state", peerName: peerID.displayName)
+            recordDiagnosticEvent("session.unknownState", message: "Unknown connection state", peerName: identity.displayName)
         }
     }
 
@@ -522,7 +702,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         searchTimeoutTask = nil
     }
 
-    private func scheduleConnectionTimeout(for peerName: String) {
+    private func scheduleConnectionTimeout(for identity: PeerDiscoveryIdentity) {
         cancelConnectionTimeout()
 
         connectionTimeoutTask = Task { @MainActor [weak self, connectionTimeout] in
@@ -533,7 +713,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             }
 
             self?.connectionTimeoutTask = nil
-            self?.handleConnectionTimeout(for: peerName)
+            self?.handleConnectionTimeout(for: identity)
         }
     }
 
@@ -568,20 +748,34 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectionRetryTask = nil
     }
 
+    private func cancelPendingPeerInvites() {
+        for task in pendingPeerInviteTasks.values {
+            task.cancel()
+        }
+        pendingPeerInviteTasks = [:]
+    }
+
     private func retryKnownPeer() {
         guard case .sender = role,
               connectionState.isWaitingToRetryKnownPeer,
               session.connectedPeers.isEmpty,
-              let peerID = knownPeerIDs.values.sorted(by: { $0.displayName < $1.displayName }).first else {
+              let knownPeer = nextKnownPeer() else {
             return
         }
 
-        let peerName = peerID.displayName
-        knownPeerIDs[peerName] = nil
-        invitedPeerIDs.remove(peerName)
-        discoveredPeers.removeAll { $0.id == peerName }
+        knownPeerIDs[knownPeer.identity.key] = nil
+        peerDiscoveryFreshness[knownPeer.identity.key] = nil
+        pendingPeerInviteTasks[knownPeer.identity.key]?.cancel()
+        pendingPeerInviteTasks[knownPeer.identity.key] = nil
+        invitedPeerIDs.remove(knownPeer.identity.key)
+        discoveredPeers.removeAll { $0.id == knownPeer.identity.key }
+        peerDisplayNamesByIdentity[knownPeer.identity.key] = nil
         updateDiagnostics()
-        recordDiagnosticEvent("browser.retryKnownPeer", message: "Refreshing known peer discovery before retry", peerName: peerName)
+        recordDiagnosticEvent(
+            "browser.retryKnownPeer",
+            message: "Refreshing known peer discovery before retry \(knownPeer.identity.diagnosticSummary)",
+            peerName: knownPeer.identity.displayName
+        )
 #if DEBUG
         if usesSimulatedDiscoveryForTesting {
             connectionState = .searching
@@ -621,32 +815,38 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         startBrowsing()
     }
 
-    private func handleConnectionTimeout(for peerName: String) {
+    private func handleConnectionTimeout(for identity: PeerDiscoveryIdentity) {
         guard case .sender = role,
               case .connecting(let currentPeerName) = connectionState,
-              currentPeerName == peerName,
+              currentPeerName == identity.displayName,
+              connectingPeerIdentityKey == identity.key,
               session.connectedPeers.isEmpty else {
             return
         }
 
-        logger.info("Connection timed out peer=\(peerName, privacy: .public) after \(String(describing: self.connectionTimeout), privacy: .public)")
-        invitedPeerIDs.remove(peerName)
+        logger.info("Connection timed out peer=\(identity.displayName, privacy: .public) after \(String(describing: self.connectionTimeout), privacy: .public)")
+        invitedPeerIDs.remove(identity.key)
         connectingPeerName = nil
-        replaceSession(reason: "session.resetForRetry", peerName: peerName)
+        connectingPeerIdentityKey = nil
+        replaceSession(reason: "session.resetForRetry", peerName: identity.displayName)
         returnToSearchingAfterConnectionAttempt()
-        recordDiagnosticEvent("connection.timeout", message: "Connection timed out after \(String(describing: connectionTimeout))", peerName: peerName)
+        recordDiagnosticEvent(
+            "connection.timeout",
+            message: "Connection timed out after \(String(describing: connectionTimeout)) \(identity.diagnosticSummary)",
+            peerName: identity.displayName
+        )
     }
 
     private func returnToSearchingAfterConnectionAttempt() {
         cancelConnectionTimeout()
         if session.connectedPeers.isEmpty,
-           let peerID = knownPeerIDs.values.sorted(by: { $0.displayName < $1.displayName }).first {
-            guard (connectionAttemptCounts[peerID.displayName] ?? 0) < maxConnectionAttempts else {
-                failAfterConnectionRetryBudget(for: peerID.displayName)
+           let knownPeer = nextKnownPeer() {
+            guard (connectionAttemptCounts[knownPeer.identity.key] ?? 0) < maxConnectionAttempts else {
+                failAfterConnectionRetryBudget(for: knownPeer.identity)
                 return
             }
 
-            connectionState = .reconnecting(peerID.displayName)
+            connectionState = .reconnecting(knownPeer.identity.displayName)
         } else {
             connectionState = .searching
         }
@@ -664,19 +864,20 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         updateDiagnostics()
     }
 
-    private func failAfterConnectionRetryBudget(for peerName: String) {
+    private func failAfterConnectionRetryBudget(for identity: PeerDiscoveryIdentity) {
         cancelSearchTimeout()
         cancelConnectionTimeout()
         cancelConnectionRetry()
         stopBrowsing()
-        invitedPeerIDs.remove(peerName)
+        invitedPeerIDs.remove(identity.key)
         connectingPeerName = nil
-        lastErrorMessage = "Could not connect to \(peerName)."
+        connectingPeerIdentityKey = nil
+        lastErrorMessage = "Could not connect to \(identity.displayName)."
         connectionState = .failed(lastErrorMessage ?? "Could not connect.")
         recordDiagnosticEvent(
             "connection.retryBudgetExceeded",
-            message: "Stopped after \(connectionAttemptCounts[peerName] ?? maxConnectionAttempts) connection attempts",
-            peerName: peerName
+            message: "Stopped after \(connectionAttemptCounts[identity.key] ?? maxConnectionAttempts) connection attempts \(identity.diagnosticSummary)",
+            peerName: identity.displayName
         )
     }
 
@@ -688,12 +889,29 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     func simulateFoundPeerForTesting(_ peerID: MCPeerID, discoveryInfo: [String: String]? = nil) {
         usesSimulatedDiscoveryForTesting = true
-        recordDiagnosticEvent("browser.foundPeer", message: "Found peer", peerName: peerID.displayName)
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: discoveryInfo)
+        recordDiagnosticEvent("browser.foundPeer", message: "Found peer \(identity.diagnosticSummary)", peerName: identity.displayName)
         if Self.isBusyReceiverDiscoveryInfo(discoveryInfo) {
-            handleBusyDiscoveredPeer(peerID)
+            handleBusyDiscoveredPeer(peerID, discoveryInfo: discoveryInfo)
         } else {
-            rememberAndInvite(peerID)
+            rememberAndInvite(peerID, discoveryInfo: discoveryInfo)
         }
+    }
+
+    func simulateBrowserFoundPeerForTesting(_ peerID: MCPeerID, discoveryInfo: [String: String]? = nil) {
+        usesSimulatedDiscoveryForTesting = true
+        let identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: discoveryInfo)
+        recordDiagnosticEvent("browser.foundPeer", message: "Found peer \(identity.diagnosticSummary)", peerName: identity.displayName)
+        if Self.isBusyReceiverDiscoveryInfo(discoveryInfo) {
+            handleBusyDiscoveredPeer(peerID, discoveryInfo: discoveryInfo)
+        } else {
+            scheduleRememberAndInvite(peerID, discoveryInfo: discoveryInfo)
+        }
+    }
+
+    func simulateLostPeerForTesting(_ peerID: MCPeerID) {
+        usesSimulatedDiscoveryForTesting = true
+        handleLostPeer(peerID)
     }
 
     func simulateSessionStateForTesting(_ state: MCSessionState, peerID: MCPeerID) {
@@ -735,7 +953,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         diagnostics = diagnostics.updating(
             connectionState: connectionState,
             discoveredPeers: discoveredPeers.map(\.displayName).sorted(),
-            invitedPeers: invitedPeerIDs.sorted(),
+            invitedPeers: invitedPeerDisplayNames(),
             connectedPeers: connectedPeerNames(),
             lastErrorMessage: lastErrorMessage
         )
@@ -745,7 +963,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         var updated = diagnostics.updating(
             connectionState: connectionState,
             discoveredPeers: discoveredPeers.map(\.displayName).sorted(),
-            invitedPeers: invitedPeerIDs.sorted(),
+            invitedPeers: invitedPeerDisplayNames(),
             connectedPeers: connectedPeerNames(),
             lastErrorMessage: lastErrorMessage
         )
@@ -783,12 +1001,88 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         return false
     }
 
+    nonisolated private func shouldReuseReceiverSessionForInvitation(from peerName: String) -> Bool {
+        if connectedPeerNames().contains(peerName) {
+            return true
+        }
+
+        return activeReceiverPeerName == peerName
+    }
+
     private func isCurrentBrowser(_ browser: MCNearbyServiceBrowser) -> Bool {
         self.browser === browser
     }
 
     private static func isBusyReceiverDiscoveryInfo(_ info: [String: String]?) -> Bool {
-        info?[ReceiverDiscoveryInfo.availabilityKey] == ReceiverDiscoveryInfo.busyValue
+        info?[CarrierReceiverDiscoveryInfo.availabilityKey] == CarrierReceiverDiscoveryInfo.busyValue
+    }
+
+    private static func receiverInstanceStartedAt(from discoveryInfo: [String: String]?) -> Double? {
+        guard let value = discoveryInfo?[CarrierReceiverDiscoveryInfo.instanceStartedAtKey] else {
+            return nil
+        }
+
+        return Double(value)
+    }
+
+    private func shouldAcceptDiscoveredPeer(identity: PeerDiscoveryIdentity, discoveryInfo: [String: String]?) -> Bool {
+        guard let candidateFreshness = Self.receiverInstanceStartedAt(from: discoveryInfo) else {
+            return peerDiscoveryFreshness[identity.key] == nil
+        }
+
+        guard let currentFreshness = peerDiscoveryFreshness[identity.key] else {
+            return true
+        }
+
+        return candidateFreshness >= currentFreshness
+    }
+
+    private func peerDiscoveryIdentity(for peerID: MCPeerID, discoveryInfo: [String: String]?) -> PeerDiscoveryIdentity {
+        if let discoveryInfo {
+            return PeerDiscoveryIdentity(peerID: peerID, discoveryInfo: discoveryInfo)
+        }
+
+        let objectID = ObjectIdentifier(peerID)
+        if let key = peerIdentityKeysByObject[objectID],
+           let displayName = peerDisplayNamesByIdentity[key] {
+            return PeerDiscoveryIdentity(key: key, displayName: displayName)
+        }
+
+        let identity = PeerDiscoveryIdentity(peerID: peerID, discoveryInfo: nil)
+        remember(identity, for: peerID)
+        return identity
+    }
+
+    private func remember(_ identity: PeerDiscoveryIdentity, for peerID: MCPeerID) {
+        peerIdentityKeysByObject[ObjectIdentifier(peerID)] = identity.key
+        peerDisplayNamesByIdentity[identity.key] = identity.displayName
+    }
+
+    private func nextKnownPeer() -> (identity: PeerDiscoveryIdentity, peerID: MCPeerID)? {
+        knownPeerIDs
+            .map { key, peerID in
+                (
+                    identity: PeerDiscoveryIdentity(
+                        key: key,
+                        displayName: peerDisplayNamesByIdentity[key] ?? peerID.displayName
+                    ),
+                    peerID: peerID
+                )
+            }
+            .sorted {
+                if $0.identity.displayName == $1.identity.displayName {
+                    return $0.identity.key < $1.identity.key
+                }
+
+                return $0.identity.displayName < $1.identity.displayName
+            }
+            .first
+    }
+
+    private func invitedPeerDisplayNames() -> [String] {
+        invitedPeerIDs
+            .map { peerDisplayNamesByIdentity[$0] ?? $0 }
+            .sorted()
     }
 }
 
@@ -826,12 +1120,13 @@ extension MultipeerCarrierService: MCNearbyServiceBrowserDelegate {
                 return
             }
 
-            self.logger.info("Found peer=\(peerID.displayName, privacy: .public)")
-            self.recordDiagnosticEvent("browser.foundPeer", message: "Found peer", peerName: peerID.displayName)
+            let identity = self.peerDiscoveryIdentity(for: peerID, discoveryInfo: info)
+            self.logger.info("Found peer=\(identity.displayName, privacy: .public)")
+            self.recordDiagnosticEvent("browser.foundPeer", message: "Found peer \(identity.diagnosticSummary)", peerName: identity.displayName)
             if Self.isBusyReceiverDiscoveryInfo(info) {
-                self.handleBusyDiscoveredPeer(peerID)
+                self.handleBusyDiscoveredPeer(peerID, discoveryInfo: info)
             } else {
-                self.rememberAndInvite(peerID)
+                self.scheduleRememberAndInvite(peerID, discoveryInfo: info)
             }
         }
     }
@@ -851,15 +1146,7 @@ extension MultipeerCarrierService: MCNearbyServiceBrowserDelegate {
                 return
             }
 
-            self.logger.info("Lost peer=\(peerID.displayName, privacy: .public)")
-            self.knownPeerIDs[peerID.displayName] = nil
-            self.invitedPeerIDs.remove(peerID.displayName)
-            self.connectionAttemptCounts[peerID.displayName] = nil
-            self.discoveredPeers.removeAll { $0.id == peerID.displayName }
-            if self.knownPeerIDs.isEmpty {
-                self.cancelConnectionRetry()
-            }
-            self.recordDiagnosticEvent("browser.lostPeer", message: "Lost peer", peerName: peerID.displayName)
+            self.handleLostPeer(peerID)
         }
     }
 
@@ -881,6 +1168,19 @@ extension MultipeerCarrierService: MCNearbyServiceAdvertiserDelegate {
         withContext context: Data?,
         invitationHandler: @escaping (Bool, MCSession?) -> Void
     ) {
+        if shouldReuseReceiverSessionForInvitation(from: peerID.displayName) {
+            let currentSession = session
+            Task { @MainActor [weak self] in
+                self?.recordDiagnosticEvent(
+                    "advertiser.invitation.acceptedExistingSession",
+                    message: "Accepted repeated invitation using current session",
+                    peerName: peerID.displayName
+                )
+            }
+            invitationHandler(true, currentSession)
+            return
+        }
+
         if shouldRejectInvitationFromPeer(named: peerID.displayName) {
             let connectedPeerName = activeReceiverPeerName ?? connectedPeerNames().joined(separator: ", ")
             Task { @MainActor [weak self] in
@@ -900,7 +1200,7 @@ extension MultipeerCarrierService: MCNearbyServiceAdvertiserDelegate {
         let freshSession = Self.makeSession(peerID: self.peerID)
         freshSession.delegate = self
         session = freshSession
-        activeReceiverPeerName = nil
+        activeReceiverPeerName = peerID.displayName
 
         Task { @MainActor [weak self] in
             self?.recordDiagnosticEvent(

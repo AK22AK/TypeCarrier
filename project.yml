@@ -11,8 +11,8 @@ settings:
     CLANG_ENABLE_MODULE_VERIFIER: YES
     DEAD_CODE_STRIPPING: YES
     SWIFT_VERSION: 6.0
-    MARKETING_VERSION: 0.1.2
-    CURRENT_PROJECT_VERSION: 3
+    MARKETING_VERSION: 0.1.3
+    CURRENT_PROJECT_VERSION: 4
     ENABLE_USER_SCRIPT_SANDBOXING: NO
 configFiles:
   Debug: Configs/TypeCarrier.xcconfig
@@ -75,7 +75,8 @@ targets:
     info:
       path: Apps/macOS/Info.plist
       properties:
-        CFBundleDisplayName: TypeCarrier
+        CFBundleDisplayName: $(TYPECARRIER_DISPLAY_NAME)
+        CFBundleName: $(TYPECARRIER_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMultipleInstancesProhibited: true
@@ -91,7 +92,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac
+        TYPECARRIER_DISPLAY_NAME: TypeCarrier
       configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac.debug
+          TYPECARRIER_DISPLAY_NAME: TypeCarrier Debug
         Release:
           ENABLE_HARDENED_RUNTIME: YES
 schemes:
