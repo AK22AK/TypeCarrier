@@ -14,10 +14,9 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         service.startSearchingForTesting()
         XCTAssertEqual(service.connectionState, .searching)
 
-        try await Task.sleep(for: .milliseconds(50))
-
+        let events = try await waitForDiagnosticEvents(in: service, containing: "search.timeout")
         XCTAssertEqual(service.connectionState, .searching)
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "search.timeout" })
+        XCTAssertTrue(events.contains("search.timeout"), events.joined(separator: ", "))
     }
 
     func testSenderCanExtendCurrentSearchTimeoutForResumeRecoveryBeforeRefreshingDiscovery() async throws {
@@ -34,10 +33,9 @@ final class MultipeerCarrierServiceTests: XCTestCase {
 
         XCTAssertEqual(service.connectionState, .searching)
 
-        try await Task.sleep(for: .milliseconds(50))
-
+        let events = try await waitForDiagnosticEvents(in: service, containing: "search.timeout")
         XCTAssertEqual(service.connectionState, .searching)
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "search.timeout" })
+        XCTAssertTrue(events.contains("search.timeout"), events.joined(separator: ", "))
     }
 
     func testSenderShowsReconnectingKnownPeerAfterConnectionTimeout() async throws {
@@ -535,7 +533,8 @@ final class MultipeerCarrierServiceTests: XCTestCase {
 
         let state = try await waitForConnectionState(.searching, in: service)
         XCTAssertEqual(state, .searching)
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "search.timeout" })
+        let events = try await waitForDiagnosticEvents(in: service, containing: "search.timeout")
+        XCTAssertTrue(events.contains("search.timeout"), events.joined(separator: ", "))
     }
 
     func testSenderDiagnosticsRecordDiscoveryInvitationAndTimeout() async throws {
