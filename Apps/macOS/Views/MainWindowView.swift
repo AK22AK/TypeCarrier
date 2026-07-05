@@ -524,7 +524,6 @@ private struct ReceivedRecordDetail: View {
 
 private struct ReceiverStatusPage: View {
     @ObservedObject var store: MacCarrierStore
-    @State private var devicePairingCode = ""
     @State private var showsAdvancedInfo = false
 
     var body: some View {
@@ -641,33 +640,14 @@ private struct ReceiverStatusPage: View {
     private var connectNewDeviceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("连接新设备")
-            Text("在手机端选择这台 Mac；如果没有看到它，可以使用匹配码连接。")
+            Text("在发送端选择这台 Mac，并在发送端输入下面的匹配码完成连接。")
                 .foregroundStyle(.secondary)
 
             statusLine("本机匹配码", store.androidBridge.pairingCode)
 
-            HStack(spacing: 10) {
-                TextField("输入手机匹配码", text: $devicePairingCode)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 180)
-                    .onChange(of: devicePairingCode) { _, newValue in
-                        devicePairingCode = String(newValue.filter(\.isNumber).prefix(6))
-                    }
-                Button {
-                    store.androidBridge.associateAndroidDevice(pairingCode: devicePairingCode)
-                } label: {
-                    Label("连接设备", systemImage: "display.and.arrow.down")
-                }
-                .disabled(devicePairingCode.count != 6)
-            }
-            Text("已信任设备会自动重连。")
+            Text("Mac 只负责提供匹配码并等待接收；连接由 iOS 或 Android 发送端发起。已信任设备会自动重连。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let message = store.androidBridge.associationStatusMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -705,7 +685,7 @@ private struct ReceiverStatusPage: View {
             sectionHeader("连接详情")
             statusLine("本机设备", diagnostics.localPeerName)
             statusLine("服务标识", diagnostics.serviceType)
-            statusLine("配对服务", pairingServiceAvailabilityText)
+            statusLine("Android 接收服务", pairingServiceAvailabilityText)
             statusLine("已发现设备", discoveredDevicesText)
 
             if let lastError = diagnostics.lastErrorMessage {
@@ -788,10 +768,6 @@ private struct ReceiverStatusPage: View {
 
         for peer in diagnostics.invitedPeers where devices[peer] == nil {
             devices[peer] = "连接中"
-        }
-
-        for device in store.androidBridge.discoveredAndroidPairingDevices where devices[device.name] == nil {
-            devices[device.name] = "未连接"
         }
 
         guard !devices.isEmpty else {
