@@ -37,4 +37,21 @@ class AndroidTrustTokenKeysTest {
             AndroidTrustTokenKeys.tokenKey(second),
         )
     }
+
+    @Test
+    fun legacyMacIdentityTokenKeyCanMatchAppSpecificService() {
+        val discoveredDebug = MacService(
+            name = "Mac",
+            host = "10.0.0.2",
+            port = 17641,
+            macID = "mac-1",
+            appBundleID = "ak22ak.typecarrier.mac.debug",
+            appVariant = "debug",
+        )
+
+        assertEquals(
+            "trust_token.mac.mac-1",
+            AndroidTrustTokenKeys.legacyMacIdentityTokenKey(discoveredDebug),
+        )
+    }
 }

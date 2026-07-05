@@ -10,6 +10,7 @@ import org.typecarrier.android.protocol.CarrierDeviceIdentity
 import org.typecarrier.android.protocol.CarrierEnvelope
 import org.typecarrier.android.protocol.CarrierJson
 import org.typecarrier.android.protocol.CarrierPayload
+import org.typecarrier.android.protocol.CarrierPostPasteAction
 import org.typecarrier.android.protocol.CarrierWireFrame
 import java.io.Closeable
 import java.io.EOFException
@@ -59,7 +60,11 @@ class AndroidCarrierClient(
             response
         }
 
-    suspend fun sendText(text: String, deviceName: String): CarrierDeliveryReceipt? =
+    suspend fun sendText(
+        text: String,
+        deviceName: String,
+        postPasteAction: CarrierPostPasteAction? = null,
+    ): CarrierDeliveryReceipt? =
         withContext(Dispatchers.IO) {
             val activeSocket = socket ?: error("尚未连接 Mac")
             if (activeSocket.isClosed) {
@@ -70,6 +75,7 @@ class AndroidCarrierClient(
                 id = UUID.randomUUID().toString().uppercase(),
                 createdAt = Instant.now().toString(),
                 text = text,
+                postPasteAction = postPasteAction,
             )
             val envelope = CarrierEnvelope.text(
                 payload = payload,

@@ -20,6 +20,7 @@ import org.typecarrier.android.domain.TextEditHistory
 import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
 import org.typecarrier.android.protocol.AndroidPairingCode
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
+import org.typecarrier.android.protocol.CarrierPostPasteAction
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
 import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
@@ -49,6 +50,8 @@ data class AndroidComposerUiState(
     val pairingCode: String = "",
     val senderDisplayName: String = "",
     val launchesIntoInputMode: Boolean = true,
+    val enablesSendReturnGesture: Boolean = false,
+    val sendsReturnAfterPaste: Boolean = false,
     val deviceName: String = "Android",
     val canConnect: Boolean = false,
     val isBusy: Boolean = false,
@@ -89,6 +92,7 @@ class AndroidComposerViewModel(
             manualPort = repository.manualPort,
             senderDisplayName = repository.senderDisplayName,
             launchesIntoInputMode = repository.launchesIntoInputMode,
+            enablesSendReturnGesture = repository.enablesSendReturnGesture,
             deviceName = repository.deviceName,
             records = recordStore.records,
             drafts = recordStore.drafts,
@@ -267,6 +271,25 @@ class AndroidComposerViewModel(
         recordDiagnostic("settings.launchesIntoInputMode.updated", "launchesIntoInputMode=$value")
     }
 
+    fun updateEnablesSendReturnGesture(value: Boolean) {
+        repository.enablesSendReturnGesture = value
+        _uiState.update {
+            it.copy(
+                enablesSendReturnGesture = value,
+                sendsReturnAfterPaste = if (value) it.sendsReturnAfterPaste else false,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic("settings.sendReturnGesture.updated", "enablesSendReturnGesture=$value")
+    }
+
+    fun updateSendsReturnAfterPaste(value: Boolean) {
+        _uiState.update { current ->
+            current.copy(
+                sendsReturnAfterPaste = if (current.enablesSendReturnGesture) value else false,
+            ).withDerivedValues(repository)
+        }
+    }
+
     fun updateText(value: String) {
         val oldValue = _uiState.value.text
         textHistory.recordChange(from = oldValue, to = value)
@@ -425,7 +448,15 @@ class AndroidComposerViewModel(
 
         runCatching {
             refreshTrustedConnectionBeforeSend(state)
-            repository.sendText(textToSend, state.senderDisplayName.ifBlank { state.deviceName })
+            repository.sendText(
+                text = textToSend,
+                senderDisplayName = state.senderDisplayName.ifBlank { state.deviceName },
+                postPasteAction = if (state.enablesSendReturnGesture && state.sendsReturnAfterPaste) {
+                    CarrierPostPasteAction.PressReturn
+                } else {
+                    null
+                },
+            )
         }.onSuccess { receipt ->
             val detail = receipt?.detail ?: "已发送"
             updateRecord(
@@ -638,7 +669,9 @@ class AndroidComposerViewModel(
     }
 
     private fun recordServicesDiagnostic(services: List<MacService>) {
-        val signature = services.joinToString("|") { "${it.name}@${it.host}:${it.port}:${it.macID.orEmpty()}" }
+        val signature = services.joinToString("|") {
+            "${it.name}@${it.host}:${it.port}:${it.macID.orEmpty()}:${it.appBundleID.orEmpty()}:${it.appVariant.orEmpty()}"
+        }
         if (signature == lastServicesDiagnosticSignature) {
             return
         }
@@ -646,7 +679,14 @@ class AndroidComposerViewModel(
         val message = if (services.isEmpty()) {
             "No Mac services discovered."
         } else {
-            services.joinToString { "${it.name}@${it.host}:${it.port}" }
+            services.joinToString { service ->
+                buildString {
+                    append("${service.name}@${service.host}:${service.port}")
+                    service.macID?.takeIf { it.isNotBlank() }?.let { append(" macID=$it") }
+                    service.appVariant?.takeIf { it.isNotBlank() }?.let { append(" appVariant=$it") }
+                    service.appBundleID?.takeIf { it.isNotBlank() }?.let { append(" appBundleID=$it") }
+                }
+            }
         }
         recordDiagnostic("discovery.services", message)
     }

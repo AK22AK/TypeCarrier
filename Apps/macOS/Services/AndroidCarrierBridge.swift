@@ -38,7 +38,9 @@ final class AndroidCarrierBridge: ObservableObject {
         AndroidBonjourAdvertisement.discoveryInfo(
             macID: macID,
             macName: displayName,
-            port: Self.defaultPort.rawValue
+            port: Self.defaultPort.rawValue,
+            appBundleID: Bundle.main.bundleIdentifier,
+            appVariant: Self.appVariant
         )
     }
 
@@ -72,6 +74,14 @@ final class AndroidCarrierBridge: ObservableObject {
     private var isStoppingListener = false
     private var listenerRecovery = AndroidBridgeListenerRecovery()
     private var listenerRestartTask: Task<Void, Never>?
+
+    private static var appVariant: String {
+#if DEBUG
+        "debug"
+#else
+        "release"
+#endif
+    }
 
     init(
         displayName: String,

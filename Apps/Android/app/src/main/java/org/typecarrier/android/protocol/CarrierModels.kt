@@ -32,7 +32,14 @@ data class CarrierPayload(
     val id: String,
     val createdAt: String,
     val text: String,
+    val postPasteAction: CarrierPostPasteAction? = null,
 )
+
+@Serializable
+enum class CarrierPostPasteAction {
+    @SerialName("pressReturn")
+    PressReturn,
+}
 
 @Serializable
 data class CarrierDeliveryReceipt(

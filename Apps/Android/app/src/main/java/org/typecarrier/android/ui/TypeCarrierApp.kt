@@ -14,6 +14,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
@@ -256,6 +258,7 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onClear = { viewModel.clearText() },
                 onSaveDraft = { viewModel.saveDraft() },
                 onSend = { viewModel.send() },
+                onSendReturnModeChange = viewModel::updateSendsReturnAfterPaste,
                 )
             }
 
@@ -278,6 +281,7 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                     onBack = { navController.popBackStack() },
                 onSenderDisplayNameChange = viewModel::updateSenderDisplayName,
                 onLaunchesIntoInputModeChange = viewModel::updateLaunchesIntoInputMode,
+                onEnablesSendReturnGestureChange = viewModel::updateEnablesSendReturnGesture,
                 )
             }
 
@@ -360,6 +364,7 @@ private fun HomeScreen(
     onClear: () -> Unit,
     onSaveDraft: () -> Unit,
     onSend: () -> Unit,
+    onSendReturnModeChange: (Boolean) -> Unit,
 ) {
     var showsConnectionDialog by remember { mutableStateOf(false) }
     val density = LocalDensity.current
@@ -432,6 +437,7 @@ private fun HomeScreen(
             state = state,
             onSaveDraft = onSaveDraft,
             onSend = onSend,
+            onSendReturnModeChange = onSendReturnModeChange,
         )
     }
 
@@ -825,7 +831,7 @@ private fun ConnectionPanel(
         }
     }
     val selectedHasTrust = state.selectedMac?.let { selected ->
-        state.trustedMacs.any { it.id == selected.id }
+        state.trustedMacs.any { it.matchesReceiver(selected) }
     } == true
 
     Column(
@@ -882,7 +888,7 @@ private fun ConnectionPanel(
                             selected = service.id == state.selectedMac?.id,
                             subtitle = when {
                                 isConnectedService -> "已连接"
-                                state.trustedMacs.any { it.id == service.id } -> "已配对，可免配对连接"
+                                state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，可免配对连接"
                                 else -> "首次连接需要配对码"
                             },
                             onClick = { onSelectMac(service) },
@@ -1131,7 +1137,14 @@ private fun EditorActionButton(
 }
 
 @Composable
-private fun Footer(state: AndroidComposerUiState, onSaveDraft: () -> Unit, onSend: () -> Unit) {
+private fun Footer(
+    state: AndroidComposerUiState,
+    onSaveDraft: () -> Unit,
+    onSend: () -> Unit,
+    onSendReturnModeChange: (Boolean) -> Unit,
+) {
+    var sendModeMenuOpen by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -1141,11 +1154,107 @@ private fun Footer(state: AndroidComposerUiState, onSaveDraft: () -> Unit, onSen
             Icon(Icons.Default.Save, contentDescription = "保存草稿")
         }
         Spacer(modifier = Modifier.widthIn(min = 12.dp))
-        OutlinedButton(onClick = onSend, enabled = state.canSend) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
-            Text(sendButtonText(state.sendState, state.text))
+        if (!state.enablesSendReturnGesture) {
+            OutlinedButton(onClick = onSend, enabled = state.canSend) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                Text(sendButtonText(state.sendState, state.text, sendsReturnAfterPaste = false))
+            }
+        } else {
+            Box {
+                val shape = RoundedCornerShape(50)
+                val contentColor = if (state.canSend) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                }
+                Surface(
+                    shape = shape,
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = contentColor,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (state.canSend) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
+                    ),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier
+                                .heightIn(min = 40.dp)
+                                .clip(RoundedCornerShape(topStartPercent = 50, bottomStartPercent = 50))
+                                .clickable(enabled = state.canSend, onClick = onSend)
+                                .padding(start = 18.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                if (state.sendsReturnAfterPaste) Icons.AutoMirrored.Filled.KeyboardReturn else Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(sendButtonText(state.sendState, state.text, state.sendsReturnAfterPaste))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(width = 44.dp, height = 40.dp)
+                                .clip(RoundedCornerShape(topEndPercent = 50, bottomEndPercent = 50))
+                                .clickable(enabled = state.canSend) { sendModeMenuOpen = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Default.ExpandMore, contentDescription = "发送方式")
+                        }
+                    }
+                }
+                DropdownMenu(
+                    expanded = sendModeMenuOpen,
+                    onDismissRequest = { sendModeMenuOpen = false },
+                    modifier = Modifier.widthIn(min = 176.dp),
+                    properties = PopupProperties(focusable = false),
+                ) {
+                    SendModeMenuItem(
+                        text = "发送",
+                        selected = !state.sendsReturnAfterPaste,
+                        onClick = {
+                            sendModeMenuOpen = false
+                            onSendReturnModeChange(false)
+                        },
+                    )
+                    SendModeMenuItem(
+                        text = "发送+回车",
+                        selected = state.sendsReturnAfterPaste,
+                        onClick = {
+                            sendModeMenuOpen = false
+                            onSendReturnModeChange(true)
+                        },
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun SendModeMenuItem(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(text, style = MaterialTheme.typography.bodyLarge) },
+        leadingIcon = {
+            if (selected) {
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(22.dp))
+            } else {
+                Spacer(modifier = Modifier.size(22.dp))
+            }
+        },
+        onClick = onClick,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1360,6 +1469,7 @@ private fun SettingsScreen(
     onBack: () -> Unit,
     onSenderDisplayNameChange: (String) -> Unit,
     onLaunchesIntoInputModeChange: (Boolean) -> Unit,
+    onEnablesSendReturnGestureChange: (Boolean) -> Unit,
 ) {
     var draftName by remember(state.senderDisplayName) { mutableStateOf(state.senderDisplayName) }
 
@@ -1393,6 +1503,17 @@ private fun SettingsScreen(
                 supporting = "打开应用后自动聚焦主输入框。",
                 trailing = {
                     Switch(checked = state.launchesIntoInputMode, onCheckedChange = onLaunchesIntoInputModeChange)
+                },
+            )
+            HorizontalDivider()
+            SettingsListItem(
+                headline = "发送方式选择",
+                supporting = "打开后，发送按钮旁会显示发送方式菜单；选择只改变按钮行为，不会立即发送。",
+                trailing = {
+                    Switch(
+                        checked = state.enablesSendReturnGesture,
+                        onCheckedChange = onEnablesSendReturnGestureChange,
+                    )
                 },
             )
         }
@@ -1652,12 +1773,24 @@ private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, ti
     }
 }
 
-private fun sendButtonText(sendState: AndroidSendState, text: String): String =
+private fun sendButtonText(sendState: AndroidSendState, text: String, sendsReturnAfterPaste: Boolean): String =
     when (sendState) {
         AndroidSendState.Sending -> "发送中"
-        AndroidSendState.Sent -> if (text.isBlank()) "已发送" else "发送"
-        else -> "发送"
+        AndroidSendState.Sent -> if (text.isBlank()) "已发送" else sendModeTitle(sendsReturnAfterPaste)
+        else -> sendModeTitle(sendsReturnAfterPaste)
     }
+
+private fun sendModeTitle(sendsReturnAfterPaste: Boolean): String =
+    if (sendsReturnAfterPaste) "发送+回车" else "发送"
+
+private fun MacService.matchesReceiver(other: MacService): Boolean {
+    val macID = macID?.takeIf { it.isNotBlank() }
+    val otherMacID = other.macID?.takeIf { it.isNotBlank() }
+    return when {
+        macID != null && otherMacID != null -> macID == otherMacID
+        else -> host == other.host && port == other.port
+    }
+}
 
 private fun AndroidRecordKind.localizedText(): String =
     when (this) {

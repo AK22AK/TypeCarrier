@@ -19,4 +19,20 @@ struct AndroidBonjourAdvertisementTests {
         #expect(info["macName"] == "MacBook Pro")
         #expect(info["androidPort"] == "17641")
     }
+
+    @Test func discoveryInfoIncludesReceiverAppIdentityWhenProvided() {
+        let info = AndroidBonjourAdvertisement.discoveryInfo(
+            macID: "mac-123",
+            macName: "MacBook Pro",
+            port: 17641,
+            appBundleID: "ak22ak.typecarrier.mac.debug",
+            appVariant: "debug"
+        )
+
+        #expect(info["macID"] == "mac-123")
+        #expect(info["macName"] == "MacBook Pro")
+        #expect(info["androidPort"] == "17641")
+        #expect(info["appBundleID"] == "ak22ak.typecarrier.mac.debug")
+        #expect(info["appVariant"] == "debug")
+    }
 }
