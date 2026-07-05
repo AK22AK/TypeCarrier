@@ -9,7 +9,7 @@ on:
       tag:
         description: "Release tag to prepare"
         required: true
-        default: "v0.1.2"
+        default: "v0.1.3"
 
 permissions:
   contents: write
@@ -46,11 +46,20 @@ jobs:
               release_title="TypeCarrier 0.1.2"
               notes_file="docs/releases/0.1.2.md"
               ;;
+            v0.1.3)
+              release_title="TypeCarrier 0.1.3"
+              notes_file="docs/releases/0.1.3.md"
+              ;;
             *)
               release_title="TypeCarrier ${release_tag#v}"
-              notes_file="docs/releases/0.1.2.md"
+              notes_file="docs/releases/${release_tag#v}.md"
               ;;
           esac
+
+          if [ ! -f "$notes_file" ]; then
+            echo "::error::Release notes file not found: $notes_file"
+            exit 1
+          fi
 
           echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
           echo "RELEASE_TITLE=$release_title" >> "$GITHUB_ENV"
