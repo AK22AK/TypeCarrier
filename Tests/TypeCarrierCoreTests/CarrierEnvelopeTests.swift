@@ -33,6 +33,20 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertEqual(decoded.sender, sender)
     }
 
+    func testTextEnvelopeRoundTripsPostPasteAction() throws {
+        let payload = CarrierPayload(
+            id: UUID(uuidString: "8AF58B20-9E92-4C0F-90F6-8E31B76F25E1")!,
+            createdAt: Date(timeIntervalSince1970: 1_778_222_222),
+            text: "send and return",
+            postPasteAction: .pressReturn
+        )
+        let envelope = CarrierEnvelope.text(payload)
+
+        let decoded = try CarrierCodec.decode(try CarrierCodec.encode(envelope))
+
+        XCTAssertEqual(decoded.payload?.postPasteAction, .pressReturn)
+    }
+
     func testLegacyTextEnvelopeDecodesWithoutSenderDeviceName() throws {
         let data = """
         {
@@ -51,6 +65,19 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertEqual(decoded.kind, .text)
         XCTAssertEqual(decoded.payload?.text, "legacy text")
         XCTAssertNil(decoded.sender)
+        XCTAssertNil(decoded.payload?.postPasteAction)
+    }
+
+    func testPlainTextEnvelopeOmitsPostPasteAction() throws {
+        let payload = CarrierPayload(
+            id: UUID(uuidString: "30AD73DB-4B66-430F-B3ED-F49F2E2D33B5")!,
+            createdAt: Date(timeIntervalSince1970: 1_778_333_333),
+            text: "plain send"
+        )
+        let data = try CarrierCodec.encode(.text(payload))
+        let json = String(decoding: data, as: UTF8.self)
+
+        XCTAssertFalse(json.contains("postPasteAction"))
     }
 
     func testDeviceIdentityFallsBackToSystemNameWhenCustomNameIsBlank() {

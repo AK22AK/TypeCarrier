@@ -515,7 +515,8 @@ final class MacCarrierStore: ObservableObject {
 
         let pasteResult = pasteInjector.paste(
             text: payload.text,
-            restoreDelay: clipboardRestoreDelayIfEnabled
+            restoreDelay: clipboardRestoreDelayIfEnabled,
+            postPasteAction: payload.postPasteAction
         )
         lastPasteResult = pasteResult
         recordPasteDiagnostic(pasteResult, peerName: sourceDeviceName)

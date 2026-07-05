@@ -515,14 +515,17 @@ final class ComposerStore: ObservableObject {
         backgroundStopTask = nil
     }
 
-    func send(preservesActiveInputSession: Bool = false) {
+    func send(
+        preservesActiveInputSession: Bool = false,
+        postPasteAction: CarrierPostPasteAction? = nil
+    ) {
         guard CarrierPayload.canSend(text) else {
             sendState = .failed("文本为空")
             return
         }
 
         let textToSend = text
-        let payload = CarrierPayload(text: textToSend)
+        let payload = CarrierPayload(text: textToSend, postPasteAction: postPasteAction)
         let now = Date()
         let record = CarrierRecord(
             payloadID: payload.id,

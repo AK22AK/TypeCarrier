@@ -5,11 +5,13 @@ import UIKit
 enum ComposerPreferenceKeys {
     static let launchesIntoInputMode = "launchesIntoInputMode"
     static let senderDisplayName = "senderDisplayName"
+    static let enablesSendReturnGesture = "enablesSendReturnGesture"
 }
 
 struct ComposerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+    @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
     @State private var showsDebugFeatures = false
@@ -19,6 +21,7 @@ struct ComposerView: View {
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
+    @State private var sendsReturnAfterPaste = false
 
     init() {
         let launchesIntoInputMode = UserDefaults.standard.object(
@@ -92,6 +95,11 @@ struct ComposerView: View {
             }
 
             restoreEditorFocusAfterRebuild()
+        }
+        .onChange(of: enablesSendReturnGesture) { _, isEnabled in
+            if !isEnabled {
+                sendsReturnAfterPaste = false
+            }
         }
     }
 
@@ -461,24 +469,26 @@ struct ComposerView: View {
                 .disabled(!store.canSaveDraft)
                 .accessibilityLabel("保存草稿")
 
-                Button {
-                    performEditorActionPreservingFocus {
-                        store.send(preservesActiveInputSession: true)
+                SendSplitButton(
+                    title: sendsReturnAfterPaste && enablesSendReturnGesture ? "发送+回车" : store.sendButtonText,
+                    includesReturn: sendsReturnAfterPaste && enablesSendReturnGesture,
+                    showsBehaviorMenu: enablesSendReturnGesture,
+                    isEnabled: store.canSend,
+                    height: footerControlHeight,
+                    sendsReturnAfterPaste: $sendsReturnAfterPaste,
+                    onSend: {
+                        performEditorActionPreservingFocus {
+                            if sendsReturnAfterPaste, enablesSendReturnGesture {
+                                store.send(
+                                    preservesActiveInputSession: true,
+                                    postPasteAction: .pressReturn
+                                )
+                            } else {
+                                store.send(preservesActiveInputSession: true)
+                            }
+                        }
                     }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 16, height: 16)
-                        Text(store.sendButtonText)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundStyle(store.canSend ? Color.primary : Color.secondary.opacity(0.45))
-                    .frame(minWidth: 96, minHeight: footerControlHeight)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                }
-                .buttonStyle(.plain)
-                .disabled(!store.canSend)
+                )
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -648,6 +658,103 @@ struct ComposerView: View {
         48
     }
 
+}
+
+private struct SendSplitButton: View {
+    let title: String
+    let includesReturn: Bool
+    let showsBehaviorMenu: Bool
+    let isEnabled: Bool
+    let height: CGFloat
+    @Binding var sendsReturnAfterPaste: Bool
+    let onSend: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: onSend) {
+                mainLabel
+            }
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .accessibilityLabel(includesReturn ? "发送并回车" : title)
+
+            if showsBehaviorMenu {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: 1, height: height * 0.5)
+                    .accessibilityHidden(true)
+
+                behaviorMenu
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .overlay {
+            Capsule()
+                .stroke(includesReturn ? Color.accentColor.opacity(0.46) : Color.clear, lineWidth: 1)
+        }
+    }
+
+    private var mainLabel: some View {
+        HStack(spacing: 8) {
+            Image(systemName: includesReturn ? "return" : "paperplane.fill")
+                .font(.system(size: includesReturn ? 16 : 15, weight: .semibold))
+                .frame(width: 18, height: 18)
+            Text(title)
+                .font(.subheadline.weight(includesReturn ? .bold : .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+        }
+        .foregroundStyle(foregroundStyle)
+        .padding(.leading, 18)
+        .padding(.trailing, showsBehaviorMenu ? 12 : 18)
+        .frame(minWidth: includesReturn ? 136 : 96, minHeight: height)
+    }
+
+    private var behaviorMenu: some View {
+        Menu {
+            Button {
+                sendsReturnAfterPaste = false
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                if sendsReturnAfterPaste {
+                    Text("发送")
+                } else {
+                    Label("发送", systemImage: "checkmark")
+                }
+            }
+
+            Button {
+                sendsReturnAfterPaste = true
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } label: {
+                if sendsReturnAfterPaste {
+                    Label("发送+回车", systemImage: "checkmark")
+                } else {
+                    Text("发送+回车")
+                }
+            }
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(includesReturn ? Color.accentColor : Color.secondary.opacity(0.72))
+                .frame(width: 38, height: height)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel("发送方式")
+        .accessibilityValue(sendsReturnAfterPaste ? "发送加回车" : "发送")
+        .accessibilityHint("选择发送按钮的行为，不会立即发送")
+    }
+
+    private var foregroundStyle: Color {
+        guard isEnabled else {
+            return Color.secondary.opacity(0.45)
+        }
+
+        return includesReturn ? .accentColor : .primary
+    }
 }
 
 private enum PlatformDownloadLinks {
@@ -840,6 +947,7 @@ private struct PlatformDownloadRow: View {
 private struct ComposerSettingsView: View {
     @ObservedObject var store: ComposerStore
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
+    @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @State private var senderDisplayNameDraft: String
 
     init(store: ComposerStore) {
@@ -876,6 +984,12 @@ private struct ComposerSettingsView: View {
                 Toggle("启动时进入输入状态", isOn: $launchesIntoInputMode)
             } footer: {
                 Text("打开应用后自动聚焦输入框，并按键盘将要出现的状态显示主界面。")
+            }
+
+            Section {
+                Toggle("发送方式选择", isOn: $enablesSendReturnGesture)
+            } footer: {
+                Text("打开后，发送按钮旁会显示发送方式菜单；选择只改变发送按钮行为，不会立即发送。")
             }
         }
         .navigationTitle("设置")
