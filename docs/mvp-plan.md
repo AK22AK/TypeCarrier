@@ -1,6 +1,6 @@
 # MVP 计划
 
-本文保留 TypeCarrier 早期 MVP 定义和阶段边界。后续功能规划统一维护在 [路线图](roadmap.md)。
+本文保留 TypeCarrier 早期 MVP 定义和阶段边界。当前已实现 iOS / Android 到 Mac 的基本发送链路；下列阶段条目保留最初计划，不是当前待办清单。实现状态与后续候选统一维护在 [路线图](roadmap.md)。
 
 ## MVP 定义
 

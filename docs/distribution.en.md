@@ -65,36 +65,30 @@ cd Apps/Android
 
 The output is `Apps/Android/app/build/outputs/apk/release/app-release.apk`. User-facing sideload APKs should keep using the same keystore; otherwise the same `applicationId` cannot upgrade an existing install in place.
 
+## Official Distribution
+
+Archive official builds on a trusted local machine or a private release environment. Do not commit certificates, provisioning profiles, App Store Connect API keys, or private release configuration.
+
 ## User Download Entry Points
 
-- iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
-- Android: download the sideloadable APK from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
-- macOS: download the sideloadable Mac package from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+- iOS: invited testing through TestFlight, or build from source. No public App Store download is available yet.
+- Android: download the sideloadable APK from the [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases).
+- macOS: download the sideloadable Mac package from the [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases).
 
 ## GitHub Beta Release
 
-GitHub Release provides Android / macOS sideload packages and should keep a self-link to the latest Release:
+GitHub Release provides Android / macOS sideload packages with the Releases list as the download entry point so prereleases remain visible:
 
-- iOS installable builds are not uploaded to GitHub Release. The official iOS acquisition path is the App Store / TestFlight.
+- iOS installable builds are not uploaded to GitHub Release. The current testing channel is TestFlight; no public App Store download is available yet.
 - Android uploads a sideloadable APK.
 - macOS builds a Developer ID signed + notarized DMG in the release workflow and uploads the `.dmg` plus `.sha256`.
 - Do not describe beta sideload packages as regular user-ready installers.
 
-Recommended tag for 0.1.2:
+Release steps:
 
-```sh
-git tag -a v0.1.2 -m "TypeCarrier 0.1.2"
-git push origin v0.1.2
-```
-
-Create the GitHub prerelease:
-
-```sh
-gh release create v0.1.2 \
-  --title "TypeCarrier 0.1.2" \
-  --notes-file docs/releases/0.1.2.md \
-  --prerelease
-```
+1. Confirm the version, release notes, and intended commit, then create the matching `v<version>` tag.
+2. Push the tag or manually run the release workflow to create a draft prerelease with APK, DMG, and checksums.
+3. Verify builds, devices, and downloaded packages before publishing the draft. Uploaded artifacts do not mean the release is public.
 
 ### Post-Release Checks
 
@@ -103,7 +97,7 @@ After publishing, verify in this order:
 1. The GitHub Release is marked as a prerelease, not a stable release.
 2. The Release page shows the Android APK, macOS notarized DMG, and matching checksum files.
 3. The checksum files match local `shasum -a 256` output.
-4. The Release body keeps the beta positioning, iOS App Store / TestFlight acquisition path, Android / macOS sideload notes, and macOS permission guidance.
+4. The Release body keeps the beta positioning, iOS TestFlight testing channel, Android / macOS sideload notes, and macOS permission guidance.
 5. The tag points at the intended release commit, not a temporary local commit.
 6. If GitHub Actions skipped builds because of the runner Xcode version, rerun the release note verification commands locally before publishing.
 7. Download the GitHub asset once after publishing, mount the DMG, and confirm the app bundle version matches the release tag.
@@ -119,18 +113,18 @@ script/package_macos_release.sh
 
 The script runs a Release build, verifies code signing, runs Gatekeeper assessment, and prints the SHA-256 checksum.
 
-0.1.2 generates a development testing package by default:
+This script generates a development testing package by default:
 
-- File name: `TypeCarrierMac-0.1.2-3-development.zip`.
+- File name: `TypeCarrierMac-<version>-<build>-development.zip`.
 - Signing: Apple Development / Personal Team.
 - Gatekeeper assessment may fail. The script prints a warning, but this is not treated as a packaging failure for the 0.1 development package.
 
-## Future Official macOS Package
+## macOS Signed and Notarized Package
 
 The public repository must not store real signing material. A local Developer ID notarized build requires signing configuration such as:
 
 ```xcconfig
-TYPECARRIER_BUNDLE_PREFIX = ak22ak.typecarrier
+TYPECARRIER_BUNDLE_PREFIX = your.bundle.prefix
 DEVELOPMENT_TEAM = YOURTEAMID
 CODE_SIGN_STYLE[sdk=macosx*] = Manual
 CODE_SIGN_IDENTITY[sdk=macosx*] = Developer ID Application
@@ -160,7 +154,7 @@ The `release-signing` environment requires these Secrets:
 | `ANDROID_RELEASE_KEY_PASSWORD` | Android release key password |
 | `DEVELOPER_ID_CERTIFICATE_BASE64` | Base64 content of the Developer ID Application `.p12` certificate |
 | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` |
-| `APPLE_TEAM_ID` | Apple Developer Team ID, for example `4H8462MSN6` |
+| `APPLE_TEAM_ID` | Apple Developer Team ID, for example `YOURTEAMID` |
 | `APPSTORE_CONNECT_API_KEY_ID` | App Store Connect API Key ID |
 | `APPSTORE_CONNECT_API_ISSUER_ID` | Issuer ID for a Team API Key; leave empty for an Individual API Key |
 | `APPSTORE_CONNECT_API_PRIVATE_KEY` | Full text of the App Store Connect API `.p8` private key |
@@ -187,6 +181,6 @@ Android also has a dedicated `Android Release APK` workflow for signed APK verif
 
 ## GitHub Actions
 
-Public CI verifies source, tests, and builds. The release workflow creates a GitHub prerelease draft, uploads the Android APK, and uploads the macOS notarized DMG.
+Public CI runs baseline checks, Android unit tests, and a Debug build. Apple tests and builds run only with Xcode 26 or later; skipped steps do not count as verification. The release workflow creates a GitHub prerelease draft, uploads the Android APK, and uploads the macOS notarized DMG.
 
 Signing private keys and App Store Connect keys in `release-signing` Environment Secrets must only be used by the controlled release workflow. Do not print them in pull request workflows, logs, release notes, or repository files.

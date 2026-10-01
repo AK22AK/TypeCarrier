@@ -1,6 +1,6 @@
 # TypeCarrier 连接与权限自检设计
 
-状态：后续设计。当前版本已经有连接状态、诊断日志和部分权限提示；本文用于规范排查入口和排查顺序。
+状态：自检入口已实现，本文仍包含待完善的设计要求。0.1.3 的 iOS / Mac 已提供连接自检、权限提示、失败解释和诊断导出；系统权限能否准确判断、网络恢复及目标 App 粘贴结果需按场景验证，不代表下文所有项目均已完成。Multipeer 与 Android bridge 分别限制同入口的 active sender，两入口可并行。
 
 ## 目标
 
@@ -32,7 +32,7 @@
 - Mac receiver 是否正在运行并 advertising。
 - 是否已授予 Accessibility 权限。
 - 是否有已连接 sender。
-- 当前是否存在 active sender；多设备规划落地前，一个 receiver 同一时间只服务一个 sender。
+- 当前是否存在 active sender；当前 Multipeer 和 Android bridge 分别限制同入口的 active sender。
 - 最近一次接收、剪贴板写入、Command-V、粘贴验证或失败原因。
 - 最近一次诊断日志导出位置。
 
@@ -41,7 +41,7 @@
 - 手机搜不到 Mac：优先检查两端是否在同一局域网、Mac receiver 是否运行、Local Network 权限。
 - 能连接但不能输入：优先检查 Mac Accessibility、当前焦点、目标 App 是否接受模拟粘贴。
 - 显示已接收但用户没看到文本：区分“已收到 payload”“已复制到剪贴板”“已尝试粘贴”“已验证插入”。
-- 第二台设备无法连接：在多设备实现前，提示当前 1:1 receiver 约束。
+- 第二台设备无法连接：在多设备实现前，提示对应传输入口的单 active sender 约束。
 
 ## UI 建议
 
@@ -79,7 +79,7 @@
 ### iOS Validation
 
 - Mac 未启动时，自检页给出明确下一步。
-- Mac busy 时，自检页说明当前 1:1 约束。
+- Mac busy 时，自检页说明对应传输入口的单 active sender 约束。
 - 发送失败后，自检页显示最近失败原因。
 - 诊断导出不包含历史文本全文。
 
