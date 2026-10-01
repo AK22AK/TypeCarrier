@@ -5,7 +5,7 @@ import UIKit
 
 @MainActor
 final class ComposerStore: ObservableObject {
-    private static let maximumDraftCount = 99
+    private static let maximumDraftCount = ComposerRecordStore.maximumDraftCount
 
     enum SendState: Equatable {
         case idle
@@ -60,11 +60,13 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var editorResetGeneration = 0
     @Published private(set) var draftLimitErrorMessage: String?
+    @Published private(set) var historyRetention: SendHistoryRetention = .default
+    @Published private(set) var historyRetentionErrorMessage: String?
     @Published private(set) var customSenderDisplayName: String
 
     @Published private(set) var carrierService: MultipeerCarrierService
     let debugDiagnosticLogFileURL: URL?
-    private let recordStore: CarrierRecordStore?
+    private let recordStore: ComposerRecordStore?
     private let systemDeviceName: String
     private let userDefaults: UserDefaults
     private let deliveryConfirmationWait: DeliveryConfirmationWait
@@ -104,10 +106,10 @@ final class ComposerStore: ObservableObject {
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
-            recordStore = try CarrierRecordStore(
-                fileURL: try CarrierRecordStore.defaultFileURL(fileName: "ios-records.json")
-            )
+            let directory = try CarrierRecordStore.defaultFileURL(fileName: "ios-drafts.json").deletingLastPathComponent()
+            recordStore = try ComposerRecordStore(directory: directory)
             records = recordStore?.records ?? []
+            historyRetention = recordStore?.retention ?? .default
         } catch {
             recordStore = nil
             records = []
@@ -227,7 +229,7 @@ final class ComposerStore: ObservableObject {
             return nil
         }
 
-        return "\(min(draftCount, Self.maximumDraftCount))"
+        return "\(draftCount)"
     }
 
     var outgoingHistory: [CarrierRecord] {
@@ -418,6 +420,7 @@ final class ComposerStore: ObservableObject {
     }
 
     private func handleAppDidBecomeActive() {
+        cleanOutgoingHistory()
         cancelBackgroundStop()
 
         let action = foregroundRecovery.didBecomeActive(
@@ -719,19 +722,11 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        let draftIDs = drafts.map(\.id)
-        guard !draftIDs.isEmpty else {
-            return
-        }
-
         do {
-            for id in draftIDs {
-                try recordStore.delete(id: id)
-            }
+            try recordStore.clearDrafts()
             syncRecords()
         } catch {
             sendState = .failed("清空草稿失败：\(error.localizedDescription)")
-            syncRecords()
         }
     }
 
@@ -740,20 +735,37 @@ final class ComposerStore: ObservableObject {
             sendState = .failed("历史记录存储不可用")
             return
         }
-
-        let outgoingIDs = outgoingHistory.map(\.id)
-        guard !outgoingIDs.isEmpty else {
-            return
-        }
-
         do {
-            for id in outgoingIDs {
-                try recordStore.delete(id: id)
-            }
+            try recordStore.clearHistory()
             syncRecords()
         } catch {
             sendState = .failed("清空历史记录失败：\(error.localizedDescription)")
+        }
+    }
+
+    func setHistoryRetention(_ retention: SendHistoryRetention) {
+        guard let recordStore else {
+            historyRetentionErrorMessage = "历史记录存储不可用"
+            return
+        }
+        do {
+            try recordStore.setRetention(retention)
+            historyRetention = recordStore.retention
+            historyRetentionErrorMessage = nil
             syncRecords()
+        } catch {
+            historyRetentionErrorMessage = "更新历史保留设置失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func cleanOutgoingHistory() {
+        guard let recordStore else { return }
+        do {
+            try recordStore.cleanHistory()
+            syncRecords()
+            historyRetentionErrorMessage = nil
+        } catch {
+            historyRetentionErrorMessage = "清理历史记录失败：\(error.localizedDescription)"
         }
     }
 

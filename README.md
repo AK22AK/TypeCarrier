@@ -15,7 +15,7 @@ TypeCarrier 是一个轻量的手机到 Mac 文本传送工具。
 - iPhone 使用 Multipeer Connectivity；Android 使用局域网 TCP，支持 NSD / mDNS 发现和手动地址连接。
 - iPhone 自动发现并连接 Mac；Android 首次连接使用 Mac 显示的配对码。Multipeer 和 Android bridge 各自限制一个 active sender，两入口可并行，尚无统一多设备调度。
 - 支持普通发送和发送后回车；Mac 自动粘贴需要辅助功能权限，实际结果取决于当前焦点和目标应用。
-- iOS 提供草稿、发送历史、重新发送及撤销/重做；Mac 提供接收历史和剪贴板恢复开关。
+- iOS 提供草稿、发送历史、重新发送及撤销/重做；草稿独立保存，发送历史可按条数或时间保留；Mac 提供接收历史和剪贴板恢复开关。
 - 提供连接状态、自检和诊断导出。前后台恢复与重连已有实现，稳定性仍需按设备和网络场景验证。
 
 无需账号或服务器。系统要求为 iOS 26.0、macOS 26.0、Android 8.0 或更新版本。云同步、互联网中转、Windows、统一多设备调度和触控板模式尚未支持。
@@ -25,7 +25,7 @@ TypeCarrier 是一个轻量的手机到 Mac 文本传送工具。
 - iOS：通过 TestFlight 邀请测试，也可自行从源码构建；尚无公开 App Store 下载入口。
 - Android / macOS：查看 [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases)，下载已公开版本的 APK / DMG 及校验文件。
 
-源码版本与各渠道已公开的构建可能不同。GitHub 发布流程先生成 draft prerelease，完成核对后才公开；生成草稿不代表已经发布。iOS 安装包不在 GitHub Release 提供。
+最新源码可能包含尚未发布的改动，源码版本与各渠道已公开的构建可能不同。GitHub 发布流程先生成 draft prerelease，完成核对后才公开；生成草稿不代表已经发布。iOS 安装包不在 GitHub Release 提供。
 
 macOS 发布流程支持 Developer ID 签名及公证 DMG；本地 development 测试包可能被 Gatekeeper 拦截。请以对应发行说明为准。
 

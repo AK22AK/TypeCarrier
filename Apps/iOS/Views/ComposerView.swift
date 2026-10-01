@@ -987,6 +987,45 @@ private struct ComposerSettingsView: View {
             }
 
             Section {
+                Picker("保留方式", selection: Binding(
+                    get: { if case .count = store.historyRetention { true } else { false } },
+                    set: { store.setHistoryRetention($0 ? .count(.twoHundred) : .age(.month)) }
+                )) {
+                    Text("按条数").tag(true)
+                    Text("按时间").tag(false)
+                }
+
+                switch store.historyRetention {
+                case .count(let selected):
+                    Picker("保留条数", selection: Binding(
+                        get: { selected },
+                        set: { store.setHistoryRetention(.count($0)) }
+                    )) {
+                        ForEach(SendHistoryRetention.Count.allCases, id: \.self) { count in
+                            Text("\(count.rawValue) 条").tag(count)
+                        }
+                    }
+                case .age(let selected):
+                    Picker("保留时间", selection: Binding(
+                        get: { selected },
+                        set: { store.setHistoryRetention(.age($0)) }
+                    )) {
+                        Text("一周").tag(SendHistoryRetention.Age.week)
+                        Text("一个月").tag(SendHistoryRetention.Age.month)
+                        Text("半年").tag(SendHistoryRetention.Age.halfYear)
+                        Text("一年").tag(SendHistoryRetention.Age.year)
+                    }
+                }
+                if let message = store.historyRetentionErrorMessage {
+                    Text(message).foregroundStyle(.red)
+                }
+            } header: {
+                Text("发送历史")
+            } footer: {
+                Text("设置变更后立即清理。按时间以首次发送日期计算，不限制条数。草稿单独保存，最多新增到 99 条，不会自动清理。")
+            }
+
+            Section {
                 Toggle("发送方式选择", isOn: $enablesSendReturnGesture)
             } footer: {
                 Text("打开后，发送按钮旁会显示发送方式菜单；选择只改变发送按钮行为，不会立即发送。")

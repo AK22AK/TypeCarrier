@@ -15,7 +15,7 @@ The current source version is **0.1.3 Beta**, with iPhone and Android senders an
 - iPhone uses Multipeer Connectivity; Android uses local TCP with NSD / mDNS discovery and manual address connection.
 - iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Multipeer and the Android bridge each allow one active sender; both transports can run concurrently, without unified multi-device scheduling.
 - Plain send and send-with-Return are supported. Automatic paste needs macOS Accessibility permission; results depend on the current focus and target app.
-- iOS provides drafts, send history, resend, and undo/redo. Mac provides receive history and a clipboard restoration toggle.
+- iOS provides drafts, send history, resend, and undo/redo. Drafts are stored independently; send history can be retained by count or age. Mac provides receive history and a clipboard restoration toggle.
 - Connection state, self-checks, and diagnostic export are available. Foreground recovery and reconnect are implemented; reliability still needs device and network validation.
 
 No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android 8.0 or later. Cloud sync, internet relay, Windows, unified multi-device scheduling, and touchpad mode are not supported yet.
@@ -25,7 +25,7 @@ No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android
 - iOS: invited testing through TestFlight, or build from source. No public App Store download is available yet.
 - Android / macOS: visit [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases) for published APK / DMG packages and checksums.
 
-The source version may differ from published builds on each channel. The GitHub release workflow creates a draft prerelease, which is published after verification; a draft is not a public release. iOS installable packages are not provided on GitHub Release.
+The latest source may include unreleased changes, and its version may differ from published builds on each channel. The GitHub release workflow creates a draft prerelease, which is published after verification; a draft is not a public release. iOS installable packages are not provided on GitHub Release.
 
 The macOS release workflow supports Developer ID signed and notarized DMGs. Local development testing packages may be blocked by Gatekeeper. Check the corresponding release notes.
 
