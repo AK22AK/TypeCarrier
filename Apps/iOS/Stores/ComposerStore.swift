@@ -67,7 +67,7 @@ final class ComposerStore: ObservableObject {
     private let recordStore: CarrierRecordStore?
     private let systemDeviceName: String
     private let userDefaults: UserDefaults
-    private var pendingPayloadID: UUID?
+    private let deliveryConfirmationWait: DeliveryConfirmationWait
     private var pendingRecordID: UUID?
     private var pendingSendPreservesActiveInputSession = false
     private var hasStarted = false
@@ -82,11 +82,13 @@ final class ComposerStore: ObservableObject {
 
     init(
         backgroundDisconnectGraceSeconds: TimeInterval = 12,
+        deliveryConfirmationTimeout: Duration = .seconds(5),
         userDefaults: UserDefaults = .standard,
         systemDeviceName: String = UIDevice.current.name
     ) {
         let storedCustomSenderDisplayName = userDefaults.string(forKey: ComposerPreferenceKeys.senderDisplayName) ?? ""
         self.backgroundDisconnectGraceSeconds = backgroundDisconnectGraceSeconds
+        deliveryConfirmationWait = DeliveryConfirmationWait(timeout: deliveryConfirmationTimeout)
         self.userDefaults = userDefaults
         self.systemDeviceName = systemDeviceName
         customSenderDisplayName = storedCustomSenderDisplayName
@@ -550,10 +552,12 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        pendingPayloadID = payload.id
         pendingRecordID = record.id
         pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
+        deliveryConfirmationWait.begin(payloadID: payload.id) { [weak self] in
+            self?.handleDeliveryConfirmationTimeout()
+        }
 
         do {
             try carrierService.send(.text(
@@ -566,7 +570,7 @@ final class ComposerStore: ObservableObject {
                 detail: "已发送到 Mac"
             )
         } catch {
-            pendingPayloadID = nil
+            deliveryConfirmationWait.cancel()
             pendingRecordID = nil
             pendingSendPreservesActiveInputSession = false
             updateRecord(
@@ -754,19 +758,31 @@ final class ComposerStore: ObservableObject {
     }
 
     private func handle(_ envelope: CarrierEnvelope) {
-        if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
+        if envelope.kind == .ack, let ackID = envelope.ackID,
+           deliveryConfirmationWait.confirm(payloadID: ackID) {
             finishPendingSend(
                 status: .received,
                 detail: "Mac 已确认收到",
                 pasteStatus: .received
             )
-        } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
+        } else if envelope.kind == .receipt, let receipt = envelope.receipt,
+                  deliveryConfirmationWait.confirm(payloadID: receipt.payloadID) {
             finishPendingSend(
                 status: .received,
                 detail: receipt.detail ?? "Mac 已接收文本",
                 pasteStatus: receipt.pasteStatus
             )
         }
+    }
+
+    private func handleDeliveryConfirmationTimeout() {
+        let detail = "发送超时，请检查 Mac 端接收结果"
+        if let pendingRecordID {
+            updateRecord(id: pendingRecordID, status: .failed, detail: detail)
+        }
+        pendingRecordID = nil
+        pendingSendPreservesActiveInputSession = false
+        sendState = .failed(detail)
     }
 
     private func finishPendingSend(
@@ -777,7 +793,6 @@ final class ComposerStore: ObservableObject {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
-        pendingPayloadID = nil
         pendingRecordID = nil
         sendState = .sent
 
