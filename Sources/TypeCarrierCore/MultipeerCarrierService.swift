@@ -23,10 +23,12 @@ private struct PeerDiscoveryIdentity: Equatable {
     let diagnosticSummary: String
 
     init(peerID: MCPeerID, discoveryInfo: [String: String]?) {
+        let advertisedName = discoveryInfo?[AndroidBonjourAdvertisement.macNameKey]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = advertisedName.flatMap { $0.isEmpty ? nil : $0 } ?? peerID.displayName
         if discoveryInfo == nil {
             self.init(key: "legacy=\(peerID.hash)", displayName: peerID.displayName)
         } else if discoveryInfo?[AndroidBonjourAdvertisement.macIDKey] != nil || discoveryInfo?[CarrierReceiverDiscoveryInfo.deviceIDKey] != nil {
-            self.init(displayName: peerID.displayName, discoveryInfo: discoveryInfo)
+            self.init(displayName: name, discoveryInfo: discoveryInfo)
         } else {
             self.init(key: "legacy=\(peerID.hash)", displayName: peerID.displayName)
         }
@@ -228,6 +230,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private var connectedPeerOrder: [String] = []
     private var peerRoles: [String: CarrierPeer.Role] = [:]
     private let localDeviceID: String
+    private let localDisplayName: String
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
     private var searchTimeoutTask: Task<Void, Never>?
@@ -271,11 +274,14 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.receiverDiscoveryInfoExtras = receiverDiscoveryInfoExtras
         receiverInstanceStartedAt = String(Date().timeIntervalSince1970)
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
-        let localPeerID = MCPeerID(displayName: displayName ?? ProcessInfo.processInfo.processName)
+        localDisplayName = CarrierDeviceIdentity.preferredDisplayName(
+            customName: nil, systemName: displayName ?? ProcessInfo.processInfo.processName, fallbackName: "TypeCarrier"
+        )
+        let localPeerID = MCPeerID(displayName: CarrierDeviceIdentity.multipeerDisplayName(localDisplayName))
         peerID = localPeerID
         diagnostics = CarrierDiagnostics(
             role: Self.roleName(for: role),
-            localPeerName: localPeerID.displayName,
+            localPeerName: localDisplayName,
             serviceType: Self.serviceType
         )
         super.init()
@@ -362,7 +368,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
 
     public func peerIdentity(for remote: MCPeerID) -> CarrierPeer {
         let identity = peerDiscoveryIdentity(for: remote, discoveryInfo: nil)
-        return CarrierPeer(id: identity.key, displayName: remote.displayName, role: peerRoles[identity.key] ?? .unknown)
+        return CarrierPeer(id: identity.key, displayName: identity.displayName, role: peerRoles[identity.key] ?? .unknown)
     }
 
     public func recordDiagnosticMarker(_ name: String, message: String, peerName: String? = nil) {
@@ -439,11 +445,11 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         connectedPeerOrder.removeAll { peerStates[$0] != .connected }
         connectingPeers = peerStates.compactMap { key, state in
             guard state == .connecting, let peer = knownPeerIDs[key] else { return nil }
-            return CarrierPeer(id: key, displayName: peer.displayName, role: peerRoles[key] ?? .unknown)
+            return CarrierPeer(id: key, displayName: peerDisplayNamesByIdentity[key] ?? peer.displayName, role: peerRoles[key] ?? .unknown)
         }.sorted { $0.id < $1.id }
         connectedPeers = connectedPeerOrder.compactMap { key in
             guard let peer = knownPeerIDs[key] else { return nil }
-            return CarrierPeer(id: key, displayName: peer.displayName, role: peerRoles[key] ?? .unknown)
+            return CarrierPeer(id: key, displayName: peerDisplayNamesByIdentity[key] ?? peer.displayName, role: peerRoles[key] ?? .unknown)
         }
     }
 
@@ -502,6 +508,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             updateDiagnostics()
         }
 
+        if accepted { refreshConnectedPeers() }
         return (identity, accepted)
     }
 
@@ -570,7 +577,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         peerSessions[identity.key] = session
         refreshAggregateState()
         scheduleConnectionTimeout(for: identity)
-        let context = try? JSONEncoder().encode(CarrierDeviceIdentity(displayName: self.peerID.displayName, deviceID: localDeviceID))
+        let context = try? JSONEncoder().encode(CarrierDeviceIdentity(displayName: localDisplayName, deviceID: localDeviceID))
         browser?.invitePeer(peerID, to: session, withContext: context, timeout: inviteTimeout)
         recordDiagnosticEvent("browser.invitePeer", message: "Invited peer attempt \(attempt)/\(maxConnectionAttempts) \(identity.diagnosticSummary)", peerName: identity.displayName)
         logger.info("Invited peer=\(identity.displayName, privacy: .public)")
@@ -667,8 +674,8 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private func acceptInvitation(from peerID: MCPeerID, context: Data?, reply: InvitationReply) {
         let sender = context.flatMap { try? JSONDecoder().decode(CarrierDeviceIdentity.self, from: $0) }
         let identity: PeerDiscoveryIdentity
-        if let deviceID = sender?.deviceID, !deviceID.isEmpty {
-            identity = PeerDiscoveryIdentity(key: "deviceID=\(deviceID)", displayName: peerID.displayName)
+        if let sender, let deviceID = sender.deviceID, !deviceID.isEmpty {
+            identity = PeerDiscoveryIdentity(key: "deviceID=\(deviceID)", displayName: sender.displayName.isEmpty ? peerID.displayName : sender.displayName)
         } else {
             identity = peerDiscoveryIdentity(for: peerID, discoveryInfo: nil)
         }
@@ -1035,7 +1042,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
 
         if let entry = knownPeerIDs.first(where: { $0.value == peerID }) {
-            let identity = PeerDiscoveryIdentity(key: entry.key, displayName: peerID.displayName)
+            let identity = PeerDiscoveryIdentity(key: entry.key, displayName: peerDisplayNamesByIdentity[entry.key] ?? peerID.displayName)
             remember(identity, for: peerID)
             return identity
         }

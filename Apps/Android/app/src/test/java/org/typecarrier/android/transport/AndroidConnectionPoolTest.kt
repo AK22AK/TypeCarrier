@@ -49,6 +49,22 @@ class AndroidConnectionPoolTest {
         assertEquals(listOf("still usable"), other.texts)
     }
 
+    @Test fun renamedDiscoveryUpdatesSameSocketWithoutChangingTargetOrVariant() = runBlocking {
+        val pool = AndroidConnectionPool()
+        val old = MacService("Old", "host", 17641, macID = "A", appVariant = "release")
+        val connection = FakeConnection()
+        pool.addAuthenticated(old, connection)
+        pool.refreshDisplayNames(listOf(old.copy(name = "书房 Mac", host = "other-host")))
+        assertEquals(old.id, pool.connectedServices.value.single().id)
+        assertEquals("书房 Mac", pool.connectedServices.value.single().name)
+        assertEquals("host", pool.connectedServices.value.single().host)
+        assertFalse(connection.closed)
+        pool.refreshDisplayNames(listOf(old.copy(name = "Debug", appVariant = "debug")))
+        assertEquals("书房 Mac", pool.connectedServices.value.single().name)
+        pool.send(old, "still same target", "Phone", null)
+        assertEquals(listOf("still same target"), connection.texts)
+    }
+
     private class FakeConnection : CarrierConnection {
         var closed = false
         var fails = false

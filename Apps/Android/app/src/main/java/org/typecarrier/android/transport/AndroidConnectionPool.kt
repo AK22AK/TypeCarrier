@@ -26,6 +26,19 @@ class AndroidConnectionPool : Closeable {
         old?.connection?.close()
     }
 
+    @Synchronized
+    fun refreshDisplayNames(discovered: List<MacService>) {
+        var changed = false
+        discovered.filter { !it.macID.isNullOrBlank() }.forEach { service ->
+            val entry = entries[service.id] ?: return@forEach
+            if (entry.service.name != service.name) {
+                entries[service.id] = entry.copy(service = entry.service.copy(name = service.name))
+                changed = true
+            }
+        }
+        if (changed) publish()
+    }
+
     suspend fun send(service: MacService, text: String, deviceName: String, action: CarrierPostPasteAction?): CarrierDeliveryReceipt? {
         val entry = synchronized(this) { entry(service) } ?: error("所选 Mac 已离线，请重新连接或选择发送目标")
         return try {

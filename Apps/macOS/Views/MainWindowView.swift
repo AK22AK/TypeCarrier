@@ -1198,9 +1198,57 @@ private struct PlatformDownloadItem: View {
 private struct SettingsReceivingPage: View {
     @ObservedObject var store: MacCarrierStore
 
+    @State private var receiverDisplayNameDraft: String
+    @State private var showsNameGuidance = false
+    private let nameGuidance = "建议中文尽量不超过 10 字，英文尽量不超过 18 个字符。屏幕、字体和字符宽度会影响显示；名称会完整保存，空间不足时仅在界面省略。留空使用系统名称。"
+
+    init(store: MacCarrierStore) {
+        self.store = store
+        _receiverDisplayNameDraft = State(initialValue: store.customReceiverDisplayName)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("本机名称")
+                        Button {
+                            showsNameGuidance.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .help(nameGuidance)
+                        .accessibilityLabel("名称长度建议")
+                        .accessibilityIdentifier("receiverNameHelp")
+                        .popover(isPresented: $showsNameGuidance) {
+                            Text(nameGuidance)
+                                .frame(width: 300, alignment: .leading)
+                                .padding(16)
+                        }
+                    }
+                    TextField("例如：书房 Mac", text: $receiverDisplayNameDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("本机显示名称")
+                    HStack {
+                        Button("保存名称") {
+                            store.setCustomReceiverDisplayName(receiverDisplayNameDraft)
+                            receiverDisplayNameDraft = store.customReceiverDisplayName
+                        }
+                        .disabled(store.customReceiverDisplayName == receiverDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+                        if !store.customReceiverDisplayName.isEmpty {
+                            Button("使用系统名称") {
+                                store.setCustomReceiverDisplayName("")
+                                receiverDisplayNameDraft = ""
+                            }
+                        }
+                    }
+                    Text("其他设备会显示为 \(store.receiverDisplayName)。留空使用系统名称。改名后 iPhone 会短暂重新连接，发送前请确认当前目标。")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle(
                         "自动粘贴后恢复剪贴板",

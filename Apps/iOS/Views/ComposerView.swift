@@ -994,6 +994,7 @@ private struct ComposerSettingsView: View {
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @State private var senderDisplayNameDraft: String
+    @State private var showsNameGuidance = false
 
     init(store: ComposerStore) {
         self.store = store
@@ -1003,21 +1004,37 @@ private struct ComposerSettingsView: View {
     var body: some View {
         List {
             Section {
-                TextField("设备显示名称", text: $senderDisplayNameDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                HStack {
+                    TextField("设备显示名称", text: $senderDisplayNameDraft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button {
+                        showsNameGuidance = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("名称长度建议")
+                    .accessibilityIdentifier("senderNameHelp")
+                }
+                .alert("设备显示名称", isPresented: $showsNameGuidance) {
+                    Button("好", role: .cancel) {}
+                } message: {
+                    Text("建议中文尽量不超过 10 字，英文尽量不超过 18 个字符。屏幕、字体和字符宽度会影响显示；名称会完整保存，空间不足时仅在界面省略。留空使用系统名称。")
+                }
 
                 Button("保存名称") {
                     store.setCustomSenderDisplayName(senderDisplayNameDraft)
                     senderDisplayNameDraft = store.customSenderDisplayName
                 }
-                .disabled(store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+                .disabled(store.sendState == .sending || store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
 
                 if !store.customSenderDisplayName.isEmpty {
                     Button("使用系统名称", role: .destructive) {
                         senderDisplayNameDraft = ""
                         store.setCustomSenderDisplayName("")
                     }
+                    .disabled(store.sendState == .sending)
                 }
             } header: {
                 Text("发送端名称")

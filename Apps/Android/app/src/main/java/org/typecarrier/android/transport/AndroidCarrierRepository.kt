@@ -56,7 +56,17 @@ class AndroidCarrierRepositoryImpl(
     private var manualPortValue = defaultAndroidBridgePort.toString()
     private val discovery = MacDiscovery(
         context = appContext,
-        onServicesChanged = { _services.value = it },
+        onServicesChanged = { services ->
+            // Refresh only display metadata for the same stable receiver identity.
+            val trusted = trustedMacs.associateBy { it.id }
+            services.filter { !it.macID.isNullOrBlank() }.forEach { service ->
+                trusted[service.id]?.let { existing ->
+                    if (existing.name != service.name) rememberTrustedMac(existing.copy(name = service.name))
+                }
+            }
+            connections.refreshDisplayNames(services)
+            _services.value = services
+        },
         onError = {
             errorMessage = it
             _discoveryError.value = it

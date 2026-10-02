@@ -149,15 +149,17 @@ class AndroidComposerViewModel(
 
     private val connectionsJob: Job = scope.launch {
         repository.connectedServices.collect { connected ->
-            val selected = _uiState.value.selectedMac
-            connectedMac = connected.firstOrNull { it.id == selected?.id }
             _uiState.update { current ->
+                connectedMac = connected.firstOrNull { it.id == current.selectedMac?.id }
+                val selected = connectedMac ?: current.selectedMac
                 current.copy(
                     connectedMacs = connected,
+                    selectedMac = selected,
+                    trustedMacs = repository.trustedMacs,
                     connectionStatus = if (current.isBusy) current.connectionStatus else if (connectedMac != null) {
                         AndroidConnectionStatus.Connected
-                    } else if (current.selectedMac != null) AndroidConnectionStatus.Idle else current.connectionStatus,
-                    headerStatusText = current.selectedMac?.name ?: current.headerStatusText,
+                    } else if (selected != null) AndroidConnectionStatus.Idle else current.connectionStatus,
+                    headerStatusText = selected?.name ?: current.headerStatusText,
                 ).withDerivedValues(repository)
             }
         }

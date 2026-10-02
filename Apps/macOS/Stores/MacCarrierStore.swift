@@ -4,6 +4,7 @@ import Foundation
 import TypeCarrierCore
 
 enum MacReceiverPreferenceKeys {
+    static let displayName = "MacReceiverDisplayName"
     static let restoresClipboardAfterAutomaticPaste = "MacReceiverRestoresClipboardAfterAutomaticPaste"
 }
 
@@ -19,12 +20,14 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
     @Published private(set) var lastAccessibilityResetMessage: String?
     @Published private(set) var restoresClipboardAfterAutomaticPaste: Bool
+    @Published private(set) var customReceiverDisplayName: String
+    @Published private(set) var receiverDisplayName: String
 
     @Published private(set) var carrierService: MultipeerCarrierService
     @Published private(set) var androidBridge: AndroidCarrierBridge
     let connectionDiagnosticLogFileURL: URL?
     private let userDefaults: UserDefaults
-    private let receiverDisplayName: String
+    private let displayNamePreference: DeviceNamePreference
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
     private let pasteQueue = CarrierPasteQueue()
@@ -34,18 +37,26 @@ final class MacCarrierStore: ObservableObject {
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        let namePreference = DeviceNamePreference(defaults: userDefaults, key: MacReceiverPreferenceKeys.displayName)
+        displayNamePreference = namePreference
+        customReceiverDisplayName = namePreference.customName
+        let initialReceiverDisplayName = CarrierDeviceIdentity.preferredDisplayName(
+            customName: namePreference.customName,
+            systemName: Host.current().localizedName ?? "",
+            fallbackName: "TypeCarrier Mac"
+        )
+        receiverDisplayName = initialReceiverDisplayName
         restoresClipboardAfterAutomaticPaste = userDefaults.bool(
             forKey: MacReceiverPreferenceKeys.restoresClipboardAfterAutomaticPaste
         )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
-        receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
         let bridge = AndroidCarrierBridge(
-            displayName: receiverDisplayName,
+            displayName: initialReceiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         androidBridge = bridge
         carrierService = Self.makeCarrierService(
-            displayName: receiverDisplayName,
+            displayName: initialReceiverDisplayName,
             receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: bridge.bonjourDiscoveryInfo),
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
@@ -161,6 +172,21 @@ final class MacCarrierStore: ObservableObject {
         androidBridge.start { [weak self] envelope, deviceID, deviceName, reply in
             self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
         }
+    }
+
+    func setCustomReceiverDisplayName(_ name: String) {
+        customReceiverDisplayName = displayNamePreference.save(name)
+        let effectiveName = CarrierDeviceIdentity.preferredDisplayName(
+            customName: customReceiverDisplayName,
+            systemName: Host.current().localizedName ?? "",
+            fallbackName: "TypeCarrier Mac"
+        )
+        guard effectiveName != receiverDisplayName else { return }
+        receiverDisplayName = effectiveName
+        androidBridge.updateDisplayName(effectiveName)
+        // Apple peer names are immutable: rebuild only that transport. Android
+        // retains its authenticated sockets and publishes the new discovery name.
+        rebuildReceiverService(rebuiltReason: "receiver.displayName.updated", restartsAndroidBridge: false)
     }
 
     func restart() {

@@ -11,6 +11,47 @@ final class MultiDeviceRoutingTests: XCTestCase {
         return peer
     }
 
+    func testRenamedReceiverKeepsStableIdentityAndFallbackDoesNotResend() throws {
+        let phone = MultipeerCarrierService(role: .sender, displayName: "Phone")
+        defer { phone.stop() }
+        let a = connect(phone, name: "Old Mac", id: "A")
+        let b = connect(phone, name: "Other Mac", id: "B")
+        let originalID = phone.peerIdentity(for: a).id
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: phone.connectedPeers)
+        let payload = CarrierPayload(text: "Already sent")
+        var destinations: [MCPeerID] = []
+        phone.sendForTesting = { _, peers in destinations += peers }
+        try phone.send(.text(payload), to: originalID)
+        phone.simulateSessionStateForTesting(.notConnected, peerID: a)
+        selection.reconcile(connected: phone.connectedPeers)
+        XCTAssertEqual(selection.selectedID, phone.peerIdentity(for: b).id)
+        let fullName = String(repeating: "书房电脑", count: 8)
+        let renamed = MCPeerID(displayName: CarrierDeviceIdentity.multipeerDisplayName(fullName))
+        phone.simulateFoundPeerForTesting(renamed, discoveryInfo: ["macID": "A", "macName": fullName, "appVariant": "release"])
+        phone.simulateSessionStateForTesting(.connected, peerID: renamed)
+        selection.reconcile(connected: phone.connectedPeers)
+        XCTAssertEqual(phone.peerIdentity(for: renamed).id, originalID)
+        XCTAssertEqual(phone.peerIdentity(for: renamed).displayName, fullName)
+        XCTAssertEqual(phone.connectedPeers.filter { $0.id == originalID }.count, 1)
+        XCTAssertEqual(selection.selectedID, phone.peerIdentity(for: b).id)
+        XCTAssertEqual(destinations, [a], "Renaming must not resend the captured payload")
+    }
+
+    func testInvitationFullNameSurvivesShortPeerSessionCallbacks() throws {
+        let mac = MultipeerCarrierService(role: .receiver, displayName: "Mac")
+        defer { mac.stop() }
+        let name = String(repeating: "完整手机名称", count: 8)
+        let peer = MCPeerID(displayName: CarrierDeviceIdentity.multipeerDisplayName(name))
+        let context = try JSONEncoder().encode(CarrierDeviceIdentity(displayName: name, deviceID: "phone-stable"))
+        mac.simulateInvitationForTesting(from: peer, context: context) { _, _ in }
+        mac.simulateSessionStateForTesting(.connecting, peerID: peer)
+        mac.simulateSessionStateForTesting(.connected, peerID: peer)
+        XCTAssertEqual(mac.peerIdentity(for: peer).displayName, name)
+        XCTAssertEqual(mac.connectedPeers.first?.displayName, name)
+        XCTAssertEqual(mac.connectedPeers.first?.id, "deviceID=phone-stable")
+    }
+
     func testOnePhoneConnectsTwoSameNamedMacsAndSendsOnlyToSelectedMac() throws {
         let phone = MultipeerCarrierService(role: .sender, displayName: "Phone")
         let a = connect(phone, name: "Mac", id: "A")

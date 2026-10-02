@@ -71,6 +71,7 @@ final class ComposerStore: ObservableObject {
     private let senderDeviceID: String
     @Published private(set) var targetSelection: ReceiverTargetSelection
     private let userDefaults: UserDefaults
+    private let displayNamePreference: DeviceNamePreference
     private let deliveryConfirmationWait: DeliveryConfirmationWait
     private var pendingRecordID: UUID?
     private var pendingSendPreservesActiveInputSession = false
@@ -90,7 +91,9 @@ final class ComposerStore: ObservableObject {
         userDefaults: UserDefaults = .standard,
         systemDeviceName: String = UIDevice.current.name
     ) {
-        let storedCustomSenderDisplayName = userDefaults.string(forKey: ComposerPreferenceKeys.senderDisplayName) ?? ""
+        let namePreference = DeviceNamePreference(defaults: userDefaults, key: ComposerPreferenceKeys.senderDisplayName)
+        displayNamePreference = namePreference
+        let storedCustomSenderDisplayName = namePreference.customName
         self.backgroundDisconnectGraceSeconds = backgroundDisconnectGraceSeconds
         deliveryConfirmationWait = DeliveryConfirmationWait(timeout: deliveryConfirmationTimeout)
         self.userDefaults = userDefaults
@@ -307,15 +310,10 @@ final class ComposerStore: ObservableObject {
     }
 
     func setCustomSenderDisplayName(_ name: String) {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard sendState != .sending else { return }
+        let normalizedName = displayNamePreference.save(name)
         let oldDisplayName = senderDisplayName
         customSenderDisplayName = normalizedName
-
-        if normalizedName.isEmpty {
-            userDefaults.removeObject(forKey: ComposerPreferenceKeys.senderDisplayName)
-        } else {
-            userDefaults.set(normalizedName, forKey: ComposerPreferenceKeys.senderDisplayName)
-        }
 
         guard senderDisplayName != oldDisplayName else {
             return

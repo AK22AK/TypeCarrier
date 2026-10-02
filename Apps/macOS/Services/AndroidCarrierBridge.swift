@@ -58,7 +58,7 @@ final class AndroidCarrierBridge: ObservableObject {
         return addresses.map { "\($0.address):\(portText)（\($0.interfaceName)）" }.joined(separator: "\n")
     }
 
-    private let displayName: String
+    private var displayName: String
     private let macID: String
     private let localPairingCode: String
     private let trustTokenStore: AndroidTrustTokenStore
@@ -91,6 +91,10 @@ final class AndroidCarrierBridge: ObservableObject {
         self.localPairingCode = pairingCode
         self.trustTokenStore = trustTokenStore
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
+    }
+
+    func updateDisplayName(_ name: String) {
+        displayName = name
     }
 
     func start(onEnvelope: @escaping EnvelopeHandler) {

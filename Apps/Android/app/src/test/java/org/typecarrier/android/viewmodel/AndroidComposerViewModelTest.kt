@@ -527,6 +527,20 @@ class AndroidComposerViewModelTest {
         assertTrue(viewModel.uiState.value.canSend)
     }
 
+    @Test
+    fun connectedReceiverRenameUpdatesHeaderWithoutSwitchingTarget() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val old = MacService("Old Mac", "host", 17641, macID = "stable")
+        val viewModel = makeViewModel(repository)
+        viewModel.selectMac(old)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+        repository.publishConnectedServices(listOf(old.copy(name = "书房 Mac")))
+        assertEquals(old.id, viewModel.uiState.value.selectedMac?.id)
+        assertEquals("书房 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+    }
+
     private fun makeViewModel(
         repository: FakeAndroidCarrierRepository = FakeAndroidCarrierRepository(),
     ): AndroidComposerViewModel {
@@ -580,6 +594,8 @@ private class FakeAndroidCarrierRepository(
     fun publishServices(services: List<MacService>) {
         mutableServices.value = services
     }
+
+    fun publishConnectedServices(services: List<MacService>) { mutableConnectedServices.value = services }
 
     fun publishDiscoveryError(message: String) {
         mutableDiscoveryErrors.value = message
