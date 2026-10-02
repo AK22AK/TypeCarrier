@@ -206,9 +206,17 @@ final class ComposerStore: ObservableObject {
 
     var headerStatusText: String {
         if let target = selectedTarget { return target.displayName }
+        if connectingReceivers.count > 1 { return "连接 \(connectingReceivers.count) 台" }
+        if let peer = connectingReceivers.first { return peer.displayName }
+        if let name = connectionState.peerName { return name }
+        return connectionStatus.displayText
+    }
+
+    var headerAccessibilityText: String {
+        if let target = selectedTarget { return "已连接 \(target.displayName)" }
         if connectingReceivers.count > 1 { return "正在连接 \(connectingReceivers.count) 台设备" }
         if let peer = connectingReceivers.first { return "正在连接 \(peer.displayName)" }
-        if case .reconnecting(let name) = connectionState { return "正在连接 \(name)" }
+        if let name = connectionState.peerName { return "正在连接 \(name)" }
         return connectionStatus.displayText
     }
 

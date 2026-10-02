@@ -4,7 +4,7 @@
 
 ## 组件与传输
 
-- iOS：SwiftUI 输入界面，使用 `MultipeerConnectivity` 连接 Mac。
+- iOS：SwiftUI 输入界面，使用 `MultipeerConnectivity` 连接 Mac。连接状态由图标表达；具体设备名称保持单行正常字号，超过副标题可用宽度时尾部省略，不改实际设备名，无障碍保留完整名称与状态。截断由宽度决定，没有统一的字符数保证。
 - Android：原生输入界面，通过 NSD / mDNS 发现 Mac，使用局域网 TCP；支持手动地址连接。
 - macOS：SwiftUI + AppKit 菜单栏接收端，分别提供 Multipeer 和 Android bridge 入口。
 - Core：共享 payload、回执、连接状态、记录存储和 Apple 端传输逻辑。Android 复用 JSON 协议契约。

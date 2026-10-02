@@ -150,6 +150,7 @@ struct ComposerView: View {
             HStack(spacing: interpolated(expanded: 7, compact: 5, progress: progress)) {
                 ConnectionStatusIndicator(status: store.connectionStatus)
                     .id(store.connectionStatus)
+                    .fixedSize()
 
                 Group {
                     if store.showsTargetPicker {
@@ -164,8 +165,11 @@ struct ComposerView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Text(store.headerStatusText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 Image(systemName: "chevron.down")
                                     .font(.system(size: 11, weight: .semibold))
+                                    .fixedSize()
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
@@ -173,18 +177,22 @@ struct ComposerView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("发送目标：\(store.headerStatusText)")
+                        .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
                         .accessibilityHint("切换已连接的 Mac")
                         .accessibilityIdentifier("receiverTargetPicker")
                     } else {
                         Text(store.headerStatusText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .accessibilityLabel(store.headerAccessibilityText)
                             .accessibilityIdentifier("connectionStatusText")
                     }
                 }
                 .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .layoutPriority(1)
             }
             .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }
