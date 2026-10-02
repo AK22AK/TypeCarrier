@@ -11,6 +11,12 @@
 
 Android TCP 使用 4-byte big-endian 长度前缀和 UTF-8 JSON，默认端口为 `17641`。Android 首次配对使用 Mac 显示的配对码，后续连接复用信任凭据。iPhone 通过 Multipeer 自动发现与连接，`MCSession` 要求加密，不使用该配对码。Apple 端每个远端使用独立 `MCSession`，Android 每个已认证目标使用独立 TCP 连接。手机同时连接多个 Mac，但每次发送仅路由到唯一选定目标；iPhone 在当前目标断开时自动选仍在线且本轮最早连接成功的 Mac，仅影响后续发送；Android 保持离线目标不自动替换的规则。Mac 允许多手机接入，来源按稳定身份区分，同名设备不合并。
 
+## Mac 入口与生命周期
+
+Mac 常驻菜单栏，无管理窗口的冷启动不显示 Dock 图标，也不自动弹窗。通过菜单中的“打开 TypeCarrier”、快捷键或 Finder / Launchpad 打开管理窗口时，显示 Dock 图标；最小化仍保留 Dock，可从 Dock 恢复。点 × 关闭最后一个管理窗口后隐藏 Dock，菜单栏与接收服务继续运行；仅明确退出应用才停止。接收与自动粘贴不主动激活管理窗口。
+
+SwiftUI 通过 `NSApplicationDelegateAdaptor` 接入应用代理，菜单栏使用适用于多场景的 `isInserted` 构造方式。窗口打开回调由菜单栏入口注册，不依赖管理窗口先出现；早到的重开请求在回调就绪后处理。
+
 ## 发送与粘贴
 
 1. 手机保存发送记录，将文本 payload 只发给选定的 Mac。

@@ -4,31 +4,32 @@ import SwiftUI
 
 @main
 struct TypeCarrierMacApp: App {
-    @StateObject private var coordinator: MacAppCoordinator
+    @NSApplicationDelegateAdaptor(MacAppCoordinator.self) private var coordinator
 
     init() {
         if Self.activateExistingInstanceIfNeeded() {
             exit(0)
         }
-        _coordinator = StateObject(wrappedValue: MacAppCoordinator())
     }
 
     var body: some Scene {
-        Window("TypeCarrier", id: "main") {
+        Window("TypeCarrier", id: MacAppCoordinator.mainWindowID) {
             MainWindowView(store: coordinator.store)
-                .background(MainWindowRequestInstaller(coordinator: coordinator))
+                .onAppear { coordinator.managementWindowDidAppear() }
         }
         .defaultSize(width: 900, height: 620)
         .windowResizability(.contentSize)
-        .defaultLaunchBehavior(.presented)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: .constant(true)) {
             MenuBarContentView(coordinator: coordinator)
         } label: {
             MenuBarStatusIcon(store: coordinator.store)
+                .background(MainWindowRequestInstaller(coordinator: coordinator))
         }
         .menuBarExtraStyle(.menu)
     }
@@ -64,7 +65,7 @@ private struct MainWindowRequestInstaller: View {
             .frame(width: 0, height: 0)
             .onAppear {
                 coordinator.setMainWindowRequestHandler {
-                    openWindow(id: "main")
+                    openWindow(id: MacAppCoordinator.mainWindowID)
                     NSApp.activate(ignoringOtherApps: true)
                 }
             }

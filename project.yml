@@ -54,6 +54,7 @@ targets:
         CFBundleDisplayName: TypeCarrier
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -80,6 +81,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMultipleInstancesProhibited: true
+        LSUIElement: true
         NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，接收附近手机发来的文本。
         NSBonjourServices:
           - _typecarrier._tcp
