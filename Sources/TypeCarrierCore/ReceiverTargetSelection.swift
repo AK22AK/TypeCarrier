@@ -1,40 +1,20 @@
 import Foundation
 
-/// Keeps an offline selection rather than silently redirecting a send.
+/// Selects from receivers ordered by their current connection's success time.
+/// Selection changes affect future sends; callers retain each in-flight target separately.
 public struct ReceiverTargetSelection: Equatable, Sendable {
     public private(set) var selectedID: String?
-    public private(set) var lastSuccessfulID: String?
-    public private(set) var selectedName: String?
-    private var automaticallySelected = false
 
-    public init(lastSuccessfulID: String? = nil, selectedName: String? = nil) {
-        self.lastSuccessfulID = lastSuccessfulID
-        selectedID = lastSuccessfulID
-        self.selectedName = selectedName
-    }
+    public init() {}
 
-    public mutating func reconcile(connected: [CarrierPeer], availableCount: Int) {
-        let availableCount = max(availableCount, connected.count)
-        if automaticallySelected, lastSuccessfulID == nil, availableCount > 1 {
-            selectedID = nil
-            selectedName = nil
-            automaticallySelected = false
-        }
-        if selectedID == nil, availableCount == 1, connected.count == 1 {
-            select(connected[0])
-            automaticallySelected = true
-        }
-        if let peer = target(in: connected) { selectedName = peer.displayName }
+    public mutating func reconcile(connected: [CarrierPeer]) {
+        guard target(in: connected) == nil else { return }
+        selectedID = connected.first { $0.role == .receiver }?.id
     }
 
     public mutating func select(_ peer: CarrierPeer) {
+        guard peer.role == .receiver else { return }
         selectedID = peer.id
-        selectedName = peer.displayName
-        automaticallySelected = false
-    }
-
-    public mutating func didConfirm(_ peer: CarrierPeer) {
-        lastSuccessfulID = peer.id
     }
 
     public func target(in connected: [CarrierPeer]) -> CarrierPeer? {

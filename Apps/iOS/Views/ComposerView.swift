@@ -151,28 +151,40 @@ struct ComposerView: View {
                 ConnectionStatusIndicator(status: store.connectionStatus)
                     .id(store.connectionStatus)
 
-                Menu {
-                    if store.connectedReceivers.isEmpty {
-                        Text("没有已连接的 Mac")
-                    }
-                    ForEach(store.connectedReceivers) { peer in
-                        Button {
-                            store.selectReceiver(peer)
+                Group {
+                    if store.showsTargetPicker {
+                        Menu {
+                            ForEach(store.connectedReceivers) { peer in
+                                Button {
+                                    store.selectReceiver(peer)
+                                } label: {
+                                    Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
+                                }
+                            }
                         } label: {
-                            Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
+                            HStack(spacing: 6) {
+                                Text(store.headerStatusText)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
                         }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("发送目标：\(store.headerStatusText)")
+                        .accessibilityHint("切换已连接的 Mac")
+                        .accessibilityIdentifier("receiverTargetPicker")
+                    } else {
                         Text(store.headerStatusText)
-                        Image(systemName: "chevron.down").font(.caption2)
+                            .accessibilityIdentifier("connectionStatusText")
                     }
                 }
-                .disabled(store.sendState == .sending)
-                    .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
             }
             .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }

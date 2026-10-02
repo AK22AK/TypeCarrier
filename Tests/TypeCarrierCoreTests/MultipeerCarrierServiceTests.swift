@@ -4,6 +4,35 @@ import XCTest
 
 @MainActor
 final class MultipeerCarrierServiceTests: XCTestCase {
+    func testConnectedOrderUsesSuccessEventsAndReconnectGoesToEnd() {
+        let service = MultipeerCarrierService(role: .sender, displayName: "iPhone")
+        defer { service.stop() }
+        let a = MCPeerID(displayName: "A Mac")
+        let z = MCPeerID(displayName: "Z Mac")
+        service.simulateFoundPeerForTesting(a)
+        service.simulateFoundPeerForTesting(z)
+        service.simulateSessionStateForTesting(.connecting, peerID: a)
+        service.simulateSessionStateForTesting(.connecting, peerID: z)
+        XCTAssertEqual(service.connectingPeers.count, 2)
+        XCTAssertTrue(service.connectedPeers.isEmpty)
+        service.simulateSessionStateForTesting(.connected, peerID: z)
+        XCTAssertEqual(service.connectedPeers.map(\.displayName), ["Z Mac"])
+        XCTAssertEqual(service.connectingPeers.map(\.displayName), ["A Mac"])
+        service.simulateSessionStateForTesting(.connected, peerID: a)
+        service.simulateSessionStateForTesting(.connected, peerID: z)
+        XCTAssertEqual(service.connectedPeers.map(\.displayName), ["Z Mac", "A Mac"])
+        XCTAssertTrue(service.connectingPeers.isEmpty)
+        service.simulateSessionStateForTesting(.notConnected, peerID: z)
+        XCTAssertEqual(service.connectedPeers.map(\.displayName), ["A Mac"])
+        service.simulateSessionStateForTesting(.connected, peerID: z)
+        XCTAssertEqual(service.connectedPeers.map(\.displayName), ["A Mac", "Z Mac"])
+        service.stop()
+        XCTAssertTrue(service.connectedPeers.isEmpty)
+        XCTAssertTrue(service.connectingPeers.isEmpty)
+        service.simulateSessionStateForTesting(.connected, peerID: z)
+        XCTAssertEqual(service.connectedPeers.map(\.displayName), ["Z Mac"])
+    }
+
     func testSenderRefreshesDiscoveryAfterSearchTimeout() async throws {
         let service = MultipeerCarrierService(
             role: .sender,

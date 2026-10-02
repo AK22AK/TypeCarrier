@@ -198,7 +198,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     public static let serviceType = "typecarrier"
 
     @Published public private(set) var connectionState: ConnectionState = .idle
+    /// Ordered by successful connection, with reconnects appended as new connections.
     @Published public private(set) var connectedPeers: [CarrierPeer] = []
+    @Published public private(set) var connectingPeers: [CarrierPeer] = []
     @Published public private(set) var discoveredPeers: [CarrierPeer] = []
     @Published public private(set) var lastReceivedEnvelope: CarrierEnvelope?
     @Published public private(set) var lastErrorMessage: String?
@@ -223,6 +225,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var peerSessions: [String: MCSession] = [:]
     private var peerStates: [String: MCSessionState] = [:]
+    private var connectedPeerOrder: [String] = []
     private var peerRoles: [String: CarrierPeer.Role] = [:]
     private let localDeviceID: String
     private var advertiser: MCNearbyServiceAdvertiser?
@@ -302,6 +305,8 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         }
         peerSessions = [:]
         peerStates = [:]
+        connectedPeerOrder = []
+        connectingPeers = []
         peerRoles = [:]
         connectedPeers = []
         cancelSearchTimeout()
@@ -431,10 +436,15 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     }
 
     private func refreshConnectedPeers() {
-        connectedPeers = peerStates.compactMap { key, state in
-            guard state == .connected, let peer = knownPeerIDs[key] else { return nil }
+        connectedPeerOrder.removeAll { peerStates[$0] != .connected }
+        connectingPeers = peerStates.compactMap { key, state in
+            guard state == .connecting, let peer = knownPeerIDs[key] else { return nil }
             return CarrierPeer(id: key, displayName: peer.displayName, role: peerRoles[key] ?? .unknown)
         }.sorted { $0.id < $1.id }
+        connectedPeers = connectedPeerOrder.compactMap { key in
+            guard let peer = knownPeerIDs[key] else { return nil }
+            return CarrierPeer(id: key, displayName: peer.displayName, role: peerRoles[key] ?? .unknown)
+        }
     }
 
     private func refreshAggregateState() {
@@ -626,6 +636,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         if peerRoles[identity.key] == nil { peerRoles[identity.key] = role == .sender ? .receiver : .sender }
         switch state {
         case .connected:
+            if !connectedPeerOrder.contains(identity.key) {
+                connectedPeerOrder.append(identity.key)
+            }
             peerStates[identity.key] = .connected
             cancelConnectionTimeout(for: identity.key)
             invitedPeerIDs.remove(identity.key)

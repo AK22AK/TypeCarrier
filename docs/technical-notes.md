@@ -9,7 +9,7 @@
 - macOS：SwiftUI + AppKit 菜单栏接收端，分别提供 Multipeer 和 Android bridge 入口。
 - Core：共享 payload、回执、连接状态、记录存储和 Apple 端传输逻辑。Android 复用 JSON 协议契约。
 
-Android TCP 使用 4-byte big-endian 长度前缀和 UTF-8 JSON，默认端口为 `17641`。Android 首次配对使用 Mac 显示的配对码，后续连接复用信任凭据。iPhone 通过 Multipeer 自动发现与连接，`MCSession` 要求加密，不使用该配对码。Apple 端每个远端使用独立 `MCSession`，Android 每个已认证目标使用独立 TCP 连接。手机同时连接多个 Mac，但每次发送仅路由到唯一选定目标；离线目标不自动替换为其他 Mac。Mac 允许多手机接入，来源按稳定身份区分，同名设备不合并。
+Android TCP 使用 4-byte big-endian 长度前缀和 UTF-8 JSON，默认端口为 `17641`。Android 首次配对使用 Mac 显示的配对码，后续连接复用信任凭据。iPhone 通过 Multipeer 自动发现与连接，`MCSession` 要求加密，不使用该配对码。Apple 端每个远端使用独立 `MCSession`，Android 每个已认证目标使用独立 TCP 连接。手机同时连接多个 Mac，但每次发送仅路由到唯一选定目标；iPhone 在当前目标断开时自动选仍在线且本轮最早连接成功的 Mac，仅影响后续发送；Android 保持离线目标不自动替换的规则。Mac 允许多手机接入，来源按稳定身份区分，同名设备不合并。
 
 ## 发送与粘贴
 

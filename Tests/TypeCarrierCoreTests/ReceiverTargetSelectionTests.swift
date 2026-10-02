@@ -2,46 +2,65 @@ import XCTest
 @testable import TypeCarrierCore
 
 final class ReceiverTargetSelectionTests: XCTestCase {
+    private let z = CarrierPeer(id: "Z", displayName: "Mac", role: .receiver)
     private let a = CarrierPeer(id: "A", displayName: "Mac", role: .receiver)
     private let b = CarrierPeer(id: "B", displayName: "Mac", role: .receiver)
 
-    func testSingletonAutoSelectsButMultipleWithoutHistoryRequireChoice() {
+    func testFirstConnectedWinsAndNewConnectionsDoNotStealSelection() {
         var selection = ReceiverTargetSelection()
-        selection.reconcile(connected: [a], availableCount: 1)
-        XCTAssertEqual(selection.target(in: [a]), a)
-        selection.reconcile(connected: [a, b], availableCount: 2)
-        XCTAssertNil(selection.selectedID)
-        selection.select(b)
-        selection.reconcile(connected: [a, b], availableCount: 2)
-        XCTAssertEqual(selection.target(in: [a, b]), b)
-    }
-
-    func testOfflineSelectionStaysSelectedWithoutFallbackAndReconnects() {
-        var selection = ReceiverTargetSelection(lastSuccessfulID: "A", selectedName: "Mac")
-        selection.reconcile(connected: [b], availableCount: 1)
-        XCTAssertEqual(selection.selectedID, "A")
-        XCTAssertNil(selection.target(in: [b]))
-        selection.reconcile(connected: [a, b], availableCount: 2)
-        XCTAssertEqual(selection.target(in: [a, b]), a)
-    }
-
-    func testConnectedTargetsStillRequireChoiceAfterOneDisappearsFromDiscovery() {
-        var selection = ReceiverTargetSelection()
-        selection.reconcile(connected: [a], availableCount: 1)
-        selection.reconcile(connected: [a, b], availableCount: 1)
-        XCTAssertNil(selection.selectedID)
-    }
-
-    func testUserSelectionSwitchesNextTargetAndSuccessfulTargetIsRemembered() {
-        var selection = ReceiverTargetSelection()
-        XCTAssertNil(selection.target(in: []))
+        selection.reconcile(connected: [z])
+        XCTAssertEqual(selection.selectedID, z.id)
+        selection.reconcile(connected: [z, a])
+        XCTAssertEqual(selection.selectedID, z.id)
         selection.select(a)
+        selection.reconcile(connected: [z, a, b])
+        XCTAssertEqual(selection.selectedID, a.id)
+    }
+
+    func testDisconnectFallsBackToEarliestSurvivorAndReconnectDoesNotSteal() {
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: [z, a, b])
+        selection.select(b)
+        selection.reconcile(connected: [z, a])
+        XCTAssertEqual(selection.selectedID, z.id)
+        selection.reconcile(connected: [a])
+        XCTAssertEqual(selection.selectedID, a.id)
+        selection.reconcile(connected: [a, b])
+        XCTAssertEqual(selection.selectedID, a.id)
+        selection.reconcile(connected: [a])
+        XCTAssertEqual(selection.selectedID, a.id)
+        selection.reconcile(connected: [])
+        XCTAssertNil(selection.selectedID)
+        selection.reconcile(connected: [z, a])
+        XCTAssertEqual(selection.selectedID, z.id)
+    }
+
+    func testSelectionChangesDoNotMutateCapturedInFlightTarget() {
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: [a, b])
         let capturedTarget = selection.target(in: [a, b])
         selection.select(b)
+        selection.reconcile(connected: [b])
         XCTAssertEqual(capturedTarget, a)
-        XCTAssertEqual(selection.target(in: [a, b]), b)
-        selection.didConfirm(a)
-        XCTAssertEqual(selection.lastSuccessfulID, "A")
-        XCTAssertEqual(selection.selectedID, "B")
+        XCTAssertEqual(selection.target(in: [b]), b)
+    }
+
+    func testNewSessionDoesNotRestorePreviousSessionSelection() {
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: [a, z])
+        selection.select(a)
+        selection = ReceiverTargetSelection()
+        selection.reconcile(connected: [z, a])
+        XCTAssertEqual(selection.selectedID, z.id)
+    }
+
+    func testOnlyReceiverCanBecomeTarget() {
+        let sender = CarrierPeer(id: "sender", displayName: "Phone", role: .sender)
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: [sender, z])
+        selection.select(sender)
+        XCTAssertEqual(selection.selectedID, z.id)
+        selection.reconcile(connected: [sender])
+        XCTAssertNil(selection.selectedID)
     }
 }

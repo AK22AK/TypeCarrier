@@ -100,6 +100,31 @@ final class MultiDeviceRoutingTests: XCTestCase {
         }
     }
 
+    func testTargetFallbackDuringSendDoesNotReroutePayloadOrReceipt() throws {
+        let phone = MultipeerCarrierService(role: .sender, displayName: "Phone")
+        defer { phone.stop() }
+        let a = connect(phone, name: "Mac A", id: "A")
+        let b = connect(phone, name: "Mac B", id: "B")
+        var selection = ReceiverTargetSelection()
+        selection.reconcile(connected: phone.connectedPeers)
+        let target = try XCTUnwrap(selection.target(in: phone.connectedPeers))
+        let payload = CarrierPayload(text: "Original text")
+        var destinations: [MCPeerID] = []
+        phone.sendForTesting = { _, peers in destinations += peers }
+        let wait = DeliveryConfirmationWait()
+        wait.begin(payloadID: payload.id, targetID: target.id) { XCTFail("Should confirm") }
+        try phone.send(.text(payload), to: target.id)
+
+        selection.select(phone.peerIdentity(for: b))
+        phone.simulateSessionStateForTesting(.notConnected, peerID: a)
+        selection.reconcile(connected: phone.connectedPeers)
+        XCTAssertEqual(selection.selectedID, phone.peerIdentity(for: b).id)
+        XCTAssertEqual(destinations, [a])
+        XCTAssertFalse(wait.confirm(payloadID: payload.id, sourceID: selection.selectedID))
+        XCTAssertTrue(wait.confirm(payloadID: payload.id, sourceID: target.id))
+        XCTAssertEqual(destinations, [a])
+    }
+
     func testWrongMacReceiptDoesNotFinishSendAndCorrectReceiptDoes() {
         let wait = DeliveryConfirmationWait()
         let id = UUID()

@@ -70,7 +70,6 @@ final class ComposerStore: ObservableObject {
     private let systemDeviceName: String
     private let senderDeviceID: String
     @Published private(set) var targetSelection: ReceiverTargetSelection
-    private var pendingTarget: CarrierPeer?
     private let userDefaults: UserDefaults
     private let deliveryConfirmationWait: DeliveryConfirmationWait
     private var pendingRecordID: UUID?
@@ -99,10 +98,7 @@ final class ComposerStore: ObservableObject {
         let deviceID = userDefaults.string(forKey: "senderStableDeviceID") ?? UUID().uuidString
         senderDeviceID = deviceID
         userDefaults.set(deviceID, forKey: "senderStableDeviceID")
-        targetSelection = ReceiverTargetSelection(
-            lastSuccessfulID: userDefaults.string(forKey: "lastSuccessfulReceiverID"),
-            selectedName: userDefaults.string(forKey: "lastSuccessfulReceiverName")
-        )
+        targetSelection = ReceiverTargetSelection()
         customSenderDisplayName = storedCustomSenderDisplayName
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
@@ -182,7 +178,8 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionStatus: ConnectionStatus {
-        if targetSelection.selectedID != nil, selectedTarget == nil { return .idle }
+        if !connectedReceivers.isEmpty { return .connected }
+        if !connectingReceivers.isEmpty { return .connecting }
         return switch connectionState {
         case .connected:
             .connected
@@ -201,23 +198,27 @@ final class ComposerStore: ObservableObject {
 
     var selectedTarget: CarrierPeer? { targetSelection.target(in: connectedReceivers) }
 
+    var connectingReceivers: [CarrierPeer] {
+        carrierService.connectingPeers.filter { $0.role == .receiver }
+    }
+
+    var showsTargetPicker: Bool { connectedReceivers.count >= 2 }
+
     var headerStatusText: String {
         if let target = selectedTarget { return target.displayName }
-        if let name = targetSelection.selectedName { return "\(name) · 未连接" }
-        return connectedReceivers.isEmpty ? connectionStatus.displayText : "选择 Mac"
+        if connectingReceivers.count > 1 { return "正在连接 \(connectingReceivers.count) 台设备" }
+        if let peer = connectingReceivers.first { return "正在连接 \(peer.displayName)" }
+        if case .reconnecting(let name) = connectionState { return "正在连接 \(name)" }
+        return connectionStatus.displayText
     }
 
     func selectReceiver(_ peer: CarrierPeer) {
-        guard sendState != .sending, connectedReceivers.contains(where: { $0.id == peer.id }) else { return }
+        guard connectedReceivers.contains(where: { $0.id == peer.id }) else { return }
         targetSelection.select(peer)
     }
 
     private func reconcileTargets() {
-        guard sendState != .sending else { return }
-        targetSelection.reconcile(
-            connected: connectedReceivers,
-            availableCount: carrierService.discoveredPeers.filter { $0.role == .receiver }.count
-        )
+        targetSelection.reconcile(connected: connectedReceivers)
     }
 
     var connectionFailureMessage: String? {
@@ -384,13 +385,10 @@ final class ComposerStore: ObservableObject {
             }
             .store(in: &carrierServiceCancellables)
         carrierService.$connectedPeers
-            .sink { [weak self] _ in
-                Task { @MainActor [weak self] in self?.reconcileTargets() }
-            }
-            .store(in: &carrierServiceCancellables)
-        carrierService.$discoveredPeers
-            .sink { [weak self] _ in
-                Task { @MainActor [weak self] in self?.reconcileTargets() }
+            .sink { [weak self] peers in
+                // Consume each published snapshot directly so rapid disconnect/reconnect
+                // events cannot be collapsed into a later service state.
+                self?.targetSelection.reconcile(connected: peers)
             }
             .store(in: &carrierServiceCancellables)
     }
@@ -571,7 +569,7 @@ final class ComposerStore: ObservableObject {
         guard sendState != .sending else { return }
         reconcileTargets()
         guard let target = selectedTarget else {
-            sendState = .failed(targetSelection.selectedID == nil ? "请选择 Mac" : "目标 Mac 未连接")
+            sendState = .failed("目标 Mac 未连接")
             return
         }
         let textToSend = text
@@ -601,7 +599,6 @@ final class ComposerStore: ObservableObject {
         }
 
         pendingRecordID = record.id
-        pendingTarget = target
         pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
         deliveryConfirmationWait.begin(payloadID: payload.id, targetID: target.id) { [weak self] in
@@ -621,7 +618,6 @@ final class ComposerStore: ObservableObject {
         } catch {
             deliveryConfirmationWait.cancel()
             pendingRecordID = nil
-            pendingTarget = nil
             pendingSendPreservesActiveInputSession = false
             updateRecord(
                 id: record.id,
@@ -841,7 +837,6 @@ final class ComposerStore: ObservableObject {
             updateRecord(id: pendingRecordID, status: .failed, detail: detail)
         }
         pendingRecordID = nil
-        pendingTarget = nil
         pendingSendPreservesActiveInputSession = false
         sendState = .failed(detail)
         reconcileTargets()
@@ -855,13 +850,8 @@ final class ComposerStore: ObservableObject {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
-        if let target = pendingTarget {
-            targetSelection.didConfirm(target)
-            userDefaults.set(target.id, forKey: "lastSuccessfulReceiverID")
-            userDefaults.set(target.displayName, forKey: "lastSuccessfulReceiverName")
-        }
+
         pendingRecordID = nil
-        pendingTarget = nil
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {
