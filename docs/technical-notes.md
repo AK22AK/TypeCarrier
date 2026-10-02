@@ -9,17 +9,17 @@
 - macOS：SwiftUI + AppKit 菜单栏接收端，分别提供 Multipeer 和 Android bridge 入口。
 - Core：共享 payload、回执、连接状态、记录存储和 Apple 端传输逻辑。Android 复用 JSON 协议契约。
 
-Android TCP 使用 4-byte big-endian 长度前缀和 UTF-8 JSON，默认端口为 `17641`。Android 首次配对使用 Mac 显示的配对码，后续连接复用信任凭据。iPhone 通过 Multipeer 自动发现与连接，`MCSession` 要求加密，不使用该配对码。Multipeer 与 Android bridge 分别限制同入口的 active sender；两入口可并行，尚无跨入口统一调度。
+Android TCP 使用 4-byte big-endian 长度前缀和 UTF-8 JSON，默认端口为 `17641`。Android 首次配对使用 Mac 显示的配对码，后续连接复用信任凭据。iPhone 通过 Multipeer 自动发现与连接，`MCSession` 要求加密，不使用该配对码。Apple 端每个远端使用独立 `MCSession`，Android 每个已认证目标使用独立 TCP 连接。手机同时连接多个 Mac，但每次发送仅路由到唯一选定目标；离线目标不自动替换为其他 Mac。Mac 允许多手机接入，来源按稳定身份区分，同名设备不合并。
 
 ## 发送与粘贴
 
-1. 手机保存发送记录，将文本 payload 发给 Mac。
-2. Mac 保存接收记录，把文本写入 `NSPasteboard` 并模拟 `Command + V`。
-3. 普通发送只粘贴；发送后回车模式在成功发出 Command-V 后请求一次 Return，不以目标 App 验证插入为门槛。
-4. Mac 返回包含粘贴状态的回执；收到 payload、发出粘贴事件和已验证插入是不同状态。
-5. 手机按 Mac 接收确认清空输入区，粘贴失败或不可验证不阻止清空；文本可从 Mac 接收历史复制或重新粘贴。传输失败或未获接收确认时保留文本。“已接收”不代表目标 App 已输入。
+1. 手机保存发送记录，将文本 payload 只发给选定的 Mac。
+2. Mac 原子保存接收记录，立即向原连接返回 `received` 确认；保存失败不确认，手机保留文本。
+3. Mac 将任务加入统一 FIFO，Apple、Android 和本机手动粘贴共享同一队列，按到达顺序执行。
+4. 每个任务在执行时快照剪贴板，写入文本、发出 Command-V，并按要求发出 Return；启用恢复时等待恢复完成后才执行下一条。恢复前检查 changeCount，不覆盖用户或其他应用期间复制的新内容。
+5. 粘贴结果更新 Mac 历史，不作为手机清空的门槛，也不另发第二个完成回执。手机收到匹配接收确认后清空；未确认或传输失败时保留。
 
-当前 Mac 在初次接收记录保存成功后才执行粘贴并发出 receipt；初次保存失败则不返回 receipt。后续粘贴状态更新失败只记诊断，仍返回 receipt。iOS 兼容旧 ack，不能将任意旧版 ack 等同于持久化保证；磁盘故障和崩溃恢复仍需专项验证。
+粘贴发送不等于目标 App 已输入。Mac 无法对所有应用可靠验证插入，用户可从接收历史复制或重新粘贴。旧无设备 ID 的 payload/历史仍可读取；来源信息优先使用连接身份，不能把任意旧版 ack 当成持久化保证。
 
 Mac 提供剪贴板恢复开关，启用时尝试恢复原内容；不覆盖期间被用户或其他应用改动的新剪贴板。自动粘贴需要辅助功能权限，结果依赖当前焦点和目标应用。仅复制到剪贴板与确认后粘贴模式尚未实现。
 

@@ -1,6 +1,6 @@
 # TypeCarrier Android Sender MVP 设计
 
-状态：Android sender 已纳入 0.1.3 Beta。已实现 NSD / mDNS 发现、TCP 手动连接、配对码与信任凭据、已配对目标重连、普通发送/发送后回车及侧载 APK 构建。本文保留 MVP 设计与既有验证约束，不代表所有设备和网络均已验收；后续方向见 [路线图](../../roadmap.md)。
+状态：Android sender 已纳入 0.1.3 Beta；最新源码已增加多 Mac 连接与单目标发送，并保留原有认证。本文以下 MVP 阶段约束按历史设计阅读，当前多设备规则见 [多设备模型](../../multi-device-management-plan.md)。已实现 NSD / mDNS 发现、TCP 手动连接、配对码与信任凭据、已配对目标重连、普通发送/发送后回车及侧载 APK 构建。本文保留 MVP 设计与既有验证约束，不代表所有设备和网络均已验收；后续方向见 [路线图](../../roadmap.md)。
 
 ## 目标
 
@@ -16,7 +16,7 @@
 - 不做云同步、账号系统或互联网中转。
 - 不做蓝牙 / BLE 作为第一版主传输。
 - 不做 Android 与 iOS 的核心源码复用改造；第一版只做协议契约复用。
-- 不做同一入口的多 sender 并发或跨入口统一调度。
+- 不做发送广播或粘贴优先级配置。
 - 不做实时上屏、内置语音识别、触控板模式或复杂设备管理。
 
 ## 用户流程
@@ -56,7 +56,7 @@ Android MVP 采用局域网优先路径：
   - 调用现有 `PasteInjector` 粘贴文本。
   - 记录诊断事件。
   - 返回 `CarrierDeliveryReceipt`。
-- Android bridge 只接收来自当前 active sender 的文本。已有 active sender 时，新连接返回 busy 状态。
+- Android bridge 只接收已认证连接的文本，允许多 sender 并行连接。
 
 ### Android 端
 
@@ -87,19 +87,9 @@ Android MVP 采用局域网优先路径：
 
 MVP 安全边界是可信局域网 / 手机热点内自用，不承诺抵抗恶意局域网攻击。产品化前再评估 TLS、二维码配对、设备信任列表 UI 和 token 轮换。
 
-## 1:1 Active Sender 策略
+## 当前多设备策略
 
-Android bridge 同一时间只服务一个 active sender；iPhone Multipeer 路径独立管理连接，可与 Android bridge 并行，当前没有跨入口统一调度。
-
-规则：
-
-- Mac 可以记住多台已配对 Android 设备。
-- Mac 可以继续支持 iPhone Multipeer 路径。
-- Android bridge 同一时间只有一台 sender 可以处于 active 状态并发送文本。
-- Android bridge 已有 active sender 时，新的 Android sender 连接收到 busy 响应。
-- Mac 端提供断开当前 sender、重新配对或清理可信设备的入口。
-
-多 sender 同时发送、FIFO 粘贴队列、来源设备标记、跨 iPhone / Android 优先级和并发冲突策略，放入后续多设备 receiver 能力，不进入 Android MVP。
+Mac bridge 允许多个独立认证 sender；同一设备重连替换其旧连接，不影响其他设备。Android 可以保持多台已配对 Mac 的连接，但每次发送只使用当前选定目标。目标断线不会切换到其他 Mac；所有来源在 Mac 共用 FIFO 粘贴，持久化成功后即定向回接收确认。
 
 ## UI 技术栈和规范
 
@@ -120,7 +110,7 @@ Android 视觉不复刻 iOS 细节，但保持同一产品心智。
 
 - 未连接或文本为空时禁用发送。
 - 发送成功后清空输入并保持继续输入的节奏。
-- busy、配对失败、Mac 不可达、receipt 失败要有明确状态。
+- 配对失败、所选 Mac 不可达、receipt 失败要有明确状态。
 - 不把 NSD、TCP、token 等底层细节暴露给主流程；这些信息只进入诊断。
 
 ## 验证计划
@@ -136,7 +126,7 @@ Android 视觉不复刻 iOS 细节，但保持同一产品心智。
 - 使用 localhost 测试 client 先验证 Android bridge，不依赖 Android 真机。
 - Android bridge 收到文本后复用现有历史、粘贴、receipt 和诊断链路。
 - 已有 iPhone Multipeer 路径不回退。
-- 已有 active sender 时，新连接返回 busy。
+- 多个 sender 可以独立认证；拒绝无效配对，不因其他设备在线而拒绝。
 
 ### Android 验证
 
@@ -151,7 +141,7 @@ Android 视觉不复刻 iOS 细节，但保持同一产品心智。
 - Android 和 Mac 在同一 Wi-Fi 下可完成发现、配对、发送和 receipt。
 - Android 开热点、Mac 连接热点后，至少可通过手动 IP + `17641` 完成配对、发送、Mac 历史入库和现有粘贴流程。
 - Mac 无 Accessibility 权限时，Android 能看到明确失败状态。
-- Android active 时，另一台 Android 连接应收到 busy；iPhone 路径独立，跨入口并发粘贴需单独验证。
+- 多个 Android / iPhone 在线时均可独立发送，Mac 按到达顺序统一 FIFO 粘贴，回执仅发给原连接。
 
 ## 2026-06-01 真机验证记录
 
@@ -203,4 +193,4 @@ Release APK 与签名配置已提供，见 [发行说明](../../distribution.md)
 1. 先补 Mac 端 Android bridge 的 wire protocol、pairing/trust model 和 localhost 测试。
 2. 再建 Android 工程，完成 Kotlin protocol / framing / discovery / transport 单元测试。
 3. 再做 Compose 文本发送界面和真机端到端验证。
-4. 最后补诊断、busy 状态、可信设备清理和 iPhone 路径回归验证。
+4. 最后补诊断、可信设备清理和 iPhone 路径回归验证。

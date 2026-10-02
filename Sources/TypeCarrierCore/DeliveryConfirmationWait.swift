@@ -7,6 +7,7 @@ public final class DeliveryConfirmationWait {
     private let sleep: @MainActor (Duration) async throws -> Void
     private var task: Task<Void, Never>?
     private var pendingPayloadID: UUID?
+    private var pendingTargetID: String?
     private var generation = UUID()
 
     public init(
@@ -21,9 +22,10 @@ public final class DeliveryConfirmationWait {
         task?.cancel()
     }
 
-    public func begin(payloadID: UUID, onTimeout: @escaping @MainActor () -> Void) {
+    public func begin(payloadID: UUID, targetID: String? = nil, onTimeout: @escaping @MainActor () -> Void) {
         cancel()
         pendingPayloadID = payloadID
+        pendingTargetID = targetID
         let generation = generation
         let timeout = timeout
         let sleep = sleep
@@ -43,8 +45,8 @@ public final class DeliveryConfirmationWait {
     }
 
     /// Returns true only for the send currently awaiting confirmation.
-    public func confirm(payloadID: UUID) -> Bool {
-        guard pendingPayloadID == payloadID else {
+    public func confirm(payloadID: UUID, sourceID: String? = nil) -> Bool {
+        guard pendingPayloadID == payloadID, pendingTargetID == sourceID else {
             return false
         }
         cancel()
@@ -55,6 +57,7 @@ public final class DeliveryConfirmationWait {
         task?.cancel()
         task = nil
         pendingPayloadID = nil
+        pendingTargetID = nil
         generation = UUID()
     }
 }

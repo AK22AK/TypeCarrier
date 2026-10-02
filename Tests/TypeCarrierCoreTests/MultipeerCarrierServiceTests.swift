@@ -394,14 +394,14 @@ final class MultipeerCarrierServiceTests: XCTestCase {
 
         service.simulateSessionStateForTesting(.connected, peerID: connectedPeer)
 
-        XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "busy")
+        XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "available")
 
         service.simulateSessionStateForTesting(.notConnected, peerID: connectedPeer)
 
         XCTAssertEqual(service.discoveryInfoForTesting?["receiverAvailability"], "available")
     }
 
-    func testReceiverRequestsServiceRebuildAfterConnectedPeerDisconnects() {
+    func testReceiverDoesNotRebuildServiceAfterOneConnectedPeerDisconnects() {
         let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
         let connectedPeer = MCPeerID(displayName: "iPhone 17 Pro")
         var rebuildRequest: (peerName: String, previousState: ConnectionState)?
@@ -413,9 +413,10 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         service.simulateSessionStateForTesting(.connected, peerID: connectedPeer)
         service.simulateSessionStateForTesting(.notConnected, peerID: connectedPeer)
 
-        XCTAssertEqual(rebuildRequest?.peerName, "iPhone 17 Pro")
-        XCTAssertEqual(rebuildRequest?.previousState, .connected("iPhone 17 Pro"))
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "receiver.rebuildRequested" && $0.peerName == "iPhone 17 Pro" })
+        XCTAssertNil(rebuildRequest)
+        XCTAssertTrue(service.connectedPeers.isEmpty)
+        XCTAssertEqual(service.connectionState, .advertising)
+        XCTAssertFalse(service.diagnostics.events.contains { $0.name == "receiver.rebuildRequested" })
     }
 
     func testReceiverDoesNotRequestServiceRebuildAfterConnectingAttemptFails() {
@@ -586,19 +587,10 @@ final class MultipeerCarrierServiceTests: XCTestCase {
     func testReceiverDiagnosticsRecordAcceptedInvitation() async {
         let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
         let peerID = MCPeerID(displayName: "iPhone")
-        let advertiser = MCNearbyServiceAdvertiser(
-            peer: MCPeerID(displayName: "Test Advertiser"),
-            discoveryInfo: nil,
-            serviceType: MultipeerCarrierService.serviceType
-        )
         var accepted = false
         var sessionWasProvided = false
 
-        service.advertiser(
-            advertiser,
-            didReceiveInvitationFromPeer: peerID,
-            withContext: nil
-        ) { shouldAccept, session in
+        service.simulateInvitationForTesting(from: peerID, context: nil) { shouldAccept, session in
             accepted = shouldAccept
             sessionWasProvided = session != nil
         }
@@ -630,26 +622,13 @@ final class MultipeerCarrierServiceTests: XCTestCase {
     func testReceiverReusesSessionForRepeatedInvitationFromSamePeer() async {
         let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
         let peerID = MCPeerID(displayName: "iPhone")
-        let advertiser = MCNearbyServiceAdvertiser(
-            peer: MCPeerID(displayName: "Test Advertiser"),
-            discoveryInfo: nil,
-            serviceType: MultipeerCarrierService.serviceType
-        )
         var firstSession: MCSession?
         var secondSession: MCSession?
 
-        service.advertiser(
-            advertiser,
-            didReceiveInvitationFromPeer: peerID,
-            withContext: nil
-        ) { _, session in
+        service.simulateInvitationForTesting(from: peerID, context: nil) { _, session in
             firstSession = session
         }
-        service.advertiser(
-            advertiser,
-            didReceiveInvitationFromPeer: peerID,
-            withContext: nil
-        ) { _, session in
+        service.simulateInvitationForTesting(from: peerID, context: nil) { _, session in
             secondSession = session
         }
         await Task.yield()
@@ -664,34 +643,25 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.acceptedExistingSession" && $0.peerName == "iPhone" })
     }
 
-    func testReceiverRejectsInvitationFromDifferentPeerWhileConnected() async {
+    func testReceiverAcceptsInvitationFromDifferentPeerWhileConnected() async {
         let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
         let connectedPeer = MCPeerID(displayName: "iPhone 17 Pro")
         let secondPeer = MCPeerID(displayName: "iPhone")
-        let advertiser = MCNearbyServiceAdvertiser(
-            peer: MCPeerID(displayName: "Test Advertiser"),
-            discoveryInfo: nil,
-            serviceType: MultipeerCarrierService.serviceType
-        )
         var accepted = true
         var sessionWasProvided = true
 
         service.simulateSessionStateForTesting(.connected, peerID: connectedPeer)
 
-        service.advertiser(
-            advertiser,
-            didReceiveInvitationFromPeer: secondPeer,
-            withContext: nil
-        ) { shouldAccept, session in
+        service.simulateInvitationForTesting(from: secondPeer, context: nil) { shouldAccept, session in
             accepted = shouldAccept
             sessionWasProvided = session != nil
         }
         await Task.yield()
 
-        XCTAssertFalse(accepted)
-        XCTAssertFalse(sessionWasProvided)
+        XCTAssertTrue(accepted)
+        XCTAssertTrue(sessionWasProvided)
         XCTAssertEqual(service.connectionState, .connected("iPhone 17 Pro"))
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.rejectedBusy" && $0.peerName == "iPhone" })
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.accepted" && $0.peerName == "iPhone" })
     }
 
     private func temporaryFileURL(fileName: String) throws -> URL {

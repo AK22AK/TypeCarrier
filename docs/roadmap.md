@@ -10,9 +10,10 @@ TypeCarrier 的长期方向是“用手机作为更自由的电脑输入入口�
 - iOS 草稿、发送历史、重新发送、撤销/重做；Mac 接收历史。
 - iOS 草稿与发送历史独立存储和清空；草稿最多新增到 99 条，不自动淘汰；发送历史按条数或时间保留。Mac 接收历史单条删除及默认数量上限；Mac 剪贴板恢复开关。
 - 连接状态、自检、诊断导出，以及前后台恢复和重连逻辑。
+- 手机多 Mac 连接与单目标发送；Mac 多手机接收、稳定来源身份和统一 FIFO 粘贴。见 [多设备模型](multi-device-management-plan.md)。
 - iOS TestFlight 测试渠道，以及 Android APK / macOS 签名公证 DMG 发布流程；GitHub 流程先产出草稿，需核对后公开。
 
-以上描述代码能力，不代表所有设备、网络和目标应用均已验收。Multipeer 与 Android bridge 分别限制同一入口的 active sender；两入口可以并行，尚无跨入口统一的多设备调度。
+以上描述代码能力，不代表所有设备、网络和目标应用均已验收。多设备能力已在源码落地，仍需多台真机混合发送、断线和目标应用兼容性验证。
 
 ## 待验证与候选改进
 
@@ -27,7 +28,7 @@ TypeCarrier 的长期方向是“用手机作为更自由的电脑输入入口�
 
 ## 后续方向
 
-- [多设备管理](multi-device-management-plan.md)：目标选择、多 sender 并发及跨入口优先级与队列。
+- 多设备连接与高频混合发送的真机验收；当前队列按到达顺序处理，不增加优先级。
 - [手机触控板](superpowers/specs/2026-05-31-touchpad-mode-design.md)：先评估 iOS 到 Mac 的移动、点击和滚动。
 - Windows receiver 与 TV / 盒子输入可行性探索。
 - 正式 App Store / Mac App Store 分发及其他官方下载渠道。

@@ -68,6 +68,9 @@ final class ComposerStore: ObservableObject {
     let debugDiagnosticLogFileURL: URL?
     private let recordStore: ComposerRecordStore?
     private let systemDeviceName: String
+    private let senderDeviceID: String
+    @Published private(set) var targetSelection: ReceiverTargetSelection
+    private var pendingTarget: CarrierPeer?
     private let userDefaults: UserDefaults
     private let deliveryConfirmationWait: DeliveryConfirmationWait
     private var pendingRecordID: UUID?
@@ -93,6 +96,13 @@ final class ComposerStore: ObservableObject {
         deliveryConfirmationWait = DeliveryConfirmationWait(timeout: deliveryConfirmationTimeout)
         self.userDefaults = userDefaults
         self.systemDeviceName = systemDeviceName
+        let deviceID = userDefaults.string(forKey: "senderStableDeviceID") ?? UUID().uuidString
+        senderDeviceID = deviceID
+        userDefaults.set(deviceID, forKey: "senderStableDeviceID")
+        targetSelection = ReceiverTargetSelection(
+            lastSuccessfulID: userDefaults.string(forKey: "lastSuccessfulReceiverID"),
+            selectedName: userDefaults.string(forKey: "lastSuccessfulReceiverName")
+        )
         customSenderDisplayName = storedCustomSenderDisplayName
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
@@ -103,6 +113,7 @@ final class ComposerStore: ObservableObject {
                 customName: storedCustomSenderDisplayName,
                 systemName: systemDeviceName
             ),
+            deviceID: senderDeviceID,
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
@@ -159,7 +170,7 @@ final class ComposerStore: ObservableObject {
     }
 
     var canSend: Bool {
-        CarrierPayload.canSend(text) && connectionState.isConnected && sendState != .sending
+        CarrierPayload.canSend(text) && selectedTarget != nil && sendState != .sending
     }
 
     var canRestartConnection: Bool {
@@ -171,7 +182,8 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionStatus: ConnectionStatus {
-        switch connectionState {
+        if targetSelection.selectedID != nil, selectedTarget == nil { return .idle }
+        return switch connectionState {
         case .connected:
             .connected
         case .connecting, .reconnecting:
@@ -183,15 +195,29 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    var connectedReceivers: [CarrierPeer] {
+        carrierService.connectedPeers.filter { $0.role == .receiver }
+    }
+
+    var selectedTarget: CarrierPeer? { targetSelection.target(in: connectedReceivers) }
+
     var headerStatusText: String {
-        switch connectionState {
-        case .connecting(let peerName), .reconnecting(let peerName), .connected(let peerName):
-            peerName
-        case .searching:
-            connectionState.localizedDisplayText
-        default:
-            connectionStatus.displayText
-        }
+        if let target = selectedTarget { return target.displayName }
+        if let name = targetSelection.selectedName { return "\(name) · 未连接" }
+        return connectedReceivers.isEmpty ? connectionStatus.displayText : "选择 Mac"
+    }
+
+    func selectReceiver(_ peer: CarrierPeer) {
+        guard sendState != .sending, connectedReceivers.contains(where: { $0.id == peer.id }) else { return }
+        targetSelection.select(peer)
+    }
+
+    private func reconcileTargets() {
+        guard sendState != .sending else { return }
+        targetSelection.reconcile(
+            connected: connectedReceivers,
+            availableCount: carrierService.discoveredPeers.filter { $0.role == .receiver }.count
+        )
     }
 
     var connectionFailureMessage: String? {
@@ -258,8 +284,8 @@ final class ComposerStore: ObservableObject {
         }
 
         hasStarted = true
-        carrierService.start { [weak self] envelope, _ in
-            self?.handle(envelope)
+        carrierService.start { [weak self] envelope, peer in
+            self?.handle(envelope, sourceID: self?.carrierService.peerIdentity(for: peer).id)
         }
     }
 
@@ -308,11 +334,13 @@ final class ComposerStore: ObservableObject {
 
     private static func makeCarrierService(
         displayName: String,
+        deviceID: String,
         diagnosticLogFileURL: URL?
     ) -> MultipeerCarrierService {
         MultipeerCarrierService(
             role: .sender,
             displayName: displayName,
+            deviceID: deviceID,
             diagnosticLogFileURL: diagnosticLogFileURL
         )
     }
@@ -323,6 +351,7 @@ final class ComposerStore: ObservableObject {
         carrierServiceCancellables.removeAll()
         carrierService = Self.makeCarrierService(
             displayName: senderDisplayName,
+            deviceID: senderDeviceID,
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         bindCarrierService()
@@ -352,6 +381,16 @@ final class ComposerStore: ObservableObject {
                 Task { @MainActor [weak self] in
                     self?.handleConnectionStateChanged(state)
                 }
+            }
+            .store(in: &carrierServiceCancellables)
+        carrierService.$connectedPeers
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.reconcileTargets() }
+            }
+            .store(in: &carrierServiceCancellables)
+        carrierService.$discoveredPeers
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.reconcileTargets() }
             }
             .store(in: &carrierServiceCancellables)
     }
@@ -529,6 +568,12 @@ final class ComposerStore: ObservableObject {
             return
         }
 
+        guard sendState != .sending else { return }
+        reconcileTargets()
+        guard let target = selectedTarget else {
+            sendState = .failed(targetSelection.selectedID == nil ? "请选择 Mac" : "目标 Mac 未连接")
+            return
+        }
         let textToSend = text
         let payload = CarrierPayload(text: textToSend, postPasteAction: postPasteAction)
         let now = Date()
@@ -556,17 +601,18 @@ final class ComposerStore: ObservableObject {
         }
 
         pendingRecordID = record.id
+        pendingTarget = target
         pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
-        deliveryConfirmationWait.begin(payloadID: payload.id) { [weak self] in
+        deliveryConfirmationWait.begin(payloadID: payload.id, targetID: target.id) { [weak self] in
             self?.handleDeliveryConfirmationTimeout()
         }
 
         do {
             try carrierService.send(.text(
                 payload,
-                sender: CarrierDeviceIdentity(displayName: senderDisplayName)
-            ))
+                sender: CarrierDeviceIdentity(displayName: senderDisplayName, deviceID: senderDeviceID)
+            ), to: target.id)
             updateRecord(
                 id: record.id,
                 status: .sent,
@@ -575,6 +621,7 @@ final class ComposerStore: ObservableObject {
         } catch {
             deliveryConfirmationWait.cancel()
             pendingRecordID = nil
+            pendingTarget = nil
             pendingSendPreservesActiveInputSession = false
             updateRecord(
                 id: record.id,
@@ -582,6 +629,7 @@ final class ComposerStore: ObservableObject {
                 detail: error.localizedDescription
             )
             sendState = .failed(error.localizedDescription)
+            reconcileTargets()
         }
     }
 
@@ -769,16 +817,16 @@ final class ComposerStore: ObservableObject {
         }
     }
 
-    private func handle(_ envelope: CarrierEnvelope) {
+    private func handle(_ envelope: CarrierEnvelope, sourceID: String?) {
         if envelope.kind == .ack, let ackID = envelope.ackID,
-           deliveryConfirmationWait.confirm(payloadID: ackID) {
+           deliveryConfirmationWait.confirm(payloadID: ackID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
                 detail: "Mac 已确认收到",
                 pasteStatus: .received
             )
         } else if envelope.kind == .receipt, let receipt = envelope.receipt,
-                  deliveryConfirmationWait.confirm(payloadID: receipt.payloadID) {
+                  deliveryConfirmationWait.confirm(payloadID: receipt.payloadID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
                 detail: receipt.detail ?? "Mac 已接收文本",
@@ -793,8 +841,10 @@ final class ComposerStore: ObservableObject {
             updateRecord(id: pendingRecordID, status: .failed, detail: detail)
         }
         pendingRecordID = nil
+        pendingTarget = nil
         pendingSendPreservesActiveInputSession = false
         sendState = .failed(detail)
+        reconcileTargets()
     }
 
     private func finishPendingSend(
@@ -805,7 +855,13 @@ final class ComposerStore: ObservableObject {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
+        if let target = pendingTarget {
+            targetSelection.didConfirm(target)
+            userDefaults.set(target.id, forKey: "lastSuccessfulReceiverID")
+            userDefaults.set(target.displayName, forKey: "lastSuccessfulReceiverName")
+        }
         pendingRecordID = nil
+        pendingTarget = nil
         sendState = .sent
 
         if let pasteStatus, EditorTextReplacementPolicy.shouldClearEditorAfterDeliveryReceipt(pasteStatus) {

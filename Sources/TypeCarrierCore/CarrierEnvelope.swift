@@ -2,9 +2,11 @@ import Foundation
 
 public struct CarrierDeviceIdentity: Codable, Equatable, Sendable {
     public let displayName: String
+    public let deviceID: String?
 
-    public init(displayName: String) {
+    public init(displayName: String, deviceID: String? = nil) {
         self.displayName = Self.normalizedDisplayName(displayName)
+        self.deviceID = deviceID
     }
 
     public static func preferredDisplayName(customName: String?, systemName: String) -> String {

@@ -1,74 +1,25 @@
-# TypeCarrier 多设备管理后续计划
+# TypeCarrier 多设备模型
 
-状态：后续路线图。当前 Mac 端已经支持 iPhone Multipeer 入口和 Android Bridge 入口并行接收；同一入口内的多 sender 管理仍按后续能力处理。
+状态：最新源码已实现，可能尚未包含在公开安装包中。测试与构建通过不等于多台真机和所有网络场景已验收。
 
-## 目标
+## 手机发送
 
-- 将 TypeCarrier 从当前“跨入口可并行、同入口仍偏单 active sender”的状态升级为完整局域网多设备模型。
-- iOS 端展示可用 Mac receiver 列表，并要求发送前选择目标 Mac。
-- macOS 端允许多个 iOS sender 同时连接，收到任意 sender 文本后继续走现有接收、粘贴、历史和回执流程。
-- macOS 状态展示区分全局接收健康、iOS Multipeer 入口健康、Android Bridge 入口健康和共享执行层问题；单入口异常不覆盖其他入口的可用状态。
-- 第一版不做配对、可信设备列表、二维码或跨网络中转。
+- iPhone 和 Android 可以同时连接多台 Mac，选择唯一发送目标；一次发送不广播。
+- 目标离线时禁用发送或明确失败，不偷偷切换到其他在线 Mac。
+- 连接按稳定身份管理，同名 Mac 不合并；断开一个连接不影响其他。
+- Apple 端按远端独立建立加密 Multipeer session。Android 每个目标使用独立 TCP 连接，保留配对码与 trust token 认证。
 
-## 范围
+## Mac 接收
 
-### Core
+- 同时接受多个 iPhone / Android sender，来源名称及稳定 ID 写入接收历史，同名手机可区分。
+- 初次接收记录持久化成功后，立即向原连接回接收确认，不等待队列或粘贴完成；保存失败不确认。
+- Apple、Android、历史手动粘贴与本机功能测试走统一非重入 FIFO。
+- 单条事务包含剪贴板快照、写入、Command-V、可选 Return 和启用后的剪贴板恢复；完成后才处理下一条。
+- 若用户或其他应用在处理期间更新剪贴板，不覆盖其新内容。粘贴失败可以从 Mac 接收历史手动恢复。
+- 顶部显示连接数量，历史展示来源。粘贴结果只更新 Mac 历史，不通过第二个回执决定手机是否清空。
 
-- 扩展 `CarrierPeer`，加入稳定 device id、display name、role、connection status、last seen time。
-- 在 Multipeer `discoveryInfo` 中广播本地持久化 device id 和 role，避免同名设备混淆。
-- 将 `MultipeerCarrierService` 从单 peer 状态改为维护多个 peers。
-- receiver 删除 `advertiser.invitation.rejectedBusy` 单活保护，改为接受多个 sender 进入同一个 `MCSession`。
-- sender 增加指定目标发送接口，例如 `send(_:to peerID:)`，不再默认广播给全部 connected peers。
+## 兼容与边界
 
-### iOS
+设备 ID 和历史来源 ID 为可选字段，旧 payload 和旧历史仍可读取。旧 Apple peer 无稳定 ID 时只能按本次连接身份区分，同名设备不按名称合并；跨重启可能需要重新选择目标。旧通用 `send` API 在连接多个 peer 时要求显式指定目标并拒绝广播。协议兼容不会升级旧客户端自身的多连接能力，旧 Android 单连接客户端仍受其原有行为限制。没有新增云账号、互联网中转、发送广播或粘贴优先级。
 
-- Composer header 或连接区域展示 Mac receiver 列表和当前选中目标。
-- 未选择目标、目标未连接、目标断开时禁用 Send，并给出明确提示。
-- 默认恢复最近一次成功发送的 Mac；没有历史目标时要求用户手动选择。
-
-### macOS
-
-- 菜单栏显示已连接 sender 数量和最近发送来源。
-- 主窗口 diagnostics 显示 connected sender 列表。
-- 接收历史记录保留来源设备名/device id，便于区分真机和模拟器。
-- 全局感叹号只表示所有入口不可用或共享执行层需要处理；Android Bridge 端口占用这类单入口异常只在对应入口状态中提示。
-
-### Docs
-
-- 更新 `docs/v0-prototype-notes.md`，移除“一个 Mac receiver 同一时间只服务一个 iOS sender”的当前限制描述。
-- 更新 `docs/mvp-plan.md`，将“多设备连接与切换管理”从候选项移动到正在实现/已规划能力。
-
-## 测试计划
-
-### Core Tests
-
-- receiver 已连接 `iPhone 17 Pro` 后，再收到 `iPhone` invitation，应接受第二个 peer。
-- sender 发现两台 Mac 后，两台都出现在 peer 列表中。
-- sender 指定 `Mac A` 发送时，只向 `Mac A` 发送，不发给 `Mac B`。
-- 两台同名设备通过 device id 区分，不被合并。
-
-### iOS Validation
-
-- 无目标 Mac 时 Send 禁用。
-- 多台 Mac 在线时可切换目标。
-- 目标断开后 UI 明确显示该目标不可发送。
-
-### macOS Validation
-
-- 真机 iPhone 和 simulator 同时运行时，Mac 不再拒绝第二个 sender。
-- 两台 iOS 依次发送，Mac 都能接收并在历史里显示来源。
-- 导出的诊断日志能看到多个 connected peers 和每条 receive 的 peer。
-
-## 假设
-
-- 第一版不做安全配对；局域网内发现即显示。
-- Mac 收到多台 iOS 的文本时按到达顺序处理，不增加确认收件箱。
-- iOS 可以同时连接多个 Mac，但一次 Send 只发给一个明确选中的 Mac。
-- 多设备 UI 优先轻量，不新增复杂设置页。
-
-## 建议拆分
-
-1. 先改 Core 的 peer identity、discovery metadata 和多 peer 状态模型，并补齐单元测试。
-2. 再改 macOS receiver 的多 sender 接受、来源记录和 diagnostics。
-3. 最后改 iOS 的 receiver 选择 UI、发送禁用条件和最近目标恢复。
-4. 完成后再更新 v0/MVP 文档，避免计划未落地时文档提前宣称能力已支持。
+当前按接收回调进入队列的顺序处理，不承诺不同网络之间的严格发送时间顺序；焦点变化和目标 App 对模拟按键的限制仍存在。多台真机、持续混合发送及重连需要单独验收。

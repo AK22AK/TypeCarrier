@@ -25,6 +25,7 @@ object CarrierJson {
 @Serializable
 data class CarrierDeviceIdentity(
     val displayName: String,
+    val deviceID: String? = null,
 )
 
 @Serializable

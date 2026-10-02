@@ -151,7 +151,24 @@ struct ComposerView: View {
                 ConnectionStatusIndicator(status: store.connectionStatus)
                     .id(store.connectionStatus)
 
-                Text(store.headerStatusText)
+                Menu {
+                    if store.connectedReceivers.isEmpty {
+                        Text("没有已连接的 Mac")
+                    }
+                    ForEach(store.connectedReceivers) { peer in
+                        Button {
+                            store.selectReceiver(peer)
+                        } label: {
+                            Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(store.headerStatusText)
+                        Image(systemName: "chevron.down").font(.caption2)
+                    }
+                }
+                .disabled(store.sendState == .sending)
                     .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -160,6 +177,14 @@ struct ComposerView: View {
             .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func receiverLabel(_ peer: CarrierPeer) -> String {
+        let duplicateName = store.connectedReceivers.filter { $0.displayName == peer.displayName }.count > 1
+        let variant = peer.id.contains("appVariant=debug") ? " · Debug" : ""
+        guard duplicateName else { return peer.displayName + variant }
+        let deviceID = peer.id.split(separator: "|").first?.split(separator: "=").last.map(String.init) ?? peer.id
+        return peer.displayName + variant + " · " + String(deviceID.suffix(6))
     }
 
     private var headerActions: some View {

@@ -26,6 +26,7 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
     public let createdAt: Date
     public var updatedAt: Date
     public var detail: String?
+    public var sourceDeviceID: String?
     public var sourceDeviceName: String?
 
     public init(
@@ -37,7 +38,8 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         detail: String? = nil,
-        sourceDeviceName: String? = nil
+        sourceDeviceName: String? = nil,
+        sourceDeviceID: String? = nil
     ) {
         self.id = id
         self.payloadID = payloadID
@@ -48,5 +50,6 @@ public struct CarrierRecord: Codable, Equatable, Identifiable, Sendable {
         self.updatedAt = updatedAt
         self.detail = detail
         self.sourceDeviceName = sourceDeviceName
+        self.sourceDeviceID = sourceDeviceID
     }
 }

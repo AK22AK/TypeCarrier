@@ -13,12 +13,12 @@ It uses your phone's existing keyboard and dictation tools, and handles local tr
 The current source version is **0.1.3 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
 
 - iPhone uses Multipeer Connectivity; Android uses local TCP with NSD / mDNS discovery and manual address connection.
-- iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Multipeer and the Android bridge each allow one active sender; both transports can run concurrently, without unified multi-device scheduling.
+- iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Phones can connect to multiple Macs and select one send target. Mac accepts multiple phones and pastes their text through one arrival-order queue.
 - Plain send and send-with-Return are supported. Automatic paste needs macOS Accessibility permission; results depend on the current focus and target app.
 - iOS provides drafts, send history, resend, and undo/redo. Drafts are stored independently; send history can be retained by count or age. Mac provides receive history and a clipboard restoration toggle.
 - Connection state, self-checks, and diagnostic export are available. Foreground recovery and reconnect are implemented; reliability still needs device and network validation.
 
-No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android 8.0 or later. Cloud sync, internet relay, Windows, unified multi-device scheduling, and touchpad mode are not supported yet.
+No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android 8.0 or later. Cloud sync, internet relay, Windows and touchpad mode are not supported yet.
 
 ## Downloads and Releases
 

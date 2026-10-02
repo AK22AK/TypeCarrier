@@ -14,6 +14,7 @@ import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 import org.typecarrier.android.protocol.CarrierPostPasteAction
 
 interface AndroidCarrierRepository : Closeable {
+    val connectedServices: StateFlow<List<MacService>>
     val services: StateFlow<List<MacService>>
     val discoveryError: StateFlow<String?>
     val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition>
@@ -33,11 +34,12 @@ interface AndroidCarrierRepository : Closeable {
     fun forgetTrustedMac(service: MacService)
     suspend fun connect(service: MacService, pairingCode: String?): AndroidBridgeResponse
     suspend fun sendText(
+        service: MacService,
         text: String,
         senderDisplayName: String,
         postPasteAction: CarrierPostPasteAction? = null,
     ): CarrierDeliveryReceipt?
-    fun closeConnection()
+    fun closeConnection(service: MacService? = null)
 }
 
 class AndroidCarrierRepositoryImpl(
@@ -48,7 +50,8 @@ class AndroidCarrierRepositoryImpl(
     private val _services = MutableStateFlow(emptyList<MacService>())
     private val _discoveryError = MutableStateFlow<String?>(null)
     private val _discoveryPrecondition = MutableStateFlow(AndroidNetworkDiscoveryPreconditions.current(appContext))
-    private var client: AndroidCarrierClient? = null
+    private val connections = AndroidConnectionPool()
+    override val connectedServices: StateFlow<List<MacService>> = connections.connectedServices
     private var manualHostValue = ""
     private var manualPortValue = defaultAndroidBridgePort.toString()
     private val discovery = MacDiscovery(
@@ -178,18 +181,21 @@ class AndroidCarrierRepositoryImpl(
     }
 
     override suspend fun connect(service: MacService, pairingCode: String?): AndroidBridgeResponse {
-        val nextClient = AndroidCarrierClient(service)
+        val nextClient = AndroidCarrierClient(service, onClosed = connections::remove)
         val savedTrustToken = savedTrustToken(service)
         val code = pairingCode?.takeIf(AndroidPairingCode::isValid)
-        val response = nextClient.pair(
-            deviceID = deviceID,
-            deviceName = displayName,
-            pairingCode = code,
-            trustToken = savedTrustToken.takeIf { code == null },
-        )
+        val response = try {
+            nextClient.pair(
+                deviceID = deviceID,
+                deviceName = displayName,
+                pairingCode = code,
+                trustToken = savedTrustToken.takeIf { code == null },
+            )
+        } catch (error: Exception) {
+            nextClient.close()
+            throw error
+        }
         if (response.status == AndroidBridgeResponseStatus.Accepted) {
-            client?.close()
-            client = nextClient
             val trustedService = service.withMacIdentity(response.macID, response.macName)
             response.trustToken?.let {
                 prefs.edit()
@@ -200,6 +206,7 @@ class AndroidCarrierRepositoryImpl(
             if (response.trustToken != null || savedTrustToken != null) {
                 rememberTrustedMac(trustedService)
             }
+            connections.addAuthenticated(trustedService, nextClient)
         } else {
             nextClient.close()
         }
@@ -207,15 +214,15 @@ class AndroidCarrierRepositoryImpl(
     }
 
     override suspend fun sendText(
+        service: MacService,
         text: String,
         senderDisplayName: String,
         postPasteAction: CarrierPostPasteAction?,
     ): CarrierDeliveryReceipt? =
-        client?.sendText(text, senderDisplayName.ifBlank { displayName }, postPasteAction) ?: error("尚未连接 Mac")
+        connections.send(service, text, senderDisplayName.ifBlank { displayName }, postPasteAction)
 
-    override fun closeConnection() {
-        client?.close()
-        client = null
+    override fun closeConnection(service: MacService?) {
+        if (service == null) connections.close() else connections.disconnect(service)
     }
 
     override fun close() {

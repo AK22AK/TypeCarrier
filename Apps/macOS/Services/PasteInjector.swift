@@ -35,6 +35,7 @@ struct PasteInjectionResult: Equatable {
 
 }
 
+@MainActor
 struct PasteInjector {
     private let accessibilityChecker = AccessibilityPermissionChecker()
 
@@ -42,7 +43,7 @@ struct PasteInjector {
         text: String,
         restoreDelay: TimeInterval? = nil,
         postPasteAction: CarrierPostPasteAction? = nil
-    ) -> PasteInjectionResult {
+    ) async -> PasteInjectionResult {
         var trace = PasteInjectionTrace(text: text)
         guard accessibilityChecker.isTrusted(prompt: false) else {
             trace.add("accessibilityTrusted", "false")
@@ -56,11 +57,16 @@ struct PasteInjector {
 
         let focusedTextTarget = FocusedTextTarget.current(trace: &trace)
         let pasteboard = NSPasteboard.general
-        let previousString = pasteboard.string(forType: .string)
+        let previousItems = pasteboard.pasteboardItems?.map { item in
+            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+        } ?? []
 
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else {
             trace.add("pasteboardWrite", "failed")
+            if restoreDelay != nil {
+                await restoreClipboard(previousItems: previousItems, changeCount: pasteboard.changeCount, delay: 0)
+            }
             return PasteInjectionResult(
                 status: "写入剪贴板失败",
                 diagnosticDetail: trace.summary,
@@ -71,8 +77,12 @@ struct PasteInjector {
         trace.add("pasteboardWrite", "success")
         trace.add("pasteboardChangeCount", "\(pasteboardChangeCount)")
 
+        // Restore even on a failed event injection, while the queue still owns the transaction.
         guard postCommandV() else {
             trace.add("commandVPosted", "false")
+            if let restoreDelay {
+                await restoreClipboard(previousItems: previousItems, changeCount: pasteboardChangeCount, delay: restoreDelay)
+            }
             return PasteInjectionResult(
                 status: "发送 Command-V 失败",
                 diagnosticDetail: trace.summary,
@@ -80,7 +90,7 @@ struct PasteInjector {
             )
         }
         trace.add("commandVPosted", "true")
-        waitForPasteDelivery()
+        await waitForPasteDelivery()
         trace.add("postWaitSeconds", "0.25")
         focusedTextTarget?.recordPostPasteState(expectedText: text, trace: &trace)
         let status: String
@@ -108,9 +118,9 @@ struct PasteInjector {
 
         if let restoreDelay {
             trace.add("clipboardRestoreDelaySeconds", String(format: "%.2f", restoreDelay))
-            trace.add("clipboardRestore", "scheduledAfterCommandV")
-            scheduleClipboardRestore(
-                previousString: previousString,
+            trace.add("clipboardRestore", "awaitedAfterCommandV")
+            await restoreClipboard(
+                previousItems: previousItems,
                 changeCount: pasteboardChangeCount,
                 delay: restoreDelay
             )
@@ -125,17 +135,19 @@ struct PasteInjector {
         )
     }
 
-    private func scheduleClipboardRestore(previousString: String?, changeCount: Int, delay: TimeInterval) {
-        if let previousString {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                let restoreBoard = NSPasteboard.general
-                guard restoreBoard.changeCount == changeCount else {
-                    return
-                }
-                restoreBoard.clearContents()
-                restoreBoard.setString(previousString, forType: .string)
-            }
+    private func restoreClipboard(previousItems: [[(NSPasteboard.PasteboardType, Data)]], changeCount: Int, delay: TimeInterval) async {
+        try? await Task.sleep(for: .seconds(delay))
+        let board = NSPasteboard.general
+        guard ClipboardRestorePolicy.shouldRestore(expectedChangeCount: changeCount, currentChangeCount: board.changeCount) else {
+            return
         }
+        let restoredItems = previousItems.map { data in
+            let item = NSPasteboardItem()
+            for (type, value) in data { item.setData(value, forType: type) }
+            return item
+        }
+        board.clearContents()
+        if !restoredItems.isEmpty { board.writeObjects(restoredItems) }
     }
 
     private func postCommandV() -> Bool {
@@ -164,8 +176,8 @@ struct PasteInjector {
         return true
     }
 
-    private func waitForPasteDelivery() {
-        RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+    private func waitForPasteDelivery() async {
+        try? await Task.sleep(for: .milliseconds(250))
     }
 
 }

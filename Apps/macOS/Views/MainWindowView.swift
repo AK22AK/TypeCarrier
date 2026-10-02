@@ -120,7 +120,7 @@ struct MainWindowView: View {
             ReceiverStatusPage(store: store)
                 .navigationTitle("连接管理")
         case .functionTest:
-            FunctionTestPage()
+            FunctionTestPage(store: store)
                 .navigationTitle("功能测试")
         case .settings:
             settingsDetailColumn
@@ -390,7 +390,7 @@ private struct ReceivedRecordRow: View {
             return timestamp
         }
 
-        return "\(timestamp) · 来自 \(sourceDeviceName)"
+        return "\(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
     }
 }
 
@@ -493,7 +493,7 @@ private struct ReceivedRecordDetail: View {
             return "接收于 \(timestamp)"
         }
 
-        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)"
+        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
     }
 
     private var editableText: some View {
@@ -814,6 +814,7 @@ private struct ReceiverStatusPage: View {
 }
 
 private struct FunctionTestPage: View {
+    @ObservedObject var store: MacCarrierStore
     @State private var testText = ""
     @State private var hasPressedReturn = false
     @State private var focusRequest = 0
@@ -821,7 +822,6 @@ private struct FunctionTestPage: View {
     @State private var pasteSelfTestResult: PasteInjectionResult?
     @State private var lastPasteSelfTestText: String?
 
-    private let pasteInjector = PasteInjector()
 
     private var didPassPasteSelfTest: Bool {
         guard let lastPasteSelfTestText else {
@@ -936,8 +936,10 @@ private struct FunctionTestPage: View {
         focusRequest += 1
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            pasteSelfTestResult = pasteInjector.paste(text: testText)
-            isRunningPasteSelfTest = false
+            store.enqueuePaste(text: testText) { result in
+                pasteSelfTestResult = result
+                isRunningPasteSelfTest = false
+            }
         }
     }
 }

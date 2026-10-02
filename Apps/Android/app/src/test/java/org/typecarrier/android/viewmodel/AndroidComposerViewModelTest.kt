@@ -121,7 +121,7 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun savedTrustTokenAllowsConnectWithoutPairingCode() {
+    fun selectingAnAlreadyConnectedTrustedMacKeepsConnection() {
         val repository = FakeAndroidCarrierRepository().apply {
             hasTrustToken = true
         }
@@ -129,7 +129,8 @@ class AndroidComposerViewModelTest {
 
         viewModel.selectMac(repository.mac)
 
-        assertTrue(viewModel.uiState.value.canConnect)
+        assertFalse(viewModel.uiState.value.canConnect)
+        assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
     }
 
     @Test
@@ -211,6 +212,7 @@ class AndroidComposerViewModelTest {
         }
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
+        viewModel.disconnectSelectedMac()
         viewModel.updatePairingCode("000000")
 
         viewModel.connect().join()
@@ -429,7 +431,7 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun selectedTargetIsClearedWhenItLeavesCurrentDiscovery() {
+    fun selectedTargetStaysSelectedWithoutSendingWhenDiscoveryDisappears() {
         val repository = FakeAndroidCarrierRepository(emptyList())
         val viewModel = makeViewModel(repository = repository)
 
@@ -443,9 +445,9 @@ class AndroidComposerViewModelTest {
 
         repository.publishServices(emptyList())
 
-        assertEquals(null, viewModel.uiState.value.selectedMac)
-        assertFalse(viewModel.uiState.value.canConnect)
-        assertEquals("未发现 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
+        assertFalse(viewModel.uiState.value.canSend)
+        assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
     }
 
     @Test
@@ -479,6 +481,52 @@ class AndroidComposerViewModelTest {
         assertFalse(viewModel.uiState.value.canConnect)
     }
 
+    @Test
+    fun multipleConnectedMacsCanBeSelectedAndOneDisconnectDoesNotSwitchTarget() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository)
+        val second = MacService("Test Mac", "127.0.0.2", 17641, macID = "second")
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+        viewModel.selectMac(second)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+        assertEquals(2, viewModel.uiState.value.connectedMacs.size)
+        viewModel.updateText("to second")
+        viewModel.send().join()
+        assertEquals(second.id, repository.lastSendTarget?.id)
+        viewModel.disconnectSelectedMac()
+        viewModel.updateText("offline")
+        assertEquals(second.id, viewModel.uiState.value.selectedMac?.id)
+        assertFalse(viewModel.uiState.value.canSend)
+        assertEquals(listOf(repository.mac), viewModel.uiState.value.connectedMacs)
+        viewModel.selectMac(repository.mac)
+        assertTrue(viewModel.uiState.value.canSend)
+    }
+
+    @Test
+    fun secondReceiverAuthenticationFailureLeavesFirstConnectionUsable() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository)
+        viewModel.selectMac(repository.mac)
+        viewModel.updatePairingCode("123456")
+        viewModel.connect().join()
+        viewModel.updateText("hello")
+        viewModel.refreshDiscovery()
+        assertTrue(viewModel.uiState.value.canSend)
+        val second = MacService("Other Mac", "127.0.0.2", 17641, macID = "second")
+        viewModel.selectMac(second)
+        viewModel.updatePairingCode("000000")
+        repository.nextConnectResponse = AndroidBridgeResponse(AndroidBridgeResponseStatus.InvalidPairing, "invalid")
+        viewModel.connect().join()
+        assertEquals(listOf(repository.mac), viewModel.uiState.value.connectedMacs)
+        assertEquals(second, viewModel.uiState.value.selectedMac)
+        assertFalse(viewModel.uiState.value.canSend)
+        viewModel.selectMac(repository.mac)
+        assertTrue(viewModel.uiState.value.canSend)
+    }
+
     private fun makeViewModel(
         repository: FakeAndroidCarrierRepository = FakeAndroidCarrierRepository(),
     ): AndroidComposerViewModel {
@@ -500,6 +548,8 @@ private class FakeAndroidCarrierRepository(
     private val mutableServices = MutableStateFlow(initialServices ?: listOf(mac))
     private val mutableDiscoveryErrors = MutableStateFlow<String?>(null)
     private val mutableDiscoveryPrecondition = MutableStateFlow(AndroidDiscoveryPrecondition.Available)
+    private val mutableConnectedServices = MutableStateFlow<List<MacService>>(emptyList())
+    override val connectedServices: StateFlow<List<MacService>> = mutableConnectedServices
     override val services: StateFlow<List<MacService>> = mutableServices
     override val discoveryError: StateFlow<String?> = mutableDiscoveryErrors
     override val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition> = mutableDiscoveryPrecondition
@@ -518,6 +568,7 @@ private class FakeAndroidCarrierRepository(
     var connectFailure: Throwable? = null
     var requiresReconnectBeforeSend = false
     var lastPostPasteAction: CarrierPostPasteAction? = null
+    var lastSendTarget: MacService? = null
     var lastConnectedService: MacService? = null
     var lastPairingCode: String? = null
     var connectAttempts = 0
@@ -558,15 +609,20 @@ private class FakeAndroidCarrierRepository(
         if (pairingCode != null && nextConnectResponse.status == AndroidBridgeResponseStatus.Accepted) {
             hasTrustToken = true
         }
+        if (nextConnectResponse.status == AndroidBridgeResponseStatus.Accepted) {
+            mutableConnectedServices.value = (mutableConnectedServices.value + service).distinctBy { it.id }
+        }
         return nextConnectResponse
     }
 
     override suspend fun sendText(
+        service: MacService,
         text: String,
         senderDisplayName: String,
         postPasteAction: CarrierPostPasteAction?,
     ): CarrierDeliveryReceipt {
         sendAttempts += 1
+        lastSendTarget = service
         lastPostPasteAction = postPasteAction
         if (requiresReconnectBeforeSend && connectAttempts < 2) {
             throw IllegalStateException("stale socket")
@@ -580,6 +636,8 @@ private class FakeAndroidCarrierRepository(
         )
     }
 
-    override fun closeConnection() = Unit
+    override fun closeConnection(service: MacService?) {
+        mutableConnectedServices.value = if (service == null) emptyList() else mutableConnectedServices.value.filter { it.id != service.id }
+    }
     override fun close() = Unit
 }

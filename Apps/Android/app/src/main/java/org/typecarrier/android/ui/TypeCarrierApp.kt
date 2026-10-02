@@ -242,6 +242,7 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                     onOpenAbout = { navController.navigate(AppRoutes.About) },
                     onOpenDebug = { navController.navigate(AppRoutes.Debug) },
                 onSelectMac = viewModel::selectMac,
+                onDisconnect = viewModel::disconnectSelectedMac,
                 onManualHostChange = viewModel::updateManualHost,
                 onManualPortChange = viewModel::updateManualPort,
                 onPairingCodeChange = viewModel::updatePairingCode,
@@ -353,6 +354,7 @@ private fun HomeScreen(
     onOpenAbout: () -> Unit,
     onOpenDebug: () -> Unit,
     onSelectMac: (MacService) -> Unit,
+    onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
     onPairingCodeChange: (String) -> Unit,
@@ -446,6 +448,7 @@ private fun HomeScreen(
                 state = state,
                 onDismiss = { showsConnectionDialog = false },
                 onSelectMac = onSelectMac,
+                onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
             onManualPortChange = onManualPortChange,
             onPairingCodeChange = onPairingCodeChange,
@@ -718,6 +721,7 @@ private fun ConnectionDialog(
     state: AndroidComposerUiState,
     onDismiss: () -> Unit,
     onSelectMac: (MacService) -> Unit,
+    onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
     onPairingCodeChange: (String) -> Unit,
@@ -735,6 +739,7 @@ private fun ConnectionDialog(
             ConnectionPanel(
                 state = state,
                 onSelectMac = onSelectMac,
+                onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
                 onManualPortChange = onManualPortChange,
                 onPairingCodeChange = onPairingCodeChange,
@@ -816,6 +821,7 @@ private fun ConnectionFailureNotice(message: String?) {
 private fun ConnectionPanel(
     state: AndroidComposerUiState,
     onSelectMac: (MacService) -> Unit,
+    onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
     onPairingCodeChange: (String) -> Unit,
@@ -823,12 +829,8 @@ private fun ConnectionPanel(
 ) {
     var showAdvanced by remember { mutableStateOf(false) }
     val connectedMac = state.selectedMac.takeIf { state.connectionStatus == AndroidConnectionStatus.Connected }
-    val visibleServices = remember(state.services, connectedMac) {
-        if (connectedMac == null || state.services.any { it.id == connectedMac.id }) {
-            state.services
-        } else {
-            listOf(connectedMac) + state.services
-        }
+    val visibleServices = remember(state.services, state.connectedMacs) {
+        (state.connectedMacs + state.services).distinctBy { it.id }
     }
     val selectedHasTrust = state.selectedMac?.let { selected ->
         state.trustedMacs.any { it.matchesReceiver(selected) }
@@ -874,7 +876,7 @@ private fun ConnectionPanel(
             }
 
             if (visibleServices.isNotEmpty()) {
-                Text(if (connectedMac != null) "当前 Mac" else "发现的 Mac", style = MaterialTheme.typography.labelLarge)
+                Text("发送目标 · 已连接 ${state.connectedMacs.size} 台 Mac", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -882,12 +884,12 @@ private fun ConnectionPanel(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(visibleServices, key = { it.id }) { service ->
-                        val isConnectedService = connectedMac?.id == service.id
+                        val isConnectedService = state.connectedMacs.any { it.id == service.id }
                         MacServiceRow(
                             service = service,
                             selected = service.id == state.selectedMac?.id,
                             subtitle = when {
-                                isConnectedService -> "已连接"
+                                isConnectedService -> if (service.id == state.selectedMac?.id) "已连接 · 当前发送目标" else "已连接 · 点击选择发送目标"
                                 state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，可免配对连接"
                                 else -> "首次连接需要配对码"
                             },
@@ -965,6 +967,12 @@ private fun ConnectionPanel(
                 }
             }
 
+            if (connectedMac != null) {
+                TextButton(onClick = onDisconnect, enabled = !state.isBusy) {
+                    Text("断开当前 Mac")
+                }
+            }
+
             Button(
                 onClick = onConnect,
                 enabled = state.connectionStatus != AndroidConnectionStatus.Connected && state.canConnect,
@@ -1010,7 +1018,7 @@ private fun MacServiceRow(
                 tint = MaterialTheme.colorScheme.primary,
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(service.name, fontWeight = FontWeight.SemiBold)
+                Text("${service.name} · ${service.macID?.takeLast(8) ?: service.host}", fontWeight = FontWeight.SemiBold)
                 Text(
                     subtitle ?: "可连接",
                     style = MaterialTheme.typography.bodySmall,
