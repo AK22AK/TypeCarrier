@@ -40,31 +40,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).core.tests
         TEST_HOST: ""
-  TypeCarrieriOS:
-    type: application
-    platform: iOS
-    deploymentTarget: "26.0"
-    sources:
-      - path: Apps/iOS
-    dependencies:
-      - target: TypeCarrierCore
-    info:
-      path: Apps/iOS/Info.plist
-      properties:
-        CFBundleDisplayName: TypeCarrier
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        ITSAppUsesNonExemptEncryption: false
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。
-        NSBonjourServices:
-          - _typecarrier._tcp
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).ios
-        TARGETED_DEVICE_FAMILY: 1
   TypeCarrierMac:
     type: application
     platform: macOS
@@ -101,6 +76,31 @@ targets:
           TYPECARRIER_DISPLAY_NAME: TypeCarrier Debug
         Release:
           ENABLE_HARDENED_RUNTIME: YES
+  TypeCarrieriOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Apps/iOS
+    dependencies:
+      - target: TypeCarrierCore
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: TypeCarrier
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。
+        NSBonjourServices:
+          - _typecarrier._tcp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).ios
+        TARGETED_DEVICE_FAMILY: 1
 schemes:
   TypeCarrierCore:
     build:
