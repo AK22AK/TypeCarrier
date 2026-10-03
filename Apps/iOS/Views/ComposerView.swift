@@ -993,53 +993,70 @@ private struct ComposerSettingsView: View {
     @ObservedObject var store: ComposerStore
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
-    @State private var senderDisplayNameDraft: String
+    @State private var nameEditor = DeviceNameEditState()
     @State private var showsNameGuidance = false
-
-    init(store: ComposerStore) {
-        self.store = store
-        _senderDisplayNameDraft = State(initialValue: store.customSenderDisplayName)
-    }
 
     var body: some View {
         List {
             Section {
-                HStack {
-                    TextField("设备显示名称", text: $senderDisplayNameDraft)
+                if nameEditor.isEditing {
+                    TextField("设备显示名称", text: $nameEditor.draft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Button {
-                        showsNameGuidance = true
-                    } label: {
+                        .accessibilityIdentifier("senderNameDraft")
+                    HStack {
+                        Button("取消") { nameEditor.cancel() }
+                        Button("保存") {
+                            guard store.sendState != .sending else { return }
+                            if let name = nameEditor.savedName() { store.setCustomSenderDisplayName(name) }
+                        }
+                        .disabled(store.sendState == .sending || !nameEditor.canSave)
+                        if !store.customSenderDisplayName.isEmpty {
+                            Button("使用系统名称") {
+                                guard store.sendState != .sending else { return }
+                                store.setCustomSenderDisplayName("")
+                                nameEditor.cancel()
+                            }
+                            .disabled(store.sendState == .sending)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top) {
+                            Text(store.senderDisplayName)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
+                                .accessibilityIdentifier("senderEffectiveName")
+                            Spacer(minLength: 8)
+                            Button("编辑") {
+                                nameEditor.begin(effectiveName: store.senderDisplayName, hasCustomName: !store.customSenderDisplayName.isEmpty)
+                            }
+                            .buttonStyle(.borderless)
+                            .fixedSize()
+                            .disabled(store.sendState == .sending)
+                        }
+                        Text(store.customSenderDisplayName.isEmpty ? "系统名称" : "自定义名称")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("发送端名称")
+                    Button { showsNameGuidance = true } label: {
                         Image(systemName: "info.circle")
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("名称长度建议")
                     .accessibilityIdentifier("senderNameHelp")
                 }
-                .alert("设备显示名称", isPresented: $showsNameGuidance) {
-                    Button("好", role: .cancel) {}
-                } message: {
-                    Text("建议中文尽量不超过 10 字，英文尽量不超过 18 个字符。屏幕、字体和字符宽度会影响显示；名称会完整保存，空间不足时仅在界面省略。留空使用系统名称。")
-                }
-
-                Button("保存名称") {
-                    store.setCustomSenderDisplayName(senderDisplayNameDraft)
-                    senderDisplayNameDraft = store.customSenderDisplayName
-                }
-                .disabled(store.sendState == .sending || store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
-
-                if !store.customSenderDisplayName.isEmpty {
-                    Button("使用系统名称", role: .destructive) {
-                        senderDisplayNameDraft = ""
-                        store.setCustomSenderDisplayName("")
-                    }
-                    .disabled(store.sendState == .sending)
-                }
-            } header: {
-                Text("发送端名称")
-            } footer: {
-                Text("Mac 会显示为 \(store.senderDisplayName)。留空时使用系统提供的设备名称。")
+            }
+            .alert("设备显示名称", isPresented: $showsNameGuidance) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text("建议中文 10 字、英文 18 字符；过长会省略显示。")
             }
 
             Section {
@@ -1093,6 +1110,7 @@ private struct ComposerSettingsView: View {
                 Text("打开后，发送按钮旁会显示发送方式菜单；选择只改变发送按钮行为，不会立即发送。")
             }
         }
+        .onDisappear { nameEditor.cancel() }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
     }

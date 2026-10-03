@@ -25,3 +25,37 @@ public struct DeviceNamePreference {
         return normalized
     }
 }
+
+/// Local editing state. Only a changed save produces a preference command.
+public struct DeviceNameEditState: Equatable {
+    public var draft = ""
+    public private(set) var isEditing = false
+    private var originalEffectiveName = ""
+    private var originallyCustom = false
+
+    public init() {}
+
+    public mutating func begin(effectiveName: String, hasCustomName: Bool) {
+        originalEffectiveName = effectiveName
+        originallyCustom = hasCustomName
+        draft = effectiveName
+        isEditing = true
+    }
+
+    public var canSave: Bool {
+        let normalized = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isEditing && normalized != originalEffectiveName && (!normalized.isEmpty || originallyCustom)
+    }
+
+    public mutating func savedName() -> String? {
+        guard canSave else { return nil }
+        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        cancel()
+        return name
+    }
+
+    public mutating func cancel() {
+        draft = ""
+        isEditing = false
+    }
+}

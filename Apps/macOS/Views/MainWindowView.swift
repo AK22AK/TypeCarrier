@@ -1198,14 +1198,9 @@ private struct PlatformDownloadItem: View {
 private struct SettingsReceivingPage: View {
     @ObservedObject var store: MacCarrierStore
 
-    @State private var receiverDisplayNameDraft: String
+    @State private var nameEditor = DeviceNameEditState()
     @State private var showsNameGuidance = false
-    private let nameGuidance = "建议中文尽量不超过 10 字，英文尽量不超过 18 个字符。屏幕、字体和字符宽度会影响显示；名称会完整保存，空间不足时仅在界面省略。留空使用系统名称。"
-
-    init(store: MacCarrierStore) {
-        self.store = store
-        _receiverDisplayNameDraft = State(initialValue: store.customReceiverDisplayName)
-    }
+    private let nameGuidance = "建议中文 10 字、英文 18 字符；过长会省略显示。"
 
     var body: some View {
         ScrollView {
@@ -1228,25 +1223,42 @@ private struct SettingsReceivingPage: View {
                                 .padding(16)
                         }
                     }
-                    TextField("例如：书房 Mac", text: $receiverDisplayNameDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("本机显示名称")
-                    HStack {
-                        Button("保存名称") {
-                            store.setCustomReceiverDisplayName(receiverDisplayNameDraft)
-                            receiverDisplayNameDraft = store.customReceiverDisplayName
-                        }
-                        .disabled(store.customReceiverDisplayName == receiverDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
-                        if !store.customReceiverDisplayName.isEmpty {
-                            Button("使用系统名称") {
-                                store.setCustomReceiverDisplayName("")
-                                receiverDisplayNameDraft = ""
+                    if nameEditor.isEditing {
+                        TextField("例如：书房 Mac", text: $nameEditor.draft)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("本机显示名称")
+                            .accessibilityIdentifier("receiverNameDraft")
+                        HStack {
+                            Button("取消") { nameEditor.cancel() }
+                            Button("保存") {
+                                if let name = nameEditor.savedName() { store.setCustomReceiverDisplayName(name) }
+                            }
+                            .disabled(!nameEditor.canSave)
+                            if !store.customReceiverDisplayName.isEmpty {
+                                Button("使用系统名称") {
+                                    store.setCustomReceiverDisplayName("")
+                                    nameEditor.cancel()
+                                }
                             }
                         }
+                    } else {
+                        HStack(alignment: .top) {
+                            Text(store.receiverDisplayName)
+                                .font(.title3.weight(.semibold))
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
+                                .accessibilityIdentifier("receiverEffectiveName")
+                            Spacer(minLength: 8)
+                            Button("编辑") {
+                                nameEditor.begin(effectiveName: store.receiverDisplayName, hasCustomName: !store.customReceiverDisplayName.isEmpty)
+                            }
+                            .fixedSize()
+                        }
+                        Text(store.customReceiverDisplayName.isEmpty ? "系统名称" : "自定义名称")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    Text("其他设备会显示为 \(store.receiverDisplayName)。留空使用系统名称。改名后 iPhone 会短暂重新连接，发送前请确认当前目标。")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -1258,7 +1270,7 @@ private struct SettingsReceivingPage: View {
                         )
                     )
 
-                    Text("关闭时，TypeCarrier 会把接收文本留在 Mac 剪贴板里；开启后会尝试在自动粘贴后恢复发送前的剪贴板内容。")
+                    Text("开启后，自动粘贴会尝试恢复原剪贴板内容。")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1269,6 +1281,12 @@ private struct SettingsReceivingPage: View {
             .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onDisappear { nameEditor.cancel() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            if let window = notification.object as? NSWindow, window.identifier?.rawValue == MacAppCoordinator.mainWindowID {
+                nameEditor.cancel()
+            }
+        }
     }
 }
 

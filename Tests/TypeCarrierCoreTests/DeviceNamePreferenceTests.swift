@@ -2,6 +2,45 @@ import XCTest
 @testable import TypeCarrierCore
 
 final class DeviceNamePreferenceTests: XCTestCase {
+    func testSystemNamePrefillAndWhitespaceEditsCannotCreateAnOverride() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "System Mac", hasCustomName: false)
+        XCTAssertEqual(editor.draft, "System Mac")
+        XCTAssertFalse(editor.canSave)
+        editor.draft = "  System Mac \n"
+        XCTAssertFalse(editor.canSave)
+        XCTAssertNil(editor.savedName())
+        editor.draft = " \n "
+        XCTAssertFalse(editor.canSave)
+        XCTAssertNil(editor.savedName())
+    }
+
+    func testChangedSaveTrimsAndBlankCustomSaveClearsExplicitly() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "Old", hasCustomName: true)
+        editor.draft = " New "
+        XCTAssertEqual(editor.savedName(), "New")
+        XCTAssertFalse(editor.isEditing)
+        editor.begin(effectiveName: "System Mac", hasCustomName: true)
+        XCTAssertFalse(editor.canSave, "A custom name matching the system text keeps its source")
+        editor.draft = " \n "
+        XCTAssertEqual(editor.savedName(), "")
+        XCTAssertFalse(editor.isEditing)
+    }
+
+    func testCancelAndReentryDiscardUnsavedDraft() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "Saved", hasCustomName: true)
+        editor.draft = "Unsaved"
+        editor.cancel()
+        XCTAssertFalse(editor.isEditing)
+        XCTAssertEqual(editor.draft, "")
+        XCTAssertNil(editor.savedName())
+        editor.begin(effectiveName: "Saved", hasCustomName: true)
+        XCTAssertEqual(editor.draft, "Saved")
+        XCTAssertFalse(editor.canSave)
+    }
+
     func testTrimPersistenceAndResetLeaveOtherPreferencesUntouched() throws {
         let suite = "DeviceNameTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
