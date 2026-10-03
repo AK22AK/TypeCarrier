@@ -1012,13 +1012,11 @@ private struct ComposerSettingsView: View {
                             if let name = nameEditor.savedName() { store.setCustomSenderDisplayName(name) }
                         }
                         .disabled(store.sendState == .sending || !nameEditor.canSave)
-                        if !store.customSenderDisplayName.isEmpty {
-                            Button("使用系统名称") {
-                                guard store.sendState != .sending else { return }
-                                nameEditor.selectSystemName(store.systemSenderDisplayName)
-                            }
-                            .disabled(store.sendState == .sending)
+                        Button("使用系统名称") {
+                            guard store.sendState != .sending else { return }
+                            nameEditor.selectSystemName(store.systemSenderDisplayName)
                         }
+                        .disabled(store.sendState == .sending || store.customSenderDisplayName.isEmpty || nameEditor.pendingSource == .system)
                     }
                     .buttonStyle(.borderless)
                 } else {

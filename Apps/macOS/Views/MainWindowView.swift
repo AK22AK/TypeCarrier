@@ -1234,11 +1234,10 @@ private struct SettingsReceivingPage: View {
                                 if let name = nameEditor.savedName() { store.setCustomReceiverDisplayName(name) }
                             }
                             .disabled(!nameEditor.canSave)
-                            if !store.customReceiverDisplayName.isEmpty {
-                                Button("使用系统名称") {
-                                    nameEditor.selectSystemName(store.systemReceiverDisplayName)
-                                }
+                            Button("使用系统名称") {
+                                nameEditor.selectSystemName(store.systemReceiverDisplayName)
                             }
+                            .disabled(store.customReceiverDisplayName.isEmpty || nameEditor.pendingSource == .system)
                         }
                     } else {
                         HStack(alignment: .top) {
