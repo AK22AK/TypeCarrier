@@ -44,6 +44,7 @@
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
 		6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */; };
+		6CDAC5BFE6622D12C6EB2E3E /* SoftTopScrollEdge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */; };
 		6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */; };
 		70A3525F35493B1F7EB04215 /* MultipeerCarrierService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */; };
 		7620C3B631E3102CE953C549 /* CarrierWireFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */; };
@@ -144,6 +145,7 @@
 /* Begin PBXFileReference section */
 		0392B64A53CEDB4A098FFB55 /* MultipeerCarrierService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierService.swift; sourceTree = "<group>"; };
 		075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticExport.swift; sourceTree = "<group>"; };
+		08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftTopScrollEdge.swift; sourceTree = "<group>"; };
 		08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPermissionChecker.swift; sourceTree = "<group>"; };
 		0CBC5EDEAA504D926640A76F /* ComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerView.swift; sourceTree = "<group>"; };
 		1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextEditHistoryTests.swift; sourceTree = "<group>"; };
@@ -282,6 +284,7 @@
 			children = (
 				0CBC5EDEAA504D926640A76F /* ComposerView.swift */,
 				98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */,
+				08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -688,6 +691,7 @@
 			files = (
 				54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */,
 				36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */,
+				6CDAC5BFE6622D12C6EB2E3E /* SoftTopScrollEdge.swift in Sources */,
 				BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */,
 				B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */,
 			);

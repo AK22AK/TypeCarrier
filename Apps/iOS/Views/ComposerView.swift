@@ -936,6 +936,7 @@ private struct AboutView: View {
                 Text("iOS App Store 页面尚未上架，当前链接是占位位置；Android 和 macOS 目前通过 GitHub 最新 Release 提供侧载包。")
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("关于")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1111,6 +1112,7 @@ private struct ComposerSettingsView: View {
             }
         }
         .onDisappear { nameEditor.cancel() }
+        .softTopScrollEdge()
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1138,6 +1140,7 @@ private struct DebugFeaturesView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("调试功能")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1180,6 +1183,7 @@ private struct DebugDiagnosticsView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("调试日志")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1367,6 +1371,7 @@ private struct CarrierHistoryView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
+        .softTopScrollEdge()
         .navigationTitle(selectedTab.title)
         .navigationSubtitle(currentSubtitle)
         .navigationBarTitleDisplayMode(.large)
@@ -1715,6 +1720,7 @@ private struct CarrierRecordDetailView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle(record.kind == .draft ? "草稿" : "已发送文本")
     }
 
