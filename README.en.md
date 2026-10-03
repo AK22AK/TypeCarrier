@@ -10,7 +10,7 @@ It uses your phone's existing keyboard and dictation tools, and handles local tr
 
 ## Current Status
 
-The current source version is **0.1.3 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
+The current source version is **0.1.4 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
 
 - iPhone uses Multipeer Connectivity; Android uses local TCP with NSD / mDNS discovery and manual address connection.
 - iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Phones can connect to multiple Macs and select one send target. Mac accepts multiple phones and pastes their text through one arrival-order queue.
@@ -81,6 +81,7 @@ GitHub Actions perform baseline checks. Apple tests and builds run only when the
 - [Technical Notes](docs/technical-notes.md)
 - [MVP Plan](docs/mvp-plan.md)
 - [Roadmap](docs/roadmap.md)
+- [0.1.4 Release Notes](docs/releases/0.1.4.en.md)
 - [0.1.3 Release Notes](docs/releases/0.1.3.en.md)
 - [0.1.2 Release Notes](docs/releases/0.1.2.en.md)
 - [0.1.1 Release Notes](docs/releases/0.1.1.en.md)
