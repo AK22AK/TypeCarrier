@@ -1015,8 +1015,7 @@ private struct ComposerSettingsView: View {
                         if !store.customSenderDisplayName.isEmpty {
                             Button("使用系统名称") {
                                 guard store.sendState != .sending else { return }
-                                store.setCustomSenderDisplayName("")
-                                nameEditor.cancel()
+                                nameEditor.selectSystemName(store.systemSenderDisplayName)
                             }
                             .disabled(store.sendState == .sending)
                         }

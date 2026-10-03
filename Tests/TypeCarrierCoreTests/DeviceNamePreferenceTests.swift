@@ -41,6 +41,47 @@ final class DeviceNamePreferenceTests: XCTestCase {
         XCTAssertFalse(editor.canSave)
     }
 
+    func testSystemSelectionStaysPendingUntilSaveAndCancelDropsIt() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "Custom", hasCustomName: true)
+        editor.selectSystemName("System Mac")
+        XCTAssertTrue(editor.isEditing)
+        XCTAssertEqual(editor.draft, "System Mac")
+        XCTAssertEqual(editor.pendingSource, .system)
+        XCTAssertTrue(editor.canSave)
+        editor.cancel()
+        XCTAssertNil(editor.savedName())
+        editor.begin(effectiveName: "Custom", hasCustomName: true)
+        XCTAssertEqual(editor.draft, "Custom")
+        XCTAssertEqual(editor.pendingSource, .custom)
+    }
+
+    func testSameTextDifferentSourceCanSaveAndClearsOverride() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "System Mac", hasCustomName: true)
+        editor.selectSystemName("System Mac")
+        XCTAssertTrue(editor.canSave)
+        XCTAssertEqual(editor.savedName(), "")
+        editor.begin(effectiveName: "System Mac", hasCustomName: false)
+        editor.selectSystemName("System Mac")
+        XCTAssertFalse(editor.canSave)
+    }
+
+    func testEditingAfterSystemChoiceUsesFinalNormalizedText() {
+        var editor = DeviceNameEditState()
+        editor.begin(effectiveName: "Custom", hasCustomName: true)
+        editor.selectSystemName("System")
+        editor.draft = "  New Name  "
+        XCTAssertEqual(editor.pendingSource, .custom)
+        XCTAssertEqual(editor.savedName(), "New Name")
+        editor.begin(effectiveName: "Custom", hasCustomName: true)
+        editor.selectSystemName("System")
+        editor.draft = "Other"
+        editor.draft = " System "
+        XCTAssertEqual(editor.pendingSource, .system)
+        XCTAssertEqual(editor.savedName(), "")
+    }
+
     func testTrimPersistenceAndResetLeaveOtherPreferencesUntouched() throws {
         let suite = "DeviceNameTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

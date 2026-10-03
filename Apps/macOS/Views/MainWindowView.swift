@@ -1236,8 +1236,7 @@ private struct SettingsReceivingPage: View {
                             .disabled(!nameEditor.canSave)
                             if !store.customReceiverDisplayName.isEmpty {
                                 Button("使用系统名称") {
-                                    store.setCustomReceiverDisplayName("")
-                                    nameEditor.cancel()
+                                    nameEditor.selectSystemName(store.systemReceiverDisplayName)
                                 }
                             }
                         }

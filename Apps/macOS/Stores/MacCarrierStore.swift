@@ -174,6 +174,10 @@ final class MacCarrierStore: ObservableObject {
         }
     }
 
+    var systemReceiverDisplayName: String {
+        CarrierDeviceIdentity.preferredDisplayName(customName: nil, systemName: Host.current().localizedName ?? "", fallbackName: "TypeCarrier Mac")
+    }
+
     func setCustomReceiverDisplayName(_ name: String) {
         customReceiverDisplayName = displayNamePreference.save(name)
         let effectiveName = CarrierDeviceIdentity.preferredDisplayName(

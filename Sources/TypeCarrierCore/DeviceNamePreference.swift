@@ -28,34 +28,53 @@ public struct DeviceNamePreference {
 
 /// Local editing state. Only a changed save produces a preference command.
 public struct DeviceNameEditState: Equatable {
+    public enum Source: Equatable { case system, custom }
     public var draft = ""
     public private(set) var isEditing = false
     private var originalEffectiveName = ""
     private var originallyCustom = false
+    private var selectedSystemName: String?
 
     public init() {}
 
     public mutating func begin(effectiveName: String, hasCustomName: Bool) {
         originalEffectiveName = effectiveName
         originallyCustom = hasCustomName
+        selectedSystemName = nil
         draft = effectiveName
         isEditing = true
     }
 
+    public mutating func selectSystemName(_ name: String) {
+        guard isEditing else { return }
+        selectedSystemName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = name
+    }
+
+    public var pendingSource: Source {
+        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty || name == selectedSystemName || (!originallyCustom && name == originalEffectiveName) {
+            return .system
+        }
+        return .custom
+    }
+
     public var canSave: Bool {
-        let normalized = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return isEditing && normalized != originalEffectiveName && (!normalized.isEmpty || originallyCustom)
+        guard isEditing else { return false }
+        if pendingSource == .system { return originallyCustom }
+        return !originallyCustom || draft.trimmingCharacters(in: .whitespacesAndNewlines) != originalEffectiveName
     }
 
     public mutating func savedName() -> String? {
         guard canSave else { return nil }
-        let name = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = pendingSource == .system ? "" : draft.trimmingCharacters(in: .whitespacesAndNewlines)
         cancel()
         return name
     }
 
     public mutating func cancel() {
         draft = ""
+        selectedSystemName = nil
         isEditing = false
     }
 }

@@ -168,6 +168,10 @@ final class ComposerStore: ObservableObject {
         )
     }
 
+    var systemSenderDisplayName: String {
+        CarrierDeviceIdentity.preferredDisplayName(customName: nil, systemName: systemDeviceName)
+    }
+
     var canSend: Bool {
         CarrierPayload.canSend(text) && selectedTarget != nil && sendState != .sending
     }
