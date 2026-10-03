@@ -2,19 +2,33 @@ import Foundation
 
 public struct CarrierDeviceIdentity: Codable, Equatable, Sendable {
     public let displayName: String
+    public let deviceID: String?
 
-    public init(displayName: String) {
+    public init(displayName: String, deviceID: String? = nil) {
         self.displayName = Self.normalizedDisplayName(displayName)
+        self.deviceID = deviceID
     }
 
-    public static func preferredDisplayName(customName: String?, systemName: String) -> String {
+    public static func preferredDisplayName(customName: String?, systemName: String, fallbackName: String = "iPhone") -> String {
         let customDisplayName = normalizedDisplayName(customName ?? "")
         if !customDisplayName.isEmpty {
             return customDisplayName
         }
 
         let systemDisplayName = normalizedDisplayName(systemName)
-        return systemDisplayName.isEmpty ? "iPhone" : systemDisplayName
+        return systemDisplayName.isEmpty ? fallbackName : systemDisplayName
+    }
+
+    /// MCPeerID requires a nonempty name of at most 63 UTF-8 bytes.
+    /// This transport alias never replaces the stored or envelope display name.
+    public static func multipeerDisplayName(_ name: String) -> String {
+        let full = normalizedDisplayName(name)
+        var alias = ""
+        for character in full {
+            guard alias.utf8.count + String(character).utf8.count <= 63 else { break }
+            alias.append(character)
+        }
+        return alias.isEmpty ? "TypeCarrier" : alias
     }
 
     private static func normalizedDisplayName(_ name: String) -> String {

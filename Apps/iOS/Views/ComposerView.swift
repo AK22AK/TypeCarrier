@@ -150,16 +150,61 @@ struct ComposerView: View {
             HStack(spacing: interpolated(expanded: 7, compact: 5, progress: progress)) {
                 ConnectionStatusIndicator(status: store.connectionStatus)
                     .id(store.connectionStatus)
+                    .fixedSize()
 
-                Text(store.headerStatusText)
-                    .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                Group {
+                    if store.showsTargetPicker {
+                        Menu {
+                            ForEach(store.connectedReceivers) { peer in
+                                Button {
+                                    store.selectReceiver(peer)
+                                } label: {
+                                    Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(store.headerStatusText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .fixedSize()
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
+                        .accessibilityHint("切换已连接的 Mac")
+                        .accessibilityIdentifier("receiverTargetPicker")
+                    } else {
+                        Text(store.headerStatusText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .accessibilityLabel(store.headerAccessibilityText)
+                            .accessibilityIdentifier("connectionStatusText")
+                    }
+                }
+                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
             }
             .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func receiverLabel(_ peer: CarrierPeer) -> String {
+        let duplicateName = store.connectedReceivers.filter { $0.displayName == peer.displayName }.count > 1
+        let variant = peer.id.contains("appVariant=debug") ? " · Debug" : ""
+        guard duplicateName else { return peer.displayName + variant }
+        let deviceID = peer.id.split(separator: "|").first?.split(separator: "=").last.map(String.init) ?? peer.id
+        return peer.displayName + variant + " · " + String(deviceID.suffix(6))
     }
 
     private var headerActions: some View {
@@ -891,6 +936,7 @@ private struct AboutView: View {
                 Text("iOS App Store 页面尚未上架，当前链接是占位位置；Android 和 macOS 目前通过 GitHub 最新 Release 提供侧载包。")
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("关于")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -948,36 +994,67 @@ private struct ComposerSettingsView: View {
     @ObservedObject var store: ComposerStore
     @AppStorage(ComposerPreferenceKeys.launchesIntoInputMode) private var launchesIntoInputMode = true
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
-    @State private var senderDisplayNameDraft: String
-
-    init(store: ComposerStore) {
-        self.store = store
-        _senderDisplayNameDraft = State(initialValue: store.customSenderDisplayName)
-    }
+    @State private var nameEditor = DeviceNameEditState()
+    @State private var showsNameGuidance = false
 
     var body: some View {
         List {
             Section {
-                TextField("设备显示名称", text: $senderDisplayNameDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                Button("保存名称") {
-                    store.setCustomSenderDisplayName(senderDisplayNameDraft)
-                    senderDisplayNameDraft = store.customSenderDisplayName
-                }
-                .disabled(store.customSenderDisplayName == senderDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
-
-                if !store.customSenderDisplayName.isEmpty {
-                    Button("使用系统名称", role: .destructive) {
-                        senderDisplayNameDraft = ""
-                        store.setCustomSenderDisplayName("")
+                if nameEditor.isEditing {
+                    TextField("设备显示名称", text: $nameEditor.draft)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("senderNameDraft")
+                    HStack {
+                        Button("取消") { nameEditor.cancel() }
+                        Button("保存") {
+                            guard store.sendState != .sending else { return }
+                            if let name = nameEditor.savedName() { store.setCustomSenderDisplayName(name) }
+                        }
+                        .disabled(store.sendState == .sending || !nameEditor.canSave)
+                        Button("使用系统名称") {
+                            guard store.sendState != .sending else { return }
+                            nameEditor.selectSystemName(store.systemSenderDisplayName)
+                        }
+                        .disabled(store.sendState == .sending || store.customSenderDisplayName.isEmpty || nameEditor.pendingSource == .system)
+                    }
+                    .buttonStyle(.borderless)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top) {
+                            Text(store.senderDisplayName)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
+                                .accessibilityIdentifier("senderEffectiveName")
+                            Spacer(minLength: 8)
+                            Button("编辑") {
+                                nameEditor.begin(effectiveName: store.senderDisplayName, hasCustomName: !store.customSenderDisplayName.isEmpty)
+                            }
+                            .buttonStyle(.borderless)
+                            .fixedSize()
+                            .disabled(store.sendState == .sending)
+                        }
+                        Text(store.customSenderDisplayName.isEmpty ? "系统名称" : "自定义名称")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } header: {
-                Text("发送端名称")
-            } footer: {
-                Text("Mac 会显示为 \(store.senderDisplayName)。留空时使用系统提供的设备名称。")
+                HStack {
+                    Text("发送端名称")
+                    Button { showsNameGuidance = true } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("名称长度建议")
+                    .accessibilityIdentifier("senderNameHelp")
+                }
+            }
+            .alert("设备显示名称", isPresented: $showsNameGuidance) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text("建议中文 10 字、英文 18 字符；过长会省略显示。")
             }
 
             Section {
@@ -987,11 +1064,52 @@ private struct ComposerSettingsView: View {
             }
 
             Section {
+                Picker("保留方式", selection: Binding(
+                    get: { if case .count = store.historyRetention { true } else { false } },
+                    set: { store.setHistoryRetention($0 ? .count(.twoHundred) : .age(.month)) }
+                )) {
+                    Text("按条数").tag(true)
+                    Text("按时间").tag(false)
+                }
+
+                switch store.historyRetention {
+                case .count(let selected):
+                    Picker("保留条数", selection: Binding(
+                        get: { selected },
+                        set: { store.setHistoryRetention(.count($0)) }
+                    )) {
+                        ForEach(SendHistoryRetention.Count.allCases, id: \.self) { count in
+                            Text("\(count.rawValue) 条").tag(count)
+                        }
+                    }
+                case .age(let selected):
+                    Picker("保留时间", selection: Binding(
+                        get: { selected },
+                        set: { store.setHistoryRetention(.age($0)) }
+                    )) {
+                        Text("一周").tag(SendHistoryRetention.Age.week)
+                        Text("一个月").tag(SendHistoryRetention.Age.month)
+                        Text("半年").tag(SendHistoryRetention.Age.halfYear)
+                        Text("一年").tag(SendHistoryRetention.Age.year)
+                    }
+                }
+                if let message = store.historyRetentionErrorMessage {
+                    Text(message).foregroundStyle(.red)
+                }
+            } header: {
+                Text("发送历史")
+            } footer: {
+                Text("设置变更后立即清理。按时间以首次发送日期计算，不限制条数。草稿单独保存，最多新增到 99 条，不会自动清理。")
+            }
+
+            Section {
                 Toggle("发送方式选择", isOn: $enablesSendReturnGesture)
             } footer: {
                 Text("打开后，发送按钮旁会显示发送方式菜单；选择只改变发送按钮行为，不会立即发送。")
             }
         }
+        .onDisappear { nameEditor.cancel() }
+        .softTopScrollEdge()
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1019,6 +1137,7 @@ private struct DebugFeaturesView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("调试功能")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1061,6 +1180,7 @@ private struct DebugDiagnosticsView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle("调试日志")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1248,6 +1368,7 @@ private struct CarrierHistoryView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
+        .softTopScrollEdge()
         .navigationTitle(selectedTab.title)
         .navigationSubtitle(currentSubtitle)
         .navigationBarTitleDisplayMode(.large)
@@ -1596,6 +1717,7 @@ private struct CarrierRecordDetailView: View {
                 }
             }
         }
+        .softTopScrollEdge()
         .navigationTitle(record.kind == .draft ? "草稿" : "已发送文本")
     }
 

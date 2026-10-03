@@ -4,6 +4,7 @@ import Foundation
 import TypeCarrierCore
 
 enum MacReceiverPreferenceKeys {
+    static let displayName = "MacReceiverDisplayName"
     static let restoresClipboardAfterAutomaticPaste = "MacReceiverRestoresClipboardAfterAutomaticPaste"
 }
 
@@ -19,32 +20,43 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
     @Published private(set) var lastAccessibilityResetMessage: String?
     @Published private(set) var restoresClipboardAfterAutomaticPaste: Bool
+    @Published private(set) var customReceiverDisplayName: String
+    @Published private(set) var receiverDisplayName: String
 
     @Published private(set) var carrierService: MultipeerCarrierService
     @Published private(set) var androidBridge: AndroidCarrierBridge
     let connectionDiagnosticLogFileURL: URL?
     private let userDefaults: UserDefaults
-    private let receiverDisplayName: String
+    private let displayNamePreference: DeviceNamePreference
     private let recordStore: CarrierRecordStore?
     private let pasteInjector = PasteInjector()
+    private let pasteQueue = CarrierPasteQueue()
     private let permissionChecker = AccessibilityPermissionChecker()
     private var carrierServiceCancellable: AnyCancellable?
     private var androidBridgeCancellable: AnyCancellable?
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        let namePreference = DeviceNamePreference(defaults: userDefaults, key: MacReceiverPreferenceKeys.displayName)
+        displayNamePreference = namePreference
+        customReceiverDisplayName = namePreference.customName
+        let initialReceiverDisplayName = CarrierDeviceIdentity.preferredDisplayName(
+            customName: namePreference.customName,
+            systemName: Host.current().localizedName ?? "",
+            fallbackName: "TypeCarrier Mac"
+        )
+        receiverDisplayName = initialReceiverDisplayName
         restoresClipboardAfterAutomaticPaste = userDefaults.bool(
             forKey: MacReceiverPreferenceKeys.restoresClipboardAfterAutomaticPaste
         )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
-        receiverDisplayName = Host.current().localizedName ?? "TypeCarrier Mac"
         let bridge = AndroidCarrierBridge(
-            displayName: receiverDisplayName,
+            displayName: initialReceiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         androidBridge = bridge
         carrierService = Self.makeCarrierService(
-            displayName: receiverDisplayName,
+            displayName: initialReceiverDisplayName,
             receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: bridge.bonjourDiscoveryInfo),
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
@@ -59,7 +71,6 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
-        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
         bindAndroidBridge()
         refreshAccessibilityStatus()
@@ -90,7 +101,7 @@ final class MacCarrierStore: ObservableObject {
     var receiverStatusSummary: ReceiverStatusSummary {
         ReceiverStatusSummary(
             appleConnectionState: carrierService.connectionState,
-            appleConnectedDeviceNames: carrierService.diagnostics.connectedPeers,
+            appleConnectedDeviceNames: carrierService.connectedPeers.map { "\($0.displayName) · \($0.id.suffix(8))" },
             androidConnectionState: androidEndpointConnectionState,
             androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
             sharedIssue: sharedReceiverIssue
@@ -149,16 +160,37 @@ final class MacCarrierStore: ObservableObject {
 
     private func startCarrierService() {
         carrierService.start { [weak self] envelope, peerID in
-            self?.handle(envelope, from: peerID.displayName) { receipt in
-                try? self?.carrierService.send(receipt)
+            guard let self else { return }
+            let source = self.carrierService.peerIdentity(for: peerID)
+            self.handle(envelope, from: source.displayName, sourceDeviceID: source.id) { receipt in
+                try? self.carrierService.send(receipt, to: source.id)
             }
         }
     }
 
     private func startAndroidBridge() {
-        androidBridge.start { [weak self] envelope, deviceName, reply in
-            self?.handle(envelope, from: deviceName, sendReceipt: reply)
+        androidBridge.start { [weak self] envelope, deviceID, deviceName, reply in
+            self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
         }
+    }
+
+    var systemReceiverDisplayName: String {
+        CarrierDeviceIdentity.preferredDisplayName(customName: nil, systemName: Host.current().localizedName ?? "", fallbackName: "TypeCarrier Mac")
+    }
+
+    func setCustomReceiverDisplayName(_ name: String) {
+        customReceiverDisplayName = displayNamePreference.save(name)
+        let effectiveName = CarrierDeviceIdentity.preferredDisplayName(
+            customName: customReceiverDisplayName,
+            systemName: Host.current().localizedName ?? "",
+            fallbackName: "TypeCarrier Mac"
+        )
+        guard effectiveName != receiverDisplayName else { return }
+        receiverDisplayName = effectiveName
+        androidBridge.updateDisplayName(effectiveName)
+        // Apple peer names are immutable: rebuild only that transport. Android
+        // retains its authenticated sockets and publishes the new discovery name.
+        rebuildReceiverService(rebuiltReason: "receiver.displayName.updated", restartsAndroidBridge: false)
     }
 
     func restart() {
@@ -176,13 +208,12 @@ final class MacCarrierStore: ObservableObject {
             receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: androidBridge.bonjourDiscoveryInfo),
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        configureCarrierServiceRecoveryHandler()
         bindCarrierService()
         startCarrierService()
 
         if restartsAndroidBridge {
-            androidBridge.restart { [weak self] envelope, deviceName, reply in
-                self?.handle(envelope, from: deviceName, sendReceipt: reply)
+            androidBridge.restart { [weak self] envelope, deviceID, deviceName, reply in
+                self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
             }
         }
 
@@ -353,12 +384,6 @@ final class MacCarrierStore: ObservableObject {
         )
     }
 
-    private func configureCarrierServiceRecoveryHandler() {
-        carrierService.receiverSessionInvalidatedHandler = { [weak self] peerName, previousState in
-            self?.restartAfterReceiverSessionInvalidated(peerName: peerName, previousState: previousState)
-        }
-    }
-
     private func bindCarrierService() {
         carrierServiceCancellable = carrierService.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -419,21 +444,41 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func pasteTestText() {
-        refreshAccessibilityStatus()
-        lastPasteResult = pasteInjector.paste(
-            text: "来自 TypeCarrier 的测试文本",
-            restoreDelay: clipboardRestoreDelayIfEnabled
-        )
-        recordPasteDiagnostic(lastPasteResult)
+        enqueuePaste(text: "来自 TypeCarrier 的测试文本")
     }
 
     func paste(record: CarrierRecord) {
-        refreshAccessibilityStatus()
-        lastPasteResult = pasteInjector.paste(
-            text: record.text,
-            restoreDelay: clipboardRestoreDelayIfEnabled
-        )
-        recordPasteDiagnostic(lastPasteResult, peerName: record.sourceDeviceName)
+        enqueuePaste(text: record.text, recordID: record.id, sourceDeviceName: record.sourceDeviceName)
+    }
+
+    func enqueuePaste(
+        text: String,
+        recordID: UUID? = nil,
+        sourceDeviceName: String? = nil,
+        postPasteAction: CarrierPostPasteAction? = nil,
+        completion: ((PasteInjectionResult) -> Void)? = nil
+    ) {
+        let restoreDelay = clipboardRestoreDelayIfEnabled
+        pasteQueue.enqueue { [weak self] in
+            guard let self else { return }
+            self.refreshAccessibilityStatus()
+            let result = await self.pasteInjector.paste(text: text, restoreDelay: restoreDelay, postPasteAction: postPasteAction)
+            self.lastPasteResult = result
+            self.recordPasteDiagnostic(result, peerName: sourceDeviceName)
+            // A user may edit/delete a queued record. Do not resurrect it or overwrite its edited text.
+            if let recordID, var record = self.records.first(where: { $0.id == recordID && $0.text == text }), let recordStore = self.recordStore {
+                record.status = Self.recordStatus(for: result.pasteStatus)
+                record.updatedAt = result.date
+                record.detail = result.status
+                do {
+                    try recordStore.upsert(record)
+                    self.syncRecords()
+                } catch {
+                    self.carrierService.recordDiagnosticMarker("record.pasteStatusUpdate.failed", message: error.localizedDescription)
+                }
+            }
+            completion?(result)
+        }
     }
 
     func updateText(for record: CarrierRecord, text: String) {
@@ -472,6 +517,7 @@ final class MacCarrierStore: ObservableObject {
     private func handle(
         _ envelope: CarrierEnvelope,
         from peerDisplayName: String,
+        sourceDeviceID: String,
         sendReceipt: (CarrierEnvelope) -> Void
     ) {
         guard envelope.kind == .text, let payload = envelope.payload else {
@@ -481,7 +527,7 @@ final class MacCarrierStore: ObservableObject {
         refreshAccessibilityStatus()
         lastPayloadText = payload.text
         let now = Date()
-        let sourceDeviceName = envelope.sender?.displayName ?? peerDisplayName
+        let sourceDeviceName = peerDisplayName
         carrierService.recordDiagnosticMarker(
             "receiver.payload.received",
             message: "Received text payload \(payload.id) from \(sourceDeviceName).",
@@ -495,7 +541,8 @@ final class MacCarrierStore: ObservableObject {
             createdAt: now,
             updatedAt: now,
             detail: "来自 \(sourceDeviceName)",
-            sourceDeviceName: sourceDeviceName
+            sourceDeviceName: sourceDeviceName,
+            sourceDeviceID: sourceDeviceID
         )
 
         guard let recordStore else {
@@ -513,33 +560,13 @@ final class MacCarrierStore: ObservableObject {
             return
         }
 
-        let pasteResult = pasteInjector.paste(
-            text: payload.text,
-            restoreDelay: clipboardRestoreDelayIfEnabled,
-            postPasteAction: payload.postPasteAction
-        )
-        lastPasteResult = pasteResult
-        recordPasteDiagnostic(pasteResult, peerName: sourceDeviceName)
-
-        var updatedRecord = record
-        updatedRecord.status = Self.recordStatus(for: pasteResult.pasteStatus)
-        updatedRecord.updatedAt = pasteResult.date
-        updatedRecord.detail = pasteResult.status
-        do {
-            try recordStore.upsert(updatedRecord)
-            syncRecords()
-        } catch {
-            carrierService.recordDiagnosticMarker(
-                "record.pasteStatusUpdate.failed",
-                message: "Failed to update paste status for \(payload.id): \(error.localizedDescription)"
-            )
-        }
-
+        // Confirm durable receipt to the originating connection before entering the paste queue.
         sendReceipt(.receipt(CarrierDeliveryReceipt(
             payloadID: payload.id,
-            pasteStatus: pasteResult.pasteStatus,
-            detail: pasteResult.status
+            pasteStatus: .received,
+            detail: "Mac 已接收并保存，等待粘贴"
         )))
+        enqueuePaste(text: payload.text, recordID: record.id, sourceDeviceName: sourceDeviceName, postPasteAction: payload.postPasteAction)
     }
 
     private func recordPasteDiagnostic(_ result: PasteInjectionResult, peerName: String? = nil) {

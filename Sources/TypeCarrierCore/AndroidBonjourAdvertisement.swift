@@ -34,7 +34,9 @@ public struct AndroidBonjourAdvertisement: Equatable {
         var info = [
             androidPortKey: String(port),
             macIDKey: macID,
-            macNameKey: macName,
+            // A DNS-SD TXT string is at most 255 bytes, including "key=".
+            macNameKey: macName.utf8.count <= 255 - macNameKey.utf8.count - 1
+                ? macName : CarrierDeviceIdentity.multipeerDisplayName(macName),
         ]
 
         if let appBundleID = appBundleID?.trimmingCharacters(in: .whitespacesAndNewlines),

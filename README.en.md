@@ -2,46 +2,32 @@
 
 [中文](README.md)
 
-TypeCarrier is a lightweight iPhone-to-Mac text carrier.
+TypeCarrier is a lightweight phone-to-Mac text carrier.
 
-It focuses on one workflow:
+> Type or dictate on an iPhone or Android phone, tap send, and the text appears at the current cursor position on the Mac.
 
-> Type on the iPhone, or use any iPhone speech-to-text input, tap send, and the text appears at the current cursor position on the Mac.
-
-TypeCarrier is not a speech recognition product. It assumes you already have a preferred iPhone input method, such as the system keyboard, a third-party keyboard, or dictation. TypeCarrier handles local transport and insertion on the Mac.
+It uses your phone's existing keyboard and dictation tools, and handles local transport and automatic paste on the Mac. It does not include speech recognition or AI.
 
 ## Current Status
 
-TypeCarrier is currently a native Apple 0.1 Beta:
+The current source version is **0.1.4 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
 
-- `TypeCarrieriOS`: iPhone input and sender app.
-- `TypeCarrierMac`: macOS menu bar receiver that inserts received text into the current input focus.
-- `TypeCarrierCore`: shared payload, connection state, diagnostics, and Multipeer transport logic.
+- iPhone uses Multipeer Connectivity; Android uses local TCP with NSD / mDNS discovery and manual address connection.
+- iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Phones can connect to multiple Macs and select one send target. Mac accepts multiple phones and pastes their text through one arrival-order queue.
+- Plain send and send-with-Return are supported. Automatic paste needs macOS Accessibility permission; results depend on the current focus and target app.
+- iOS provides drafts, send history, resend, and undo/redo. Drafts are stored independently; send history can be retained by count or age. Mac provides receive history and a clipboard restoration toggle.
+- Connection state, self-checks, and diagnostic export are available. Foreground recovery and reconnect are implemented; reliability still needs device and network validation.
 
-0.1 uses Apple Multipeer Connectivity on the local network. It does not require an account or a server. The project currently targets iOS 26.0 and macOS 26.0.
-
-## 0.1 Beta Scope
-
-- Focused iPhone text composer and send action.
-- macOS menu bar receiver.
-- Local network discovery and transport.
-- Text insertion on macOS through clipboard handoff and simulated paste.
-- Connection state, receiver state, and diagnostics entry points.
-- No cloud sync, QR pairing, pairing code, AI, speech recognition, Android, Windows, or multi-device switching in 0.1.
+No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android 8.0 or later. Cloud sync, internet relay, Windows and touchpad mode are not supported yet.
 
 ## Downloads and Releases
 
-Users can get TypeCarrier from these platform-specific entry points:
+- iOS: invited testing through TestFlight, or build from source. No public App Store download is available yet.
+- Android / macOS: visit [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases) for published APK / DMG packages and checksums.
 
-- iOS: download from the App Store. The App Store page is not live yet; the current placeholder is [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier), and it will be replaced with the real store URL after release.
-- Android: download the sideloadable APK from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
-- macOS: download the sideloadable Mac package from the [latest GitHub Release](https://github.com/AK22AK/TypeCarrier/releases/latest).
+The latest source may include unreleased changes, and its version may differ from published builds on each channel. The GitHub release workflow creates a draft prerelease, which is published after verification; a draft is not a public release. iOS installable packages are not provided on GitHub Release.
 
-Current GitHub Releases are still beta / sideload distribution:
-
-- Android and macOS packages are provided through GitHub Release, not through app stores.
-- The macOS testing package may still be Apple Development / Personal Team signed and may not be a Developer ID notarized public distribution build. Gatekeeper may block it.
-- iOS installable builds are not provided through GitHub Release. The official iOS acquisition path is the App Store.
+The macOS release workflow supports Developer ID signed and notarized DMGs. Local development testing packages may be blocked by Gatekeeper. Check the corresponding release notes.
 
 ## Build
 
@@ -77,7 +63,7 @@ Then fill in your bundle prefix and Apple Developer Team ID in `Configs/Signing.
 
 TypeCarrier source code is licensed under Apache License 2.0. Users may build the app from source.
 
-Official App Store, Mac, and future Android builds may be sold as one-time purchases. Payment covers official signed builds, store distribution, updates, and maintenance support. It does not change the open-source status of the code.
+Official App Store, Mac, and Android builds may be sold as one-time purchases. Payment covers official signed builds, store distribution, updates, and maintenance support. It does not change the open-source status of the code.
 
 The `TypeCarrier` name, app icon, store assets, and official distribution identity follow the project brand policy. Forks may use the source code, but user-facing distribution should use a different app name, bundle id, icon, and store assets unless explicitly authorized.
 
@@ -85,7 +71,7 @@ The `TypeCarrier` name, app icon, store assets, and official distribution identi
 
 Feature work, protocol changes, permissions, automatic paste behavior, and release configuration changes should go through pull requests and keep `master` buildable. Small documentation fixes may be committed directly by maintainers.
 
-Current GitHub Actions perform baseline checks. Hosted runners may not always provide Xcode 26 yet, so Xcode builds are skipped with a notice when the runner is too old.
+GitHub Actions perform baseline checks. Apple tests and builds run only when the runner has Xcode 26 or later; otherwise they are skipped. A successful CI run does not necessarily include Apple build verification. Android CI runs unit tests and a Debug build.
 
 ## Documentation
 
@@ -95,6 +81,8 @@ Current GitHub Actions perform baseline checks. Hosted runners may not always pr
 - [Technical Notes](docs/technical-notes.md)
 - [MVP Plan](docs/mvp-plan.md)
 - [Roadmap](docs/roadmap.md)
+- [0.1.4 Release Notes](docs/releases/0.1.4.en.md)
+- [0.1.3 Release Notes](docs/releases/0.1.3.en.md)
 - [0.1.2 Release Notes](docs/releases/0.1.2.en.md)
 - [0.1.1 Release Notes](docs/releases/0.1.1.en.md)
 - [0.1 Beta 1 Release Notes](docs/releases/0.1-beta.1.en.md)

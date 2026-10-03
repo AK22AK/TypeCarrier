@@ -71,34 +71,24 @@ cd Apps/Android
 
 ## 用户下载入口
 
-- iOS：前往 App Store 下载。App Store 页面尚未上架，当前占位链接为 [TypeCarrier on the App Store](https://apps.apple.com/app/typecarrier)，正式上架后替换为真实商店地址。
-- Android：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 APK 侧载包。
-- macOS：在 [GitHub 最新 Release](https://github.com/AK22AK/TypeCarrier/releases/latest) 下载 Mac 侧载包。
+- iOS：通过 TestFlight 邀请测试，或自行从源码构建；尚无公开 App Store 下载入口。
+- Android：在 [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases) 下载 APK 侧载包。
+- macOS：在 [GitHub Releases](https://github.com/AK22AK/TypeCarrier/releases) 下载 Mac 侧载包。
 
 ## GitHub Beta 发布
 
-GitHub Release 提供 Android / macOS 侧载包，并保留到最新 Release 的自引用入口：
+GitHub Release 提供 Android / macOS 侧载包，下载入口使用 Releases 列表，以便查看 prerelease：
 
-- iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；正式获取方式是 App Store / TestFlight。
+- iOS 端不在 GitHub Release 上传可直接安装的 iOS 构建产物；当前测试渠道为 TestFlight，正式 App Store 下载入口尚未公开。
 - Android 端随 release 上传 APK 侧载包。
 - macOS 端在 release workflow 中生成 Developer ID signed + notarized DMG，并随 release 上传 `.dmg` 和 `.sha256`。
 - 不要把 beta 侧载包描述成对普通用户即开即用的正式安装包。
 
-0.1.2 建议 tag 命名：
+发布步骤：
 
-```sh
-git tag -a v0.1.2 -m "TypeCarrier 0.1.2"
-git push origin v0.1.2
-```
-
-创建 GitHub prerelease：
-
-```sh
-gh release create v0.1.2 \
-  --title "TypeCarrier 0.1.2" \
-  --notes-file docs/releases/0.1.2.md \
-  --prerelease
-```
+1. 确认版本号、发行说明和待发布 commit 一致，创建对应 `v<version>` tag。
+2. 推送 tag 或手动运行 Release workflow，生成带 APK、DMG 和校验文件的 draft prerelease。
+3. 完成构建、真机和下载包核对后，再公开草稿。构建产物已上传不代表发布完成。
 
 ### 发布后核对
 
@@ -107,7 +97,7 @@ gh release create v0.1.2 \
 1. GitHub Release 标记为 prerelease，不是正式 stable release。
 2. Release 页面显示 Android APK、macOS notarized DMG 以及对应校验文件。
 3. 校验文件内容与本地 `shasum -a 256` 输出一致。
-4. Release body 保留 beta 定位、iOS App Store / TestFlight 获取方式、Android / macOS 侧载说明和 macOS 权限提示。
+4. Release body 保留 beta 定位、iOS TestFlight 测试渠道、Android / macOS 侧载说明和 macOS 权限提示。
 5. 当前 tag 指向预期的发布 commit，而不是临时本地 commit。
 6. 如果 GitHub Actions 因 runner Xcode 版本跳过 build，发布前必须使用本机 Xcode 重新跑完 release note 里的验证命令。
 7. 发布后下载一次 GitHub asset，确认 DMG 可以挂载，app bundle 版本号与 release tag 对应。
@@ -123,18 +113,18 @@ script/package_macos_release.sh
 
 脚本会执行 Release build、校验签名、运行 Gatekeeper assessment，并输出 `dist/TypeCarrierMac-<version>-<build>-development.zip` 及 SHA-256。
 
-0.1.2 默认生成 development 测试包：
+该脚本默认生成 development 测试包：
 
-- 文件名：`TypeCarrierMac-0.1.2-3-development.zip`。
+- 文件名：`TypeCarrierMac-<version>-<build>-development.zip`。
 - 签名：Apple Development / Personal Team。
 - Gatekeeper assessment 可能失败；脚本会输出 warning，但不会把它当作 0.1 development 包的构建失败。
 
-## 未来正式 macOS 包
+## macOS 签名公证包
 
 当前公开仓库不提交真实签名材料。本机要发布 Developer ID notarized 包时，需要在 `Configs/Signing.local.xcconfig` 中配置发布签名，例如：
 
 ```xcconfig
-TYPECARRIER_BUNDLE_PREFIX = ak22ak.typecarrier
+TYPECARRIER_BUNDLE_PREFIX = your.bundle.prefix
 DEVELOPMENT_TEAM = YOURTEAMID
 CODE_SIGN_STYLE[sdk=macosx*] = Manual
 CODE_SIGN_IDENTITY[sdk=macosx*] = Developer ID Application
@@ -164,7 +154,7 @@ Release workflow 会自动生成 Android APK 和 macOS Developer ID notarized DM
 | `ANDROID_RELEASE_KEY_PASSWORD` | Android release key 密码 |
 | `DEVELOPER_ID_CERTIFICATE_BASE64` | Developer ID Application `.p12` 证书的 base64 内容 |
 | `DEVELOPER_ID_CERTIFICATE_PASSWORD` | 导出 `.p12` 时设置的密码 |
-| `APPLE_TEAM_ID` | Apple Developer Team ID，例如 `4H8462MSN6` |
+| `APPLE_TEAM_ID` | Apple Developer Team ID，例如 `YOURTEAMID` |
 | `APPSTORE_CONNECT_API_KEY_ID` | App Store Connect API Key ID |
 | `APPSTORE_CONNECT_API_ISSUER_ID` | Team API Key 的 Issuer ID；Individual API Key 可留空 |
 | `APPSTORE_CONNECT_API_PRIVATE_KEY` | App Store Connect API `.p8` 私钥全文 |
@@ -191,6 +181,6 @@ Android 侧也提供独立的 `Android Release APK` workflow，用于只验证�
 
 ## GitHub Actions
 
-公开 CI 负责构建和测试验证。Release workflow 负责创建 GitHub prerelease draft、上传 Android APK、上传 macOS notarized DMG。
+公开 CI 提供基础检查及 Android 单元测试和 Debug 构建；Apple 测试与构建仅在 runner 的 Xcode 至少为 26 时运行，跳过不代表验证通过。Release workflow 负责创建 GitHub prerelease draft、上传 Android APK、上传 macOS notarized DMG。
 
 `release-signing` Environment Secrets 中的签名私钥和 App Store Connect key 只能用于受控 release workflow。不要在 pull request workflow、日志、release notes 或仓库文件中输出这些内容。

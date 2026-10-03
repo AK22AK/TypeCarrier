@@ -42,6 +42,7 @@ data class AndroidComposerUiState(
     val drafts: List<AndroidCarrierRecord> = emptyList(),
     val outgoingHistory: List<AndroidCarrierRecord> = emptyList(),
     val services: List<MacService> = emptyList(),
+    val connectedMacs: List<MacService> = emptyList(),
     val localPairingCode: String = "",
     val trustedMacs: List<MacService> = emptyList(),
     val selectedMac: MacService? = null,
@@ -115,8 +116,7 @@ class AndroidComposerViewModel(
             var autoSelectedTarget: MacService? = null
             _uiState.update { current ->
                 val currentSelected = current.selectedMac?.let { selected ->
-                    services.firstOrNull { it.id == selected.id }
-                        ?: selected.takeIf { connectedMac?.id == selected.id }
+                    services.firstOrNull { it.id == selected.id } ?: selected
                 }
                 autoConnectTarget = autoConnectTarget(services = services, current = current, selected = currentSelected)
                 val selected = currentSelected ?: autoSelectTarget(services = services, current = current)
@@ -143,6 +143,24 @@ class AndroidComposerViewModel(
             autoConnectTarget?.let { service ->
                 autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs + service.id
                 connectToService(service, requestedPairingCode = null)
+            }
+        }
+    }
+
+    private val connectionsJob: Job = scope.launch {
+        repository.connectedServices.collect { connected ->
+            _uiState.update { current ->
+                connectedMac = connected.firstOrNull { it.id == current.selectedMac?.id }
+                val selected = connectedMac ?: current.selectedMac
+                current.copy(
+                    connectedMacs = connected,
+                    selectedMac = selected,
+                    trustedMacs = repository.trustedMacs,
+                    connectionStatus = if (current.isBusy) current.connectionStatus else if (connectedMac != null) {
+                        AndroidConnectionStatus.Connected
+                    } else if (selected != null) AndroidConnectionStatus.Idle else current.connectionStatus,
+                    headerStatusText = selected?.name ?: current.headerStatusText,
+                ).withDerivedValues(repository)
             }
         }
     }
@@ -174,8 +192,8 @@ class AndroidComposerViewModel(
         repository.refreshDiscovery()
         _uiState.update {
             it.copy(
-                connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "正在查找 Mac",
+                connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Searching,
+                headerStatusText = connectedMac?.name ?: "正在查找 Mac",
                 connectionFailureMessage = null,
             ).withDerivedValues(repository)
         }
@@ -212,22 +230,32 @@ class AndroidComposerViewModel(
     }
 
     fun selectMac(service: MacService) {
-        repository.closeConnection()
-        connectedMac = null
+        if (_uiState.value.isBusy) return
+        connectedMac = repository.connectedServices.value.firstOrNull { it.id == service.id }
         autoSelectedServiceID = null
         _uiState.update {
             it.copy(
                 selectedMac = service,
-                connectionStatus = AndroidConnectionStatus.Idle,
+                pairingCode = "",
+                connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Idle,
                 headerStatusText = service.name,
                 connectionFailureMessage = null,
             ).withDerivedValues(repository)
         }
     }
 
+    fun disconnectSelectedMac() {
+        if (_uiState.value.isBusy) return
+        _uiState.value.selectedMac?.let(repository::closeConnection)
+        connectedMac = null
+        _uiState.update {
+            it.copy(connectionStatus = AndroidConnectionStatus.Idle).withDerivedValues(repository)
+        }
+    }
+
     fun updateManualHost(value: String) {
+        if (_uiState.value.isBusy) return
         repository.manualHost = value
-        repository.closeConnection()
         connectedMac = null
         autoSelectedServiceID = null
         _uiState.update {
@@ -241,8 +269,8 @@ class AndroidComposerViewModel(
     }
 
     fun updateManualPort(value: String) {
+        if (_uiState.value.isBusy) return
         repository.manualPort = value
-        repository.closeConnection()
         connectedMac = null
         autoSelectedServiceID = null
         _uiState.update {
@@ -363,9 +391,9 @@ class AndroidComposerViewModel(
         }.onSuccess { response ->
             if (response.status == AndroidBridgeResponseStatus.Accepted) {
                 val trustedMacs = repository.trustedMacs
-                val connectedService = trustedMacs.firstOrNull { trusted ->
-                    response.macID?.let { trusted.macID == it } == true ||
-                        (trusted.host == service.host && trusted.port == service.port)
+                val connectedService = repository.connectedServices.value.firstOrNull {
+                    it.host == service.host && it.port == service.port &&
+                        it.appBundleID == service.appBundleID && it.appVariant == service.appVariant
                 } ?: service
                 connectedMac = connectedService
                 autoSelectedServiceID = null
@@ -392,7 +420,7 @@ class AndroidComposerViewModel(
                 } else {
                     response.message ?: response.status.name
                 }
-                repository.closeConnection()
+                repository.closeConnection(service)
                 connectedMac = null
                 _uiState.update {
                     it.copy(
@@ -406,7 +434,7 @@ class AndroidComposerViewModel(
                 recordDiagnostic("connection.rejected", message)
             }
         }.onFailure { error ->
-            repository.closeConnection()
+            repository.closeConnection(service)
             connectedMac = null
             val rawMessage = error.localizedMessage ?: "连接失败"
             _uiState.update {
@@ -449,6 +477,7 @@ class AndroidComposerViewModel(
         runCatching {
             refreshTrustedConnectionBeforeSend(state)
             repository.sendText(
+                service = state.selectedMac ?: connectedMac ?: error("请选择发送目标"),
                 text = textToSend,
                 senderDisplayName = state.senderDisplayName.ifBlank { state.deviceName },
                 postPasteAction = if (state.enablesSendReturnGesture && state.sendsReturnAfterPaste) {
@@ -478,7 +507,7 @@ class AndroidComposerViewModel(
             recordDiagnostic("send.succeeded", detail)
         }.onFailure { error ->
             val message = error.localizedMessage ?: "发送失败"
-            repository.closeConnection()
+            state.selectedMac?.let(repository::closeConnection)
             connectedMac = null
             updateRecord(
                 record.copy(
@@ -525,7 +554,7 @@ class AndroidComposerViewModel(
             if (response.status == AndroidBridgeResponseStatus.InvalidPairing) {
                 repository.forgetTrustedMac(service)
             }
-            repository.closeConnection()
+            repository.closeConnection(service)
             connectedMac = null
             _uiState.update {
                 it.copy(
@@ -540,9 +569,9 @@ class AndroidComposerViewModel(
         }
 
         val trustedMacs = repository.trustedMacs
-        val connectedService = trustedMacs.firstOrNull { trusted ->
-            response.macID?.let { trusted.macID == it } == true ||
-                (trusted.host == service.host && trusted.port == service.port)
+        val connectedService = repository.connectedServices.value.firstOrNull {
+            it.host == service.host && it.port == service.port &&
+                it.appBundleID == service.appBundleID && it.appVariant == service.appVariant
         } ?: service
         connectedMac = connectedService
         autoSelectedServiceID = null
@@ -634,7 +663,9 @@ class AndroidComposerViewModel(
 
     fun close() {
         servicesJob.cancel()
+        connectionsJob.cancel()
         discoveryErrorJob.cancel()
+        discoveryPreconditionJob.cancel()
         repository.close()
     }
 

@@ -5,7 +5,7 @@ import UIKit
 
 @MainActor
 final class ComposerStore: ObservableObject {
-    private static let maximumDraftCount = 99
+    private static let maximumDraftCount = ComposerRecordStore.maximumDraftCount
 
     enum SendState: Equatable {
         case idle
@@ -60,14 +60,19 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var records: [CarrierRecord] = []
     @Published private(set) var editorResetGeneration = 0
     @Published private(set) var draftLimitErrorMessage: String?
+    @Published private(set) var historyRetention: SendHistoryRetention = .default
+    @Published private(set) var historyRetentionErrorMessage: String?
     @Published private(set) var customSenderDisplayName: String
 
     @Published private(set) var carrierService: MultipeerCarrierService
     let debugDiagnosticLogFileURL: URL?
-    private let recordStore: CarrierRecordStore?
+    private let recordStore: ComposerRecordStore?
     private let systemDeviceName: String
+    private let senderDeviceID: String
+    @Published private(set) var targetSelection: ReceiverTargetSelection
     private let userDefaults: UserDefaults
-    private var pendingPayloadID: UUID?
+    private let displayNamePreference: DeviceNamePreference
+    private let deliveryConfirmationWait: DeliveryConfirmationWait
     private var pendingRecordID: UUID?
     private var pendingSendPreservesActiveInputSession = false
     private var hasStarted = false
@@ -82,13 +87,21 @@ final class ComposerStore: ObservableObject {
 
     init(
         backgroundDisconnectGraceSeconds: TimeInterval = 12,
+        deliveryConfirmationTimeout: Duration = .seconds(5),
         userDefaults: UserDefaults = .standard,
         systemDeviceName: String = UIDevice.current.name
     ) {
-        let storedCustomSenderDisplayName = userDefaults.string(forKey: ComposerPreferenceKeys.senderDisplayName) ?? ""
+        let namePreference = DeviceNamePreference(defaults: userDefaults, key: ComposerPreferenceKeys.senderDisplayName)
+        displayNamePreference = namePreference
+        let storedCustomSenderDisplayName = namePreference.customName
         self.backgroundDisconnectGraceSeconds = backgroundDisconnectGraceSeconds
+        deliveryConfirmationWait = DeliveryConfirmationWait(timeout: deliveryConfirmationTimeout)
         self.userDefaults = userDefaults
         self.systemDeviceName = systemDeviceName
+        let deviceID = userDefaults.string(forKey: "senderStableDeviceID") ?? UUID().uuidString
+        senderDeviceID = deviceID
+        userDefaults.set(deviceID, forKey: "senderStableDeviceID")
+        targetSelection = ReceiverTargetSelection()
         customSenderDisplayName = storedCustomSenderDisplayName
         foregroundRecovery = ForegroundConnectionRecovery(
             backgroundDisconnectGraceSeconds: backgroundDisconnectGraceSeconds
@@ -99,13 +112,14 @@ final class ComposerStore: ObservableObject {
                 customName: storedCustomSenderDisplayName,
                 systemName: systemDeviceName
             ),
+            deviceID: senderDeviceID,
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         do {
-            recordStore = try CarrierRecordStore(
-                fileURL: try CarrierRecordStore.defaultFileURL(fileName: "ios-records.json")
-            )
+            let directory = try CarrierRecordStore.defaultFileURL(fileName: "ios-drafts.json").deletingLastPathComponent()
+            recordStore = try ComposerRecordStore(directory: directory)
             records = recordStore?.records ?? []
+            historyRetention = recordStore?.retention ?? .default
         } catch {
             recordStore = nil
             records = []
@@ -154,8 +168,12 @@ final class ComposerStore: ObservableObject {
         )
     }
 
+    var systemSenderDisplayName: String {
+        CarrierDeviceIdentity.preferredDisplayName(customName: nil, systemName: systemDeviceName)
+    }
+
     var canSend: Bool {
-        CarrierPayload.canSend(text) && connectionState.isConnected && sendState != .sending
+        CarrierPayload.canSend(text) && selectedTarget != nil && sendState != .sending
     }
 
     var canRestartConnection: Bool {
@@ -167,7 +185,9 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionStatus: ConnectionStatus {
-        switch connectionState {
+        if !connectedReceivers.isEmpty { return .connected }
+        if !connectingReceivers.isEmpty { return .connecting }
+        return switch connectionState {
         case .connected:
             .connected
         case .connecting, .reconnecting:
@@ -179,15 +199,41 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    var connectedReceivers: [CarrierPeer] {
+        carrierService.connectedPeers.filter { $0.role == .receiver }
+    }
+
+    var selectedTarget: CarrierPeer? { targetSelection.target(in: connectedReceivers) }
+
+    var connectingReceivers: [CarrierPeer] {
+        carrierService.connectingPeers.filter { $0.role == .receiver }
+    }
+
+    var showsTargetPicker: Bool { connectedReceivers.count >= 2 }
+
     var headerStatusText: String {
-        switch connectionState {
-        case .connecting(let peerName), .reconnecting(let peerName), .connected(let peerName):
-            peerName
-        case .searching:
-            connectionState.localizedDisplayText
-        default:
-            connectionStatus.displayText
-        }
+        if let target = selectedTarget { return target.displayName }
+        if connectingReceivers.count > 1 { return "连接 \(connectingReceivers.count) 台" }
+        if let peer = connectingReceivers.first { return peer.displayName }
+        if let name = connectionState.peerName { return name }
+        return connectionStatus.displayText
+    }
+
+    var headerAccessibilityText: String {
+        if let target = selectedTarget { return "已连接 \(target.displayName)" }
+        if connectingReceivers.count > 1 { return "正在连接 \(connectingReceivers.count) 台设备" }
+        if let peer = connectingReceivers.first { return "正在连接 \(peer.displayName)" }
+        if let name = connectionState.peerName { return "正在连接 \(name)" }
+        return connectionStatus.displayText
+    }
+
+    func selectReceiver(_ peer: CarrierPeer) {
+        guard connectedReceivers.contains(where: { $0.id == peer.id }) else { return }
+        targetSelection.select(peer)
+    }
+
+    private func reconcileTargets() {
+        targetSelection.reconcile(connected: connectedReceivers)
     }
 
     var connectionFailureMessage: String? {
@@ -225,7 +271,7 @@ final class ComposerStore: ObservableObject {
             return nil
         }
 
-        return "\(min(draftCount, Self.maximumDraftCount))"
+        return "\(draftCount)"
     }
 
     var outgoingHistory: [CarrierRecord] {
@@ -254,8 +300,8 @@ final class ComposerStore: ObservableObject {
         }
 
         hasStarted = true
-        carrierService.start { [weak self] envelope, _ in
-            self?.handle(envelope)
+        carrierService.start { [weak self] envelope, peer in
+            self?.handle(envelope, sourceID: self?.carrierService.peerIdentity(for: peer).id)
         }
     }
 
@@ -268,15 +314,10 @@ final class ComposerStore: ObservableObject {
     }
 
     func setCustomSenderDisplayName(_ name: String) {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard sendState != .sending else { return }
+        let normalizedName = displayNamePreference.save(name)
         let oldDisplayName = senderDisplayName
         customSenderDisplayName = normalizedName
-
-        if normalizedName.isEmpty {
-            userDefaults.removeObject(forKey: ComposerPreferenceKeys.senderDisplayName)
-        } else {
-            userDefaults.set(normalizedName, forKey: ComposerPreferenceKeys.senderDisplayName)
-        }
 
         guard senderDisplayName != oldDisplayName else {
             return
@@ -304,11 +345,13 @@ final class ComposerStore: ObservableObject {
 
     private static func makeCarrierService(
         displayName: String,
+        deviceID: String,
         diagnosticLogFileURL: URL?
     ) -> MultipeerCarrierService {
         MultipeerCarrierService(
             role: .sender,
             displayName: displayName,
+            deviceID: deviceID,
             diagnosticLogFileURL: diagnosticLogFileURL
         )
     }
@@ -319,6 +362,7 @@ final class ComposerStore: ObservableObject {
         carrierServiceCancellables.removeAll()
         carrierService = Self.makeCarrierService(
             displayName: senderDisplayName,
+            deviceID: senderDeviceID,
             diagnosticLogFileURL: debugDiagnosticLogFileURL
         )
         bindCarrierService()
@@ -348,6 +392,13 @@ final class ComposerStore: ObservableObject {
                 Task { @MainActor [weak self] in
                     self?.handleConnectionStateChanged(state)
                 }
+            }
+            .store(in: &carrierServiceCancellables)
+        carrierService.$connectedPeers
+            .sink { [weak self] peers in
+                // Consume each published snapshot directly so rapid disconnect/reconnect
+                // events cannot be collapsed into a later service state.
+                self?.targetSelection.reconcile(connected: peers)
             }
             .store(in: &carrierServiceCancellables)
     }
@@ -416,6 +467,7 @@ final class ComposerStore: ObservableObject {
     }
 
     private func handleAppDidBecomeActive() {
+        cleanOutgoingHistory()
         cancelBackgroundStop()
 
         let action = foregroundRecovery.didBecomeActive(
@@ -524,6 +576,12 @@ final class ComposerStore: ObservableObject {
             return
         }
 
+        guard sendState != .sending else { return }
+        reconcileTargets()
+        guard let target = selectedTarget else {
+            sendState = .failed("目标 Mac 未连接")
+            return
+        }
         let textToSend = text
         let payload = CarrierPayload(text: textToSend, postPasteAction: postPasteAction)
         let now = Date()
@@ -550,23 +608,25 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        pendingPayloadID = payload.id
         pendingRecordID = record.id
         pendingSendPreservesActiveInputSession = preservesActiveInputSession
         sendState = .sending
+        deliveryConfirmationWait.begin(payloadID: payload.id, targetID: target.id) { [weak self] in
+            self?.handleDeliveryConfirmationTimeout()
+        }
 
         do {
             try carrierService.send(.text(
                 payload,
-                sender: CarrierDeviceIdentity(displayName: senderDisplayName)
-            ))
+                sender: CarrierDeviceIdentity(displayName: senderDisplayName, deviceID: senderDeviceID)
+            ), to: target.id)
             updateRecord(
                 id: record.id,
                 status: .sent,
                 detail: "已发送到 Mac"
             )
         } catch {
-            pendingPayloadID = nil
+            deliveryConfirmationWait.cancel()
             pendingRecordID = nil
             pendingSendPreservesActiveInputSession = false
             updateRecord(
@@ -575,6 +635,7 @@ final class ComposerStore: ObservableObject {
                 detail: error.localizedDescription
             )
             sendState = .failed(error.localizedDescription)
+            reconcileTargets()
         }
     }
 
@@ -715,19 +776,11 @@ final class ComposerStore: ObservableObject {
             return
         }
 
-        let draftIDs = drafts.map(\.id)
-        guard !draftIDs.isEmpty else {
-            return
-        }
-
         do {
-            for id in draftIDs {
-                try recordStore.delete(id: id)
-            }
+            try recordStore.clearDrafts()
             syncRecords()
         } catch {
             sendState = .failed("清空草稿失败：\(error.localizedDescription)")
-            syncRecords()
         }
     }
 
@@ -736,37 +789,67 @@ final class ComposerStore: ObservableObject {
             sendState = .failed("历史记录存储不可用")
             return
         }
-
-        let outgoingIDs = outgoingHistory.map(\.id)
-        guard !outgoingIDs.isEmpty else {
-            return
-        }
-
         do {
-            for id in outgoingIDs {
-                try recordStore.delete(id: id)
-            }
+            try recordStore.clearHistory()
             syncRecords()
         } catch {
             sendState = .failed("清空历史记录失败：\(error.localizedDescription)")
-            syncRecords()
         }
     }
 
-    private func handle(_ envelope: CarrierEnvelope) {
-        if envelope.kind == .ack, envelope.ackID == pendingPayloadID {
+    func setHistoryRetention(_ retention: SendHistoryRetention) {
+        guard let recordStore else {
+            historyRetentionErrorMessage = "历史记录存储不可用"
+            return
+        }
+        do {
+            try recordStore.setRetention(retention)
+            historyRetention = recordStore.retention
+            historyRetentionErrorMessage = nil
+            syncRecords()
+        } catch {
+            historyRetentionErrorMessage = "更新历史保留设置失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func cleanOutgoingHistory() {
+        guard let recordStore else { return }
+        do {
+            try recordStore.cleanHistory()
+            syncRecords()
+            historyRetentionErrorMessage = nil
+        } catch {
+            historyRetentionErrorMessage = "清理历史记录失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func handle(_ envelope: CarrierEnvelope, sourceID: String?) {
+        if envelope.kind == .ack, let ackID = envelope.ackID,
+           deliveryConfirmationWait.confirm(payloadID: ackID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
                 detail: "Mac 已确认收到",
                 pasteStatus: .received
             )
-        } else if envelope.kind == .receipt, let receipt = envelope.receipt, receipt.payloadID == pendingPayloadID {
+        } else if envelope.kind == .receipt, let receipt = envelope.receipt,
+                  deliveryConfirmationWait.confirm(payloadID: receipt.payloadID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
                 detail: receipt.detail ?? "Mac 已接收文本",
                 pasteStatus: receipt.pasteStatus
             )
         }
+    }
+
+    private func handleDeliveryConfirmationTimeout() {
+        let detail = "发送超时，请检查 Mac 端接收结果"
+        if let pendingRecordID {
+            updateRecord(id: pendingRecordID, status: .failed, detail: detail)
+        }
+        pendingRecordID = nil
+        pendingSendPreservesActiveInputSession = false
+        sendState = .failed(detail)
+        reconcileTargets()
     }
 
     private func finishPendingSend(
@@ -777,7 +860,7 @@ final class ComposerStore: ObservableObject {
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: status, detail: detail)
         }
-        pendingPayloadID = nil
+
         pendingRecordID = nil
         sendState = .sent
 

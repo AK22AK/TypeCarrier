@@ -4,7 +4,7 @@ import TypeCarrierCore
 
 @MainActor
 final class AndroidCarrierBridge: ObservableObject {
-    typealias EnvelopeHandler = (CarrierEnvelope, String, @escaping (CarrierEnvelope) -> Void) -> Void
+    typealias EnvelopeHandler = (CarrierEnvelope, String, String, @escaping (CarrierEnvelope) -> Void) -> Void
 
     enum BridgeState: Equatable {
         case stopped
@@ -58,14 +58,13 @@ final class AndroidCarrierBridge: ObservableObject {
         return addresses.map { "\($0.address):\(portText)（\($0.interfaceName)）" }.joined(separator: "\n")
     }
 
-    private let displayName: String
+    private var displayName: String
     private let macID: String
     private let localPairingCode: String
     private let trustTokenStore: AndroidTrustTokenStore
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: BridgeConnectionState] = [:]
-    private var activeSenderGate = AndroidBridgeActiveSenderGate()
     private var envelopeHandler: EnvelopeHandler?
     private var pendingStartHandler: EnvelopeHandler?
     private var isStoppingListener = false
@@ -92,6 +91,10 @@ final class AndroidCarrierBridge: ObservableObject {
         self.localPairingCode = pairingCode
         self.trustTokenStore = trustTokenStore
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
+    }
+
+    func updateDisplayName(_ name: String) {
+        displayName = name
     }
 
     func start(onEnvelope: @escaping EnvelopeHandler) {
@@ -164,7 +167,6 @@ final class AndroidCarrierBridge: ObservableObject {
         connectedAndroidDeviceNames = []
         connections.values.forEach { $0.connection.cancel() }
         connections = [:]
-        activeSenderGate = AndroidBridgeActiveSenderGate()
         envelopeHandler = nil
         lastErrorMessage = nil
         recordDiagnosticEvent("androidBridge.listener.stop", message: "Stopped Android bridge listener.")
@@ -325,7 +327,7 @@ final class AndroidCarrierBridge: ObservableObject {
 
         let envelope = try CarrierCodec.decode(payload)
         let deviceName = connectionState.deviceName ?? "Android"
-        envelopeHandler?(envelope, deviceName) { [weak self, weak connection] reply in
+        envelopeHandler?(envelope, connectionState.deviceID ?? "unknown", deviceName) { [weak self, weak connection] reply in
             guard let self, let connection else {
                 return
             }
@@ -334,16 +336,6 @@ final class AndroidCarrierBridge: ObservableObject {
     }
 
     private func handle(_ handshake: AndroidBridgeHandshake, from connection: NWConnection, state connectionState: inout BridgeConnectionState) {
-        guard activeSenderGate.claim(deviceID: handshake.deviceID) else {
-            recordDiagnosticEvent(
-                "androidBridge.handshake.busy",
-                message: "Rejected Android handshake because another sender is active.",
-                peerName: handshake.deviceName
-            )
-            sendAndRemove(.busy("Mac is already serving another device."), to: connection)
-            return
-        }
-
         if handshake.isPairingAttempt, handshake.pairingCode == localPairingCode {
             let trustToken = (try? AndroidTrustToken.generate()) ?? AndroidTrustToken(rawValue: UUID().uuidString)
             trustTokenStore.remember(trustToken, for: handshake.deviceID)
@@ -372,7 +364,6 @@ final class AndroidCarrierBridge: ObservableObject {
             return
         }
 
-        activeSenderGate.release(deviceID: handshake.deviceID)
         recordDiagnosticEvent(
             "androidBridge.handshake.rejected",
             message: "Invalid Android pairing code or trust token.",
@@ -433,12 +424,7 @@ final class AndroidCarrierBridge: ObservableObject {
 
     private func remove(_ connection: NWConnection) {
         let id = ObjectIdentifier(connection)
-        let deviceID = connections[id]?.deviceID
         connections[id] = nil
-        if let deviceID,
-           !connections.values.contains(where: { $0.deviceID == deviceID }) {
-            activeSenderGate.release(deviceID: deviceID)
-        }
         updateConnectedAndroidDevices()
         connection.cancel()
     }
@@ -468,7 +454,7 @@ final class AndroidCarrierBridge: ObservableObject {
                 devicesByID[deviceID] = "Android"
             }
         }
-        connectedAndroidDeviceNames = devicesByID.values.sorted()
+        connectedAndroidDeviceNames = devicesByID.map { id, name in "\(name) · \(id.suffix(8))" }.sorted()
     }
 
     private func fail(_ message: String) {

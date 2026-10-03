@@ -120,7 +120,7 @@ struct MainWindowView: View {
             ReceiverStatusPage(store: store)
                 .navigationTitle("连接管理")
         case .functionTest:
-            FunctionTestPage()
+            FunctionTestPage(store: store)
                 .navigationTitle("功能测试")
         case .settings:
             settingsDetailColumn
@@ -390,7 +390,7 @@ private struct ReceivedRecordRow: View {
             return timestamp
         }
 
-        return "\(timestamp) · 来自 \(sourceDeviceName)"
+        return "\(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
     }
 }
 
@@ -493,7 +493,7 @@ private struct ReceivedRecordDetail: View {
             return "接收于 \(timestamp)"
         }
 
-        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)"
+        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
     }
 
     private var editableText: some View {
@@ -814,6 +814,7 @@ private struct ReceiverStatusPage: View {
 }
 
 private struct FunctionTestPage: View {
+    @ObservedObject var store: MacCarrierStore
     @State private var testText = ""
     @State private var hasPressedReturn = false
     @State private var focusRequest = 0
@@ -821,7 +822,6 @@ private struct FunctionTestPage: View {
     @State private var pasteSelfTestResult: PasteInjectionResult?
     @State private var lastPasteSelfTestText: String?
 
-    private let pasteInjector = PasteInjector()
 
     private var didPassPasteSelfTest: Bool {
         guard let lastPasteSelfTestText else {
@@ -936,8 +936,10 @@ private struct FunctionTestPage: View {
         focusRequest += 1
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            pasteSelfTestResult = pasteInjector.paste(text: testText)
-            isRunningPasteSelfTest = false
+            store.enqueuePaste(text: testText) { result in
+                pasteSelfTestResult = result
+                isRunningPasteSelfTest = false
+            }
         }
     }
 }
@@ -1196,9 +1198,67 @@ private struct PlatformDownloadItem: View {
 private struct SettingsReceivingPage: View {
     @ObservedObject var store: MacCarrierStore
 
+    @State private var nameEditor = DeviceNameEditState()
+    @State private var showsNameGuidance = false
+    private let nameGuidance = "建议中文 10 字、英文 18 字符；过长会省略显示。"
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("本机名称")
+                        Button {
+                            showsNameGuidance.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .help(nameGuidance)
+                        .accessibilityLabel("名称长度建议")
+                        .accessibilityIdentifier("receiverNameHelp")
+                        .popover(isPresented: $showsNameGuidance) {
+                            Text(nameGuidance)
+                                .frame(width: 300, alignment: .leading)
+                                .padding(16)
+                        }
+                    }
+                    if nameEditor.isEditing {
+                        TextField("例如：书房 Mac", text: $nameEditor.draft)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("本机显示名称")
+                            .accessibilityIdentifier("receiverNameDraft")
+                        HStack {
+                            Button("取消") { nameEditor.cancel() }
+                            Button("保存") {
+                                if let name = nameEditor.savedName() { store.setCustomReceiverDisplayName(name) }
+                            }
+                            .disabled(!nameEditor.canSave)
+                            Button("使用系统名称") {
+                                nameEditor.selectSystemName(store.systemReceiverDisplayName)
+                            }
+                            .disabled(store.customReceiverDisplayName.isEmpty || nameEditor.pendingSource == .system)
+                        }
+                    } else {
+                        HStack(alignment: .top) {
+                            Text(store.receiverDisplayName)
+                                .font(.title3.weight(.semibold))
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
+                                .accessibilityIdentifier("receiverEffectiveName")
+                            Spacer(minLength: 8)
+                            Button("编辑") {
+                                nameEditor.begin(effectiveName: store.receiverDisplayName, hasCustomName: !store.customReceiverDisplayName.isEmpty)
+                            }
+                            .fixedSize()
+                        }
+                        Text(store.customReceiverDisplayName.isEmpty ? "系统名称" : "自定义名称")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle(
                         "自动粘贴后恢复剪贴板",
@@ -1208,7 +1268,7 @@ private struct SettingsReceivingPage: View {
                         )
                     )
 
-                    Text("关闭时，TypeCarrier 会把接收文本留在 Mac 剪贴板里；开启后会尝试在自动粘贴后恢复发送前的剪贴板内容。")
+                    Text("开启后，自动粘贴会尝试恢复原剪贴板内容。")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1219,6 +1279,12 @@ private struct SettingsReceivingPage: View {
             .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onDisappear { nameEditor.cancel() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            if let window = notification.object as? NSWindow, window.identifier?.rawValue == MacAppCoordinator.mainWindowID {
+                nameEditor.cancel()
+            }
+        }
     }
 }
 

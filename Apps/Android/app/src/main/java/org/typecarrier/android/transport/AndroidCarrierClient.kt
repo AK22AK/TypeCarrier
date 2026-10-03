@@ -1,5 +1,13 @@
 package org.typecarrier.android.transport
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.typecarrier.android.protocol.AndroidBridgeHandshake
@@ -21,8 +29,14 @@ import java.util.UUID
 
 class AndroidCarrierClient(
     private val service: MacService,
-) : Closeable {
-    private var socket: Socket? = null
+    private val onClosed: (CarrierConnection) -> Unit = {},
+) : CarrierConnection {
+    @Volatile private var socket: Socket? = null
+    override val isOpen: Boolean get() = socket?.isClosed == false
+    private val replies = Channel<CarrierEnvelope>(16)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sendMutex = Mutex()
+    private var senderID: String? = null
 
     suspend fun pair(
         deviceID: String,
@@ -31,11 +45,11 @@ class AndroidCarrierClient(
         trustToken: String?,
     ): AndroidBridgeResponse =
         withContext(Dispatchers.IO) {
-            close()
+            senderID = deviceID
             val nextSocket = Socket()
+            socket = nextSocket
             nextSocket.connect(InetSocketAddress(service.host, service.port), connectTimeoutMillis)
             nextSocket.soTimeout = readTimeoutMillis
-            socket = nextSocket
 
             val challenge = trustToken?.let { UUID.randomUUID().toString() }
             val handshake = if (trustToken != null && challenge != null) {
@@ -53,19 +67,34 @@ class AndroidCarrierClient(
                 )
             }
             sendFrame(CarrierJson.encode(handshake).encodeToByteArray())
-            val response = CarrierJson.decodeBridgeResponse(readFrame().decodeToString())
+            val decoded = CarrierJson.decodeBridgeResponse(readFrame().decodeToString())
+            val response = if (decoded.status == AndroidBridgeResponseStatus.Accepted &&
+                service.macID != null && decoded.macID != null && service.macID != decoded.macID
+            ) {
+                decoded.copy(status = AndroidBridgeResponseStatus.Rejected, message = "连接目标身份已变更，请重新选择 Mac", trustToken = null)
+            } else decoded
             if (response.status != AndroidBridgeResponseStatus.Accepted) {
                 close()
+            } else {
+                nextSocket.soTimeout = 0
+                scope.launch {
+                    try {
+                        while (true) replies.send(CarrierJson.decodeEnvelope(readFrame().decodeToString()))
+                    } catch (error: Exception) {
+                        replies.close(error)
+                        close()
+                    }
+                }
             }
             response
         }
 
-    suspend fun sendText(
+    override suspend fun sendText(
         text: String,
         deviceName: String,
-        postPasteAction: CarrierPostPasteAction? = null,
+        postPasteAction: CarrierPostPasteAction?,
     ): CarrierDeliveryReceipt? =
-        withContext(Dispatchers.IO) {
+        sendMutex.withLock { withContext(Dispatchers.IO) {
             val activeSocket = socket ?: error("尚未连接 Mac")
             if (activeSocket.isClosed) {
                 error("连接已关闭")
@@ -79,17 +108,26 @@ class AndroidCarrierClient(
             )
             val envelope = CarrierEnvelope.text(
                 payload = payload,
-                sender = CarrierDeviceIdentity(displayName = deviceName),
+                sender = CarrierDeviceIdentity(displayName = deviceName, deviceID = senderID),
             )
 
             sendFrame(CarrierJson.encode(envelope).encodeToByteArray())
-            val reply = CarrierJson.decodeEnvelope(readFrame().decodeToString())
-            reply.receipt
-        }
+            withTimeout(readTimeoutMillis.toLong()) {
+                var matched: CarrierDeliveryReceipt? = null
+                while (matched == null) {
+                    val receipt = replies.receive().receipt
+                    if (receipt?.payloadID == payload.id) matched = receipt
+                }
+                matched
+            }
+        } }
 
     override fun close() {
         runCatching { socket?.close() }
         socket = null
+        replies.close()
+        scope.cancel()
+        onClosed(this)
     }
 
     private fun sendFrame(payload: ByteArray) {
@@ -106,7 +144,7 @@ class AndroidCarrierClient(
             ((header[2].toInt() and 0xff) shl 8) or
             (header[3].toInt() and 0xff)
 
-        if (length > CarrierWireFrame.maxPayloadSize) {
+        if (length < 0 || length > CarrierWireFrame.maxPayloadSize) {
             error("响应过大：$length bytes")
         }
         return input.readFully(length)
