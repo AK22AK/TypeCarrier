@@ -222,11 +222,15 @@ final class MultiDeviceRoutingTests: XCTestCase {
 
     func testReceiverDropsOnlyStuckInvitationAfterTimeout() async throws {
         let mac = MultipeerCarrierService(role: .receiver, displayName: "Mac", connectionTimeout: .milliseconds(20))
+        defer { mac.stop() }
         let online = MCPeerID(displayName: "Online Phone")
         let stuck = MCPeerID(displayName: "Stuck Phone")
         mac.simulateSessionStateForTesting(.connected, peerID: online)
         mac.simulateInvitationForTesting(from: stuck) { accepted, _ in XCTAssertTrue(accepted) }
-        try await Task.sleep(for: .milliseconds(60))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while mac.sessionForTesting(peerID: stuck) != nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertNil(mac.sessionForTesting(peerID: stuck))
         XCTAssertNotNil(mac.sessionForTesting(peerID: online))
         XCTAssertEqual(mac.connectedPeers.count, 1)
