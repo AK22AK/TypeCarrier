@@ -17,7 +17,7 @@ struct TypeCarrierMacApp: App {
             MainWindowView(coordinator: coordinator)
                 .onAppear { coordinator.managementWindowDidAppear() }
         }
-        .defaultSize(width: 1000, height: 700)
+        .defaultSize(width: 740, height: 609)
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)

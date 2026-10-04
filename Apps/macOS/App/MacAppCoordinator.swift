@@ -17,6 +17,7 @@ final class MacAppCoordinator: NSObject, ObservableObject {
     private var sleepStartedAt: Date?
     private var lastWakeRestartAt: Date?
     private let wakeRestartDebounceInterval: TimeInterval = 2
+    private let compactWindowSizeAppliedKey = "MacManagementWindowSize740x609Applied"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setManagementWindowOpen(hasManagementWindow)
@@ -56,6 +57,24 @@ final class MacAppCoordinator: NSObject, ObservableObject {
 
     func managementWindowDidAppear() {
         setManagementWindowOpen(true)
+        DispatchQueue.main.async { [weak self] in
+            self?.applyCompactWindowSizeOnce()
+        }
+    }
+
+    private func applyCompactWindowSizeOnce() {
+        guard let window = NSApp.windows.first(where: { $0.identifier?.rawValue == Self.mainWindowID }) else { return }
+        let autosaveName = window.frameAutosaveName.isEmpty ? "TypeCarrierManagementWindow" : window.frameAutosaveName
+        _ = window.setFrameAutosaveName(autosaveName)
+        if UserDefaults.standard.bool(forKey: compactWindowSizeAppliedKey) {
+            _ = window.setFrameUsingName(autosaveName)
+            return
+        }
+        var frame = window.frame
+        frame.size = NSSize(width: 740, height: 609)
+        window.setFrame(frame, display: true)
+        window.saveFrame(usingName: autosaveName)
+        UserDefaults.standard.set(true, forKey: compactWindowSizeAppliedKey)
     }
 
     private func setManagementWindowOpen(_ isOpen: Bool) {

@@ -15,14 +15,14 @@ struct MainWindowView: View {
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+                .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 210)
         } detail: {
             content
                 .navigationTitle(activePage.title)
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar(removing: .sidebarToggle)
-        .frame(minWidth: 860, idealWidth: 1000, minHeight: 600, idealHeight: 700)
+        .frame(minWidth: 740, idealWidth: 740, minHeight: 557, idealHeight: 557)
         .font(.system(size: 13))
         .onAppear {
             store.refreshAccessibilityStatus()
@@ -91,16 +91,16 @@ struct MainWindowView: View {
         case .received:
             HSplitView {
                 ReceivedRecordsListPane(records: store.receivedHistory, selectedRecordID: $selectedRecordID, store: store)
-                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
+                    .frame(minWidth: 220, idealWidth: 240, maxWidth: 300)
                     .frame(maxHeight: .infinity)
                 if let selectedRecord {
                     ReceivedRecordDetail(record: selectedRecord, store: store,
                                          showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
                         .id(selectedRecord.id)
-                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 288, maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ContentUnavailableView("暂无接收文本", systemImage: "tray", description: Text("从手机发送后，文本会保存在这里。"))
-                        .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 288, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
