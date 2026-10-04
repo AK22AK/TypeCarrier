@@ -103,6 +103,7 @@ struct MainWindowView: View {
                         .frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         case .connections:
             ReceiverStatusPage(store: store) { coordinator.selectedPage = .diagnostics }
         case .receiving:
