@@ -9,71 +9,22 @@ struct MenuBarContentView: View {
         store = coordinator.store
     }
 
+    private var presentation: ReceiverManagementPresentation {
+        .init(summary: store.receiverStatusSummary, accessibilityTrusted: store.accessibilityTrusted)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                coordinator.showMainWindow()
-            } label: {
-                Label(statusMenuTitle, systemImage: statusSystemImage)
-            }
-
-            if let warning = store.receiverHealthWarning {
-                Text(warning)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Divider()
-
-            Button("打开 TypeCarrier") {
-                coordinator.showMainWindow()
-            }
+        Button(presentation.menuTitle) {}.disabled(true)
+        Divider()
+        Button("打开接收列表") { coordinator.showMainWindow(page: .received) }
             .keyboardShortcut("t", modifiers: [.command, .option])
-
-            Button("测试粘贴") {
-                store.pasteTestText()
-            }
-
-            Button("重启接收器") {
-                store.restartFromUserAction()
-            }
-
-            Button("导出诊断") {
-                store.exportConnectionDiagnosticsToFinder()
-            }
-
-            if let exportError = store.lastDiagnosticExportErrorMessage {
-                Text(exportError)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Divider()
-
-            Button("退出 TypeCarrier") {
-                NSApplication.shared.terminate(nil)
-            }
+        Button("连接管理…") { coordinator.showMainWindow(page: .connections) }
+        Button("接收设置…") { coordinator.showMainWindow(page: .receiving) }
+        if presentation.needsAttention {
+            Button("处理问题…") { coordinator.showMainWindow(page: .diagnostics) }
         }
-        .onAppear {
-            store.refreshAccessibilityStatus()
-        }
-    }
-
-    private var statusMenuTitle: String {
-        if store.receiverHealthWarning != nil {
-            return "接收器需要处理"
-        }
-
-        return store.receiverDisplayConnectionState.localizedDisplayText
-    }
-
-    private var statusSystemImage: String {
-        if store.receiverHealthWarning != nil {
-            return "exclamationmark.triangle.fill"
-        }
-
-        return store.receiverDisplayConnectionState.isConnected ? "checkmark.circle.fill" : "antenna.radiowaves.left.and.right"
+        Divider()
+        Button("退出 TypeCarrier") { NSApplication.shared.terminate(nil) }
+        .onAppear { store.refreshAccessibilityStatus() }
     }
 }

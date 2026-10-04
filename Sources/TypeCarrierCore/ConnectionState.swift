@@ -165,6 +165,7 @@ public struct ReceiverStatusIssue: Equatable, Sendable {
 
 public struct ReceiverStatusSummary: Equatable, Sendable {
     public let overallHealth: ReceiverOverallHealth
+    public let hasUsableEndpoint: Bool
     public let connectedDevices: [ReceiverConnectedDevice]
     public let issues: [ReceiverStatusIssue]
 
@@ -179,6 +180,10 @@ public struct ReceiverStatusSummary: Equatable, Sendable {
         androidConnectedDeviceNames: [String],
         sharedIssue: ReceiverStatusIssue? = nil
     ) {
+        hasUsableEndpoint = Self.hasAnyUsableEndpoint(
+            appleConnectionState: appleConnectionState,
+            androidConnectionState: androidConnectionState
+        )
         connectedDevices = appleConnectedDeviceNames.map {
             ReceiverConnectedDevice(name: $0, platform: .apple, endpoint: .appleMultipeer)
         } + androidConnectedDeviceNames.map {

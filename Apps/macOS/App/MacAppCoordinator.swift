@@ -5,6 +5,7 @@ import OSLog
 final class MacAppCoordinator: NSObject, ObservableObject {
     static let mainWindowID = "main"
     private(set) lazy var store = MacCarrierStore()
+    @Published var selectedPage: MacManagementPage? = .received
 
     private let logger = Logger(subsystem: "org.typecarrier.mac", category: "Lifecycle")
     private let hotKeyMonitor = GlobalHotKeyMonitor()
@@ -35,7 +36,8 @@ final class MacAppCoordinator: NSObject, ObservableObject {
         }
     }
 
-    func showMainWindow() {
+    func showMainWindow(page: MacManagementPage? = nil) {
+        if let page { selectedPage = page }
         setManagementWindowOpen(true)
         if let existingWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == Self.mainWindowID && $0.canBecomeMain }) {
             NSApp.activate(ignoringOtherApps: true)

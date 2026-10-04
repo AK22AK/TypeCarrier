@@ -454,7 +454,10 @@ final class AndroidCarrierBridge: ObservableObject {
                 devicesByID[deviceID] = "Android"
             }
         }
-        connectedAndroidDeviceNames = devicesByID.map { id, name in "\(name) · \(id.suffix(8))" }.sorted()
+        connectedAndroidDeviceNames = devicesByID.map { id, name in
+            let hasDuplicateName = devicesByID.values.filter { $0 == name }.count > 1
+            return name + (hasDuplicateName ? " · \(id.suffix(8))" : "")
+        }.sorted()
     }
 
     private func fail(_ message: String) {

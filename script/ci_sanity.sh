@@ -88,10 +88,10 @@ check_mac_record_action_toolbar() {
   local block
   block="$(
     awk '
-      /^private struct ReceivedRecordDetail: View/ { in_block = 1 }
+      /^struct ReceivedRecordDetail: View/ { in_block = 1 }
       /^private struct ReceiverStatusPage: View/ { in_block = 0 }
       in_block { print }
-    ' Apps/macOS/Views/MainWindowView.swift
+    ' Apps/macOS/Views/ReceivedRecordsView.swift
   )"
 
   if ! grep -q 'ToolbarItemGroup(placement: \.primaryAction)' <<<"$block"; then
@@ -128,31 +128,13 @@ check_mac_main_window_uses_single_scene_path() {
 }
 
 check_mac_connection_management_has_restart_action() {
-  local block
-  block="$(
-    awk '
-      /^private struct ReceiverStatusPage: View/ { in_block = 1 }
-      /^private struct SettingsListPane: View/ { in_block = 0 }
-      in_block { print }
-    ' Apps/macOS/Views/MainWindowView.swift
-  )"
-
-  if ! grep -q 'receiverActionsSection' <<<"$block"; then
-    echo "ReceiverStatusPage must expose receiverActionsSection in the always-visible connection management page."
+  if ! grep -q 'store.restartFromUserAction()' Apps/macOS/Views/ReceiverStatusPage.swift; then
+    echo "Connection management must retain the receiver restart action."
     return 1
   fi
 
-  local actions_block
-  actions_block="$(
-    awk '
-      /private var receiverActionsSection: some View/ { in_block = 1 }
-      in_block { print }
-      in_block && /^    private var / && !/receiverActionsSection/ { exit }
-    ' Apps/macOS/Views/MainWindowView.swift
-  )"
-
-  if ! grep -q 'store.restartFromUserAction()' <<<"$actions_block"; then
-    echo "ReceiverStatusPage receiverActionsSection must call store.restartFromUserAction()."
+  if grep -q 'restartFromUserAction\|pasteTestText\|exportConnectionDiagnosticsToFinder' Apps/macOS/Views/MenuBarContentView.swift; then
+    echo "Restart, test paste, and export belong in management pages, not the menu."
     return 1
   fi
 }

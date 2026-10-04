@@ -101,7 +101,10 @@ final class MacCarrierStore: ObservableObject {
     var receiverStatusSummary: ReceiverStatusSummary {
         ReceiverStatusSummary(
             appleConnectionState: carrierService.connectionState,
-            appleConnectedDeviceNames: carrierService.connectedPeers.map { "\($0.displayName) · \($0.id.suffix(8))" },
+            appleConnectedDeviceNames: carrierService.connectedPeers.map { peer in
+                let hasDuplicateName = carrierService.connectedPeers.filter { $0.displayName == peer.displayName }.count > 1
+                return peer.displayName + (hasDuplicateName ? " · \(peer.id.suffix(8))" : "")
+            },
             androidConnectionState: androidEndpointConnectionState,
             androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
             sharedIssue: sharedReceiverIssue

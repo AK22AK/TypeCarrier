@@ -183,4 +183,32 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertTrue(summary.requiresGlobalAttention)
         XCTAssertEqual(summary.issues.map(\.impact), [.allDevices])
     }
+    func testReadyReceiverWithoutDevicesHasUsableEndpoint() {
+        let summary = ReceiverStatusSummary(
+            appleConnectionState: .advertising, appleConnectedDeviceNames: [],
+            androidConnectionState: .listening, androidConnectedDeviceNames: []
+        )
+        XCTAssertTrue(summary.hasUsableEndpoint)
+        XCTAssertTrue(summary.connectedDevices.isEmpty)
+        XCTAssertEqual(summary.overallHealth, .ok)
+    }
+
+    func testStoppedEndpointsAreUnavailableEvenWithoutReportedErrors() {
+        let summary = ReceiverStatusSummary(
+            appleConnectionState: .idle, appleConnectedDeviceNames: [],
+            androidConnectionState: .idle, androidConnectedDeviceNames: []
+        )
+        XCTAssertFalse(summary.hasUsableEndpoint)
+        XCTAssertTrue(summary.issues.isEmpty)
+    }
+
+    func testPartialFailureRetainsUsableReceiverEndpoint() {
+        let summary = ReceiverStatusSummary(
+            appleConnectionState: .failed("Apple unavailable"), appleConnectedDeviceNames: [],
+            androidConnectionState: .listening, androidConnectedDeviceNames: []
+        )
+        XCTAssertTrue(summary.hasUsableEndpoint)
+        XCTAssertEqual(summary.overallHealth, .degraded)
+    }
+
 }
