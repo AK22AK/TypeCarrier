@@ -71,7 +71,7 @@ struct FunctionTestPage: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: 600, alignment: .leading)
+            .frame(maxWidth: 544, alignment: .leading)
             .padding(28)
             .frame(maxWidth: .infinity, alignment: .top)
         }

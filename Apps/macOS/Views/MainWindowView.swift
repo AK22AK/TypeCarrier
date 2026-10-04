@@ -45,6 +45,7 @@ struct MainWindowView: View {
             Section {
                 sidebarRow(.received)
                     .badge(store.receivedHistory.count)
+                    .tag(MacManagementPage.received)
                 sidebarRow(.connections)
             }
             Section("设置") {
@@ -55,7 +56,7 @@ struct MainWindowView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .top, spacing: 4) {
-            Label("TypeCarrier", systemImage: "waveform")
+            Label { Text("TypeCarrier") } icon: { Image(systemName: "waveform").font(.system(size: 14)) }
                 .font(.system(size: 15, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
@@ -68,7 +69,7 @@ struct MainWindowView: View {
             Image(systemName: page.symbol)
                 .font(.system(size: 16))
                 .frame(width: 20)
-            Text(page.title)
+            Text(page.title).font(.system(size: 13, weight: .regular))
             Spacer(minLength: 0)
             if page == .connections, store.receiverStatusSummary.overallHealth != .ok {
                 Image(systemName: "exclamationmark.circle.fill")
@@ -137,7 +138,66 @@ struct MacManagementForm<Content: View>: View {
     var body: some View {
         Form { content }
             .formStyle(.grouped)
-            .frame(maxWidth: 640)
+            .frame(maxWidth: 600)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+
+struct MacManagementPageContent<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) { content }
+                .frame(maxWidth: 552, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 30)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .top)
+        }
+    }
+}
+
+struct MacManagementGroup<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) { content }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct MacManagementHeader: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    var tint: Color = .secondary
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 22)).foregroundStyle(tint).frame(width: 22)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 20, weight: .semibold))
+                Text(detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+struct MacManagementActionRow: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).font(.system(size: 15)).frame(width: 18)
+                Text(title)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 }

@@ -96,49 +96,65 @@ struct SettingsDiagnosticsPage: View {
     }
 
     var body: some View {
-        MacManagementForm {
-            Section {
-                LabeledContent("接收服务", value: presentation.title)
-                LabeledContent("自动粘贴权限", value: store.accessibilityTrusted ? "已授权" : "需要授权")
+        MacManagementPageContent {
+            MacManagementHeader(title: diagnosticTitle,
+                                detail: "出现连接或粘贴问题时，可以在这里检查。",
+                                symbol: "stethoscope", tint: presentation.needsAttention ? .orange : .green)
+                .padding(.bottom, 4)
+            MacManagementGroup {
+                ForEach(Array(selfCheckFindings.enumerated()), id: \.element.id) { index, finding in
+                    if index > 0 { Divider().padding(.horizontal, 16) }
+                    SettingsSelfCheckFindingRow(finding: finding).padding(16)
+                }
                 if !store.accessibilityTrusted {
-                    Button("授权辅助功能") { store.requestAccessibilityAccess() }
+                    Divider().padding(.horizontal, 16)
+                    MacManagementActionRow(title: "授权辅助功能", symbol: "lock.open") { store.requestAccessibilityAccess() }
                 }
             }
-            Section("检查与反馈") {
-                Button(action: showFunctionTest) { Label("功能测试", systemImage: "chevron.right") }
-                Button { store.exportConnectionDiagnosticsToFinder() } label: {
-                    Label("导出诊断", systemImage: "square.and.arrow.up")
+            VStack(alignment: .leading, spacing: 10) {
+                Text("检查与反馈").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                MacManagementGroup {
+                    MacManagementActionRow(title: "功能测试", symbol: "checkmark.seal", action: showFunctionTest)
+                    Divider().padding(.horizontal, 16)
+                    MacManagementActionRow(title: "导出诊断", symbol: "square.and.arrow.up") { store.exportConnectionDiagnosticsToFinder() }
                 }
-                if let error = store.lastDiagnosticExportErrorMessage { Text(error).foregroundStyle(.orange) }
+                if let error = store.lastDiagnosticExportErrorMessage { Text(error).font(.system(size: 12)).foregroundStyle(.orange) }
                 else if let url = store.lastDiagnosticExportURL {
                     Text("最近导出：\(url.path)").font(.system(size: 12)).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }
-            Section("连接自检") {
-                ForEach(selfCheckFindings) { finding in SettingsSelfCheckFindingRow(finding: finding) }
-            }
-            Section {
-                DisclosureGroup("最近事件", isExpanded: $showsRecentEvents) {
-                    if recentEvents.isEmpty { Text("暂无事件").foregroundStyle(.secondary) }
+            DisclosureGroup(isExpanded: $showsRecentEvents) {
+                MacManagementGroup {
+                    if recentEvents.isEmpty { Text("暂无事件").foregroundStyle(.secondary).padding(16) }
                     else {
                         LazyVStack(alignment: .leading, spacing: 12) {
                             ForEach(recentEvents) { event in DiagnosticEventListRow(event: event) }
-                        }
+                        }.padding(16)
                     }
-                }
-                DisclosureGroup("高级恢复操作", isExpanded: $showsRecovery) {
-                    Button("重启接收器") { store.restartFromUserAction() }
-                    Text("会中断当前连接，手机可能需要重新连接。")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                    AccessibilityRecoveryActions(store: store)
-                }
-            }
+                }.padding(.top, 10)
+            } label: { Text("最近事件").foregroundStyle(.secondary) }
+            DisclosureGroup(isExpanded: $showsRecovery) {
+                MacManagementGroup {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button("重启接收器") { store.restartFromUserAction() }
+                        Text("会中断当前连接，手机可能需要重新连接。")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        AccessibilityRecoveryActions(store: store)
+                    }.padding(16)
+                }.padding(.top, 10)
+            } label: { Text("高级恢复操作").foregroundStyle(.secondary) }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("运行自检", systemImage: "stethoscope") { store.runManualDiagnostics() }
             }
         }
+    }
+
+    private var diagnosticTitle: String {
+        if !presentation.canReceive { return "接收服务需要处理" }
+        if presentation.summary.overallHealth != .ok { return "部分入口异常" }
+        return store.accessibilityTrusted ? "接收器运行正常" : "自动粘贴需要授权"
     }
 
     private var selfCheckFindings: [SelfCheckFinding] {
@@ -168,37 +184,17 @@ struct SettingsDiagnosticsPage: View {
 
 private struct SettingsSelfCheckFindingRow: View {
     let finding: SelfCheckFinding
-
     var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(finding.title.localizedDiagnosticMessageText)
-                    .font(.body.weight(.semibold))
-                Text(finding.detail.localizedDiagnosticMessageText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: finding.systemImageName).font(.system(size: 16)).foregroundStyle(finding.tint)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(finding.title.localizedDiagnosticMessageText).font(.system(size: 13, weight: .medium))
+                Text(finding.detail.localizedDiagnosticMessageText).font(.system(size: 12)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionTitle = finding.actionTitle {
-                    Text(actionTitle.localizedDiagnosticMessageText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    Text(actionTitle.localizedDiagnosticMessageText).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-            }
-        } icon: {
-            Image(systemName: finding.systemImageName)
-                .foregroundStyle(finding.tint)
-        }
-        .padding(finding.requiresAttention ? 12 : 0)
-        .background {
-            if finding.requiresAttention {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(finding.tint.opacity(0.09))
-            }
-        }
-        .overlay {
-            if finding.requiresAttention {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(finding.tint.opacity(0.35), lineWidth: 1)
             }
         }
     }

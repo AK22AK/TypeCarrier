@@ -2,30 +2,29 @@ import SwiftUI
 
 struct SettingsAboutPage: View {
     var body: some View {
-        MacManagementForm {
-            Section {
-                HStack(spacing: 14) {
-                    Image(systemName: "waveform").font(.system(size: 28)).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("TypeCarrier").font(.system(size: 17, weight: .semibold))
-                        Text("手机输入，Mac 接收。").foregroundStyle(.secondary)
+        MacManagementPageContent {
+            VStack(spacing: 8) {
+                Image(systemName: "waveform").font(.system(size: 28)).foregroundStyle(.secondary)
+                Text("TypeCarrier").font(.system(size: 20, weight: .semibold))
+                Text("手机输入，Mac 接收。").foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity).padding(.vertical, 12)
+            MacManagementGroup {
+                LabeledContent("版本", value: appVersionText).padding(16)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("更多平台").font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                MacManagementGroup {
+                    LabeledContent("iOS") { Text("通过 TestFlight 邀请测试").foregroundStyle(.secondary) }.padding(16)
+                    Divider().padding(.horizontal, 16)
+                    if let url = URL(string: "https://github.com/AK22AK/TypeCarrier/releases") {
+                        Link(destination: url) {
+                            LabeledContent("Android / macOS") { Label("GitHub Releases", systemImage: "arrow.up.right") }
+                        }.buttonStyle(.plain).padding(16)
                     }
                 }
-                .padding(.vertical, 8)
-                LabeledContent("版本", value: appVersionText)
             }
-            Section("更多平台") {
-                LabeledContent("iOS") { Text("通过 TestFlight 邀请测试").foregroundStyle(.secondary) }
-                if let url = URL(string: "https://github.com/AK22AK/TypeCarrier/releases") {
-                    Link(destination: url) {
-                        LabeledContent("Android / macOS") { Label("GitHub Releases", systemImage: "arrow.up.right") }
-                    }
-                }
-            }
-            Section {
-                if let url = URL(string: "https://github.com/AK22AK/TypeCarrier") {
-                    Link("项目源码", destination: url)
-                }
+            if let url = URL(string: "https://github.com/AK22AK/TypeCarrier") {
+                Link("项目源码", destination: url)
             }
         }
     }
