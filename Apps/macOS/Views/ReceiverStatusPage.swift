@@ -13,13 +13,27 @@ struct ReceiverStatusPage: View {
     }
 
     var body: some View {
-        MacManagementPageContent {
-            MacManagementHeader(
-                title: presentation.title, detail: presentation.detail,
-                symbol: presentation.canReceive ? "antenna.radiowaves.left.and.right" : "exclamationmark.triangle",
-                tint: summary.overallHealth != .ok || !presentation.canReceive ? .orange : .green
-            )
-            .padding(.bottom, 4)
+        MacConnectionPageContent {
+            MacManagementGroup {
+                HStack(spacing: 12) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 22)).foregroundStyle(.secondary).frame(width: 24)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("接收器").font(.system(size: 13, weight: .medium))
+                        HStack(spacing: 5) {
+                            Circle().fill(presentation.canReceive ? (summary.overallHealth == .degraded ? Color.orange : Color.green) : Color.orange)
+                                .frame(width: 6, height: 6)
+                            Text(presentation.title).font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 12)
+                    if presentation.needsAttention {
+                        Button("处理问题", action: showDiagnostics).controlSize(.small)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 12)
+                .frame(minHeight: 60, alignment: .leading)
+            }
 
             if !store.accessibilityTrusted {
                 MacManagementGroup {
@@ -61,25 +75,30 @@ struct ReceiverStatusPage: View {
                 }
             }
             if presentation.canReceive {
-                DisclosureGroup("连接新设备", isExpanded: $showsConnectionGuide) {
+                VStack(alignment: .leading, spacing: 8) {
                     MacManagementGroup {
-                        connectionGuidance("iPhone", symbol: "iphone", detail: "打开手机上的 TypeCarrier，自动发现这台 Mac。")
-                        Divider().padding(.horizontal, 16)
-                        VStack(alignment: .leading, spacing: 12) {
-                            connectionGuidanceLabel("Android", symbol: "apps.iphone", detail: "首次连接时，在手机输入配对码。")
-                            LabeledContent("配对码") {
-                                Text(store.androidBridge.pairingCode)
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced)).textSelection(.enabled)
+                        DisclosureGroup("连接新设备", isExpanded: $showsConnectionGuide) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                guidanceRow("iPhone", symbol: "iphone", detail: "打开手机上的 TypeCarrier，自动发现这台 Mac。")
+                                Divider()
+                                guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，在手机输入配对码。", pairingCode: store.androidBridge.pairingCode)
                             }
-                        }.padding(.horizontal, 16).padding(.vertical, 14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8)
+                        }
+                        .font(.system(size: 13)).padding(12)
                     }
-                    .padding(.top, 10)
-                    Text("手机与 Mac 需在同一局域网；有多台 Mac 时，在手机上选择这台。")
-                        .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 6)
+                    if showsConnectionGuide {
+                        Text("手机与 Mac 使用同一局域网。多台 Mac 时，在手机上选择目标。")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.leading)
+                            .padding(.horizontal, 12)
+                    }
                 }
             }
-            DisclosureGroup(isExpanded: $showsAdvancedInfo) {
-                MacManagementGroup {
+            MacManagementGroup {
+                DisclosureGroup(isExpanded: $showsAdvancedInfo) {
                     VStack(alignment: .leading, spacing: 12) {
                         LabeledContent("本机名称", value: store.receiverDisplayName)
                         LabeledContent("服务标识", value: store.carrierService.diagnostics.serviceType)
@@ -93,24 +112,33 @@ struct ReceiverStatusPage: View {
                         Button("重启接收器") { store.restartFromUserAction() }
                         Text("会中断当前连接，手机可能需要重新连接。")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
-                    }.padding(16)
-                }.padding(.top, 10)
+                    }.padding(.top, 12)
             } label: { Text("高级信息").foregroundStyle(.secondary) }
+                .padding(12)
+            }
         }
         .onAppear { showsConnectionGuide = summary.connectedDevices.isEmpty }
         .onChange(of: summary.connectedDevices.isEmpty) { _, isEmpty in showsConnectionGuide = isEmpty }
     }
 
-    private func connectionGuidance(_ title: String, symbol: String, detail: String) -> some View {
-        connectionGuidanceLabel(title, symbol: symbol, detail: detail)
-            .padding(.horizontal, 16).padding(.vertical, 14)
-    }
-
-    private func connectionGuidanceLabel(_ title: String, symbol: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: symbol).font(.system(size: 13, weight: .medium))
-            Text(detail).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    private func guidanceRow(_ title: String, symbol: String, detail: String, pairingCode: String? = nil) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 20)).foregroundStyle(.secondary).frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            if let pairingCode {
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(pairingCode).font(.system(size: 13, weight: .medium, design: .monospaced)).textSelection(.enabled)
+                    Text("配对码").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
         }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
     }
 
     private var androidAvailability: String {
@@ -128,6 +156,22 @@ private extension ReceiverIssueImpact {
         case .allDevices: "影响所有设备"
         case .endpoint(.appleMultipeer): "影响 iPhone 接收入口"
         case .endpoint(.androidBridge): "影响 Android 接收入口"
+        }
+    }
+}
+
+
+/// Network-style page: adaptive width, anchored to the detail leading edge.
+private struct MacConnectionPageContent<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) { content }
+                .frame(maxWidth: 760, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 }
