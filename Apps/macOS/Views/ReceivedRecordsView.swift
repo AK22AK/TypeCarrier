@@ -179,7 +179,7 @@ struct ReceivedRecordDetail: View {
             Spacer(minLength: 0)
         }
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 14)
         .padding(.top, 24)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
