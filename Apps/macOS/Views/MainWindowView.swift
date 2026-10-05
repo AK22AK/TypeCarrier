@@ -6,6 +6,7 @@ struct MainWindowView: View {
     @ObservedObject var coordinator: MacAppCoordinator
     @ObservedObject private var store: MacCarrierStore
     @State private var selectedRecordID: UUID?
+    @State private var measuredListWidth: CGFloat = 240
 
     init(coordinator: MacAppCoordinator) {
         self.coordinator = coordinator
@@ -89,19 +90,29 @@ struct MainWindowView: View {
     @ViewBuilder private var content: some View {
         switch activePage {
         case .received:
+            GeometryReader { available in
             HSplitView {
                 ReceivedRecordsListPane(records: store.receivedHistory, selectedRecordID: $selectedRecordID, store: store)
-                    .frame(minWidth: 220, idealWidth: 240, maxWidth: 300)
+                    .frame(minWidth: 220, idealWidth: 240, maxWidth: max(220, min(300, available.size.width - 288 - 1)))
                     .frame(maxHeight: .infinity)
+                    .background(GeometryReader { listGeometry in
+                        Color.clear
+                            .onAppear { measuredListWidth = listGeometry.size.width }
+                            .onChange(of: listGeometry.size.width) { _, width in
+                                if measuredListWidth != width { measuredListWidth = width }
+                            }
+                    })
                 if let selectedRecord {
                     ReceivedRecordDetail(record: selectedRecord, store: store,
                                          showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
                         .id(selectedRecord.id)
-                        .frame(minWidth: 288, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: max(288, available.size.width - measuredListWidth - 1))
                 } else {
                     ContentUnavailableView("暂无接收文本", systemImage: "tray", description: Text("从手机发送后，文本会保存在这里。"))
-                        .frame(minWidth: 288, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(width: max(288, available.size.width - measuredListWidth - 1))
                 }
+            }
+            .frame(width: available.size.width, height: available.size.height)
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         case .connections:
