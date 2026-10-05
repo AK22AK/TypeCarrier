@@ -1354,12 +1354,17 @@ private struct CarrierHistoryView: View {
 
     var body: some View {
         List {
-            switch selectedTab {
-            case .drafts:
-                draftsContent
-            case .history:
-                historyContent
+            Section {
+                switch selectedTab {
+                case .drafts:
+                    draftsContent
+                case .history:
+                    historyContent
+                }
+            } header: {
+                historyScrollableHeader
             }
+            .textCase(nil)
         }
         .contentMargins(.top, 0, for: .scrollContent)
         .listStyle(.insetGrouped)
@@ -1434,56 +1439,36 @@ private struct CarrierHistoryView: View {
     @ViewBuilder
     private var draftsContent: some View {
         if store.drafts.isEmpty {
-            Section {
-                ContentUnavailableView("暂无草稿", systemImage: "tray")
-            } header: {
-                historyScrollableHeader
-            }
-            .textCase(nil)
+            ContentUnavailableView("暂无草稿", systemImage: "tray")
         } else {
-            Section {
-                ForEach(store.drafts) { record in
-                    NavigationLink {
-                        CarrierRecordDetailView(record: record, store: store)
-                    } label: {
-                        CarrierRecordRow(record: record)
-                    }
+            ForEach(store.drafts) { record in
+                NavigationLink {
+                    CarrierRecordDetailView(record: record, store: store)
+                } label: {
+                    CarrierRecordRow(record: record)
                 }
-                .onDelete { offsets in
-                    delete(offsets, from: store.drafts)
-                }
-            } header: {
-                historyScrollableHeader
             }
-            .textCase(nil)
+            .onDelete { offsets in
+                delete(offsets, from: store.drafts)
+            }
         }
     }
 
     @ViewBuilder
     private var historyContent: some View {
         if store.outgoingHistory.isEmpty {
-            Section {
-                ContentUnavailableView("暂无发送记录", systemImage: "paperplane")
-            } header: {
-                historyScrollableHeader
-            }
-            .textCase(nil)
+            ContentUnavailableView("暂无发送记录", systemImage: "paperplane")
         } else {
-            Section {
-                ForEach(store.outgoingHistory) { record in
-                    NavigationLink {
-                        CarrierRecordDetailView(record: record, store: store)
-                    } label: {
-                        CarrierRecordRow(record: record)
-                    }
+            ForEach(store.outgoingHistory) { record in
+                NavigationLink {
+                    CarrierRecordDetailView(record: record, store: store)
+                } label: {
+                    CarrierRecordRow(record: record)
                 }
-                .onDelete { offsets in
-                    delete(offsets, from: store.outgoingHistory)
-                }
-            } header: {
-                historyScrollableHeader
             }
-            .textCase(nil)
+            .onDelete { offsets in
+                delete(offsets, from: store.outgoingHistory)
+            }
         }
     }
 
