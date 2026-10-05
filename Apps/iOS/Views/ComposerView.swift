@@ -167,13 +167,10 @@ struct ComposerView: View {
                                 Text(store.headerStatusText)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                                Image(systemName: "chevron.down")
+                                Image(systemName: "chevron.right")
                                     .font(.system(size: 11, weight: .semibold))
                                     .fixedSize()
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
