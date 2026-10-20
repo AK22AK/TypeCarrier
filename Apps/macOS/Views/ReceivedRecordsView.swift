@@ -172,28 +172,15 @@ struct ReceivedRecordDetail: View {
     private var isEditing: Bool { editor.recordID == record.id }
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 16) {
+            timestampMetadata
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
             if isEditing {
                 editingContent
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        timestampMetadata
-                        Text(verbatim: record.text)
-                            .font(.system(size: 13, weight: .regular))
-                            .lineSpacing(2)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .accessibilityIdentifier("receivedRecordBody")
-                        if let detail = PasteFailureGuidance.userFacingRecordDetail(status: record.status, detail: record.detail) {
-                            Label(detail, systemImage: "lightbulb")
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
+                readingContent
             }
         }
         .padding(.horizontal, 14)
@@ -222,15 +209,28 @@ struct ReceivedRecordDetail: View {
         } message: { Text("删除后无法恢复。") }
     }
 
+    private var readingContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(verbatim: record.text)
+                    .font(.system(size: 13, weight: .regular))
+                    .lineSpacing(2)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("receivedRecordBody")
+                if let detail = PasteFailureGuidance.userFacingRecordDetail(status: record.status, detail: record.detail) {
+                    Label(detail, systemImage: "lightbulb")
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
     private var editingContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(receivedMetadataText)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .help(receivedMetadataText)
-                .accessibilityLabel(receivedMetadataText)
             TextEditor(text: $editor.draft)
                 .font(.system(size: 13, weight: .regular))
                 .scrollContentBackground(.hidden)
@@ -240,7 +240,7 @@ struct ReceivedRecordDetail: View {
                 .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
                 .overlay {
                     RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(editorFocused ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: editorFocused ? 2 : 1)
+                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
                         .allowsHitTesting(false)
                 }
                 .accessibilityLabel("编辑接收文本")
