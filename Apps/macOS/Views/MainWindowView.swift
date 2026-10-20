@@ -5,12 +5,16 @@ import TypeCarrierCore
 struct MainWindowView: View {
     @ObservedObject var coordinator: MacAppCoordinator
     @ObservedObject private var store: MacCarrierStore
+    @ObservedObject private var editor: ReceivedRecordEditor
     @State private var selectedRecordID: UUID?
     @State private var measuredListWidth: CGFloat = 240
+    @State private var recordSelectionRevision = 0
+    @State private var pageSelectionRevision = 0
 
     init(coordinator: MacAppCoordinator) {
         self.coordinator = coordinator
         store = coordinator.store
+        editor = coordinator.recordEditor
     }
 
     var body: some View {
@@ -33,20 +37,29 @@ struct MainWindowView: View {
             store.refreshAccessibilityStatus()
         }
         .onChange(of: store.records) { _, _ in ensureSelectedRecord() }
+        .onChange(of: editor.recordID) { _, _ in
+            coordinator.updateEditingCloseGuard()
+            ensureSelectedRecord()
+        }
     }
 
     private var activePage: MacManagementPage { coordinator.selectedPage ?? .received }
-    private var selectedRecord: CarrierRecord? { store.receivedHistory.first { $0.id == selectedRecordID } }
+    private var selectedRecord: CarrierRecord? {
+        store.receivedHistory.first { $0.id == selectedRecordID }
+            ?? (editor.recordID == selectedRecordID ? editor.targetRecord : nil)
+    }
 
     private var sidebar: some View {
-        List(selection: Binding(
-            get: { (coordinator.selectedPage ?? .received).sidebarPage as MacManagementPage? },
-            set: { coordinator.selectedPage = $0 }
+        List(selection: Binding<ManagementSelection<MacManagementPage>?>(
+            get: { ManagementSelection(value: (coordinator.selectedPage ?? .received).sidebarPage, revision: pageSelectionRevision) },
+            set: { selection in
+                coordinator.selectPage(selection?.value, onCancel: { pageSelectionRevision &+= 1 })
+            }
         )) {
             Section {
                 sidebarRow(.received)
                     .badge(store.receivedHistory.count)
-                    .tag(MacManagementPage.received)
+                    .tag(ManagementSelection(value: MacManagementPage.received, revision: pageSelectionRevision))
                 sidebarRow(.connections)
             }
             Section("设置") {
@@ -83,8 +96,10 @@ struct MainWindowView: View {
             }
         }
         .padding(.vertical, 3)
-        .tag(page)
-        .simultaneousGesture(TapGesture().onEnded { coordinator.selectedPage = page })
+        .tag(ManagementSelection(value: page, revision: pageSelectionRevision))
+        .simultaneousGesture(TapGesture().onEnded {
+            coordinator.selectPage(page, onCancel: { pageSelectionRevision &+= 1 })
+        })
     }
 
     @ViewBuilder private var content: some View {
@@ -92,7 +107,15 @@ struct MainWindowView: View {
         case .received:
             GeometryReader { available in
             HSplitView {
-                ReceivedRecordsListPane(records: store.receivedHistory, selectedRecordID: $selectedRecordID, store: store)
+                ReceivedRecordsListPane(records: store.receivedHistory, selectedRecordID: Binding(
+                    get: { selectedRecordID },
+                    set: { id in
+                        // A pruned row must not dismiss its still-visible draft.
+                        if id == nil, editor.recordID == selectedRecordID { return }
+                        guard id != selectedRecordID else { return }
+                        coordinator.resolveRecordEdits(onCancel: { recordSelectionRevision &+= 1 }) { selectedRecordID = id }
+                    }
+                ), store: store, editor: coordinator.recordEditor, selectionRevision: recordSelectionRevision, onDelete: coordinator.deleteConfirmedRecords)
                     .frame(minWidth: 220, idealWidth: 240, maxWidth: max(220, min(300, available.size.width - 288 - 1)))
                     .frame(maxHeight: .infinity)
                     .background(GeometryReader { listGeometry in
@@ -103,7 +126,7 @@ struct MainWindowView: View {
                             }
                     })
                 if let selectedRecord {
-                    ReceivedRecordDetail(record: selectedRecord, store: store,
+                    ReceivedRecordDetail(record: selectedRecord, store: store, coordinator: coordinator,
                                          showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
                         .id(selectedRecord.id)
                         .frame(width: max(288, available.size.width - measuredListWidth - 1))
@@ -116,16 +139,16 @@ struct MainWindowView: View {
             }
             .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         case .connections:
-            ReceiverStatusPage(store: store) { coordinator.selectedPage = .diagnostics }
+            ReceiverStatusPage(store: store) { coordinator.selectPage(.diagnostics) }
         case .receiving:
             SettingsReceivingPage(store: store)
         case .diagnostics:
-            SettingsDiagnosticsPage(store: store) { coordinator.selectedPage = .functionTest }
+            SettingsDiagnosticsPage(store: store) { coordinator.selectPage(.functionTest) }
         case .functionTest:
             FunctionTestPage(store: store)
                 .toolbar {
                     ToolbarItem(placement: .navigation) {
-                        Button { coordinator.selectedPage = .diagnostics } label: { Label("诊断与测试", systemImage: "chevron.left") }
+                        Button { coordinator.selectPage(.diagnostics) } label: { Label("诊断与测试", systemImage: "chevron.left") }
                     }
                 }
         case .about:
@@ -139,9 +162,17 @@ struct MainWindowView: View {
     }
 
     private func ensureSelectedRecord() {
-        if store.receivedHistory.isEmpty { selectedRecordID = nil }
-        else if selectedRecord == nil { selectedRecordID = store.receivedHistory.first?.id }
+        guard selectedRecord == nil else { return }
+        let nextID = store.receivedHistory.first?.id
+        guard selectedRecordID != nextID else { return }
+        coordinator.resolveRecordEdits { selectedRecordID = nextID }
     }
+}
+
+/// Reapply a rejected native List selection without rebuilding rows or their scroll position.
+struct ManagementSelection<Value: Hashable>: Hashable {
+    let value: Value
+    let revision: Int
 }
 
 /// A constrained native management page; padding scrolls with the content.

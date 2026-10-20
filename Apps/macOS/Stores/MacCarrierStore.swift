@@ -484,7 +484,8 @@ final class MacCarrierStore: ObservableObject {
         }
     }
 
-    func updateText(for record: CarrierRecord, text: String) {
+    @discardableResult
+    func updateText(for record: CarrierRecord, text: String) -> Bool {
         var updated = record
         updated.text = text
         updated.updatedAt = Date()
@@ -492,28 +493,33 @@ final class MacCarrierStore: ObservableObject {
 
         guard let recordStore else {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用", succeeded: false)
-            return
+            return false
         }
 
         do {
             try recordStore.upsert(updated)
             syncRecords()
+            return true
         } catch {
             lastPasteResult = PasteInjectionResult(status: "更新历史记录失败：\(error.localizedDescription)", succeeded: false)
+            return false
         }
     }
 
-    func delete(_ record: CarrierRecord) {
+    @discardableResult
+    func delete(_ record: CarrierRecord) -> Bool {
         guard let recordStore else {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用", succeeded: false)
-            return
+            return false
         }
 
         do {
             try recordStore.delete(id: record.id)
             syncRecords()
+            return true
         } catch {
             lastPasteResult = PasteInjectionResult(status: "删除历史记录失败：\(error.localizedDescription)", succeeded: false)
+            return false
         }
     }
 

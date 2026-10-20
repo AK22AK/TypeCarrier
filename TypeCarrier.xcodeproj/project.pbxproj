@@ -75,6 +75,7 @@
 		C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */; };
 		C523232758A6D1BFE48E6EFA /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C6B1F653BE1074BB1E5A9921 /* AndroidBonjourAdvertisementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F5B760415544FDE9BD9126 /* AndroidBonjourAdvertisementTests.swift */; };
+		CDBC5AAABC1147BC2A507B88 /* ReceivedRecordEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */; };
 		CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */; };
 		D29DFCEC0317EDAF31C3BC4A /* CarrierPasteQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8FAC2781DA749A4C9EE722F /* CarrierPasteQueue.swift */; };
 		D2B4BBD8548A11D2620389F7 /* MacManagementPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EB5A9914747F0C973A1B33 /* MacManagementPage.swift */; };
@@ -216,6 +217,7 @@
 		DDABD2B35FDEDF249F291616 /* ReceiverTargetSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverTargetSelectionTests.swift; sourceTree = "<group>"; };
 		E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionTestPage.swift; sourceTree = "<group>"; };
 		E85E0134D26176B58210FB10 /* MacSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsPages.swift; sourceTree = "<group>"; };
+		E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedRecordEditor.swift; sourceTree = "<group>"; };
 		EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedRecordsView.swift; sourceTree = "<group>"; };
 		EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidPairingTests.swift; sourceTree = "<group>"; };
 		EFEBE06E80198FCB17CB2C56 /* ComposerRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRecordStoreTests.swift; sourceTree = "<group>"; };
@@ -392,6 +394,7 @@
 			isa = PBXGroup;
 			children = (
 				FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */,
+				E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -642,6 +645,7 @@
 				4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */,
 				CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */,
 				865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */,
+				CDBC5AAABC1147BC2A507B88 /* ReceivedRecordEditor.swift in Sources */,
 				F82692FE30684D1DF44A6DA3 /* ReceivedRecordsView.swift in Sources */,
 				314269C87F82681DDD361FF1 /* ReceiverManagementPresentation.swift in Sources */,
 				4213AC4014F2986D7ABAEB2D /* ReceiverStatusPage.swift in Sources */,
