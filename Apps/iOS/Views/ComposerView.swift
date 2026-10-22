@@ -14,11 +14,10 @@ struct ComposerView: View {
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
-    private enum Route: Hashable {
-        case history, settings, about, debugFeatures
-    }
-
-    @State private var navigationPath: [Route] = []
+    @State private var showsDebugFeatures = false
+    @State private var showsHistory = false
+    @State private var showsSettings = false
+    @State private var showsAbout = false
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
@@ -32,7 +31,7 @@ struct ComposerView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        NavigationStack {
             ZStack {
                 Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
@@ -48,19 +47,19 @@ struct ComposerView: View {
                 .padding(.bottom, 18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .navigationDestination(for: Route.self) { route in
-                switch route {
-                case .history:
-                    CarrierHistoryView(store: store)
-                case .settings:
-                    ComposerSettingsView(store: store)
-                case .about:
-                    AboutView()
-                case .debugFeatures:
-                    DebugFeaturesView(store: store)
-                }
+            .navigationDestination(isPresented: $showsHistory) {
+                CarrierHistoryView(store: store)
             }
-            .toolbar(navigationPath.isEmpty ? .hidden : .visible, for: .navigationBar)
+            .navigationDestination(isPresented: $showsSettings) {
+                ComposerSettingsView(store: store)
+            }
+            .navigationDestination(isPresented: $showsAbout) {
+                AboutView()
+            }
+            .navigationDestination(isPresented: $showsDebugFeatures) {
+                DebugFeaturesView(store: store)
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             store.start()
@@ -221,7 +220,7 @@ struct ComposerView: View {
 
             Button {
                 prepareForChildNavigation()
-                navigationPath = [.history]
+                showsHistory = true
             } label: {
                 HeaderHistoryButtonLabel(
                     badgeText: store.draftBadgeText,
@@ -235,21 +234,21 @@ struct ComposerView: View {
             Menu {
                 Button {
                     prepareForChildNavigation()
-                    navigationPath = [.settings]
+                    showsSettings = true
                 } label: {
                     Label("设置", systemImage: "gearshape")
                 }
 
                 Button {
                     prepareForChildNavigation()
-                    navigationPath = [.about]
+                    showsAbout = true
                 } label: {
                     Label("关于", systemImage: "info.circle")
                 }
 
                 Button {
                     prepareForChildNavigation()
-                    navigationPath = [.debugFeatures]
+                    showsDebugFeatures = true
                 } label: {
                     Label("调试功能", systemImage: "wrench.and.screwdriver")
                 }
@@ -1355,17 +1354,12 @@ private struct CarrierHistoryView: View {
 
     var body: some View {
         List {
-            Section {
-                switch selectedTab {
-                case .drafts:
-                    draftsContent
-                case .history:
-                    historyContent
-                }
-            } header: {
-                historyScrollableHeader
+            switch selectedTab {
+            case .drafts:
+                draftsContent
+            case .history:
+                historyContent
             }
-            .textCase(nil)
         }
         .contentMargins(.top, 0, for: .scrollContent)
         .listStyle(.insetGrouped)
@@ -1440,36 +1434,56 @@ private struct CarrierHistoryView: View {
     @ViewBuilder
     private var draftsContent: some View {
         if store.drafts.isEmpty {
-            ContentUnavailableView("暂无草稿", systemImage: "tray")
+            Section {
+                ContentUnavailableView("暂无草稿", systemImage: "tray")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
         } else {
-            ForEach(store.drafts) { record in
-                NavigationLink {
-                    CarrierRecordDetailView(record: record, store: store)
-                } label: {
-                    CarrierRecordRow(record: record)
+            Section {
+                ForEach(store.drafts) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
+                    }
                 }
+                .onDelete { offsets in
+                    delete(offsets, from: store.drafts)
+                }
+            } header: {
+                historyScrollableHeader
             }
-            .onDelete { offsets in
-                delete(offsets, from: store.drafts)
-            }
+            .textCase(nil)
         }
     }
 
     @ViewBuilder
     private var historyContent: some View {
         if store.outgoingHistory.isEmpty {
-            ContentUnavailableView("暂无发送记录", systemImage: "paperplane")
+            Section {
+                ContentUnavailableView("暂无发送记录", systemImage: "paperplane")
+            } header: {
+                historyScrollableHeader
+            }
+            .textCase(nil)
         } else {
-            ForEach(store.outgoingHistory) { record in
-                NavigationLink {
-                    CarrierRecordDetailView(record: record, store: store)
-                } label: {
-                    CarrierRecordRow(record: record)
+            Section {
+                ForEach(store.outgoingHistory) { record in
+                    NavigationLink {
+                        CarrierRecordDetailView(record: record, store: store)
+                    } label: {
+                        CarrierRecordRow(record: record)
+                    }
                 }
+                .onDelete { offsets in
+                    delete(offsets, from: store.outgoingHistory)
+                }
+            } header: {
+                historyScrollableHeader
             }
-            .onDelete { offsets in
-                delete(offsets, from: store.outgoingHistory)
-            }
+            .textCase(nil)
         }
     }
 
