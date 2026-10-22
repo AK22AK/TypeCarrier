@@ -14,10 +14,11 @@ struct ComposerView: View {
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
-    @State private var showsDebugFeatures = false
-    @State private var showsHistory = false
-    @State private var showsSettings = false
-    @State private var showsAbout = false
+    private enum Route: Hashable {
+        case history, settings, about, debugFeatures
+    }
+
+    @State private var navigationPath: [Route] = []
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
@@ -31,7 +32,7 @@ struct ComposerView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
@@ -47,19 +48,19 @@ struct ComposerView: View {
                 .padding(.bottom, 18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .navigationDestination(isPresented: $showsHistory) {
-                CarrierHistoryView(store: store)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .history:
+                    CarrierHistoryView(store: store)
+                case .settings:
+                    ComposerSettingsView(store: store)
+                case .about:
+                    AboutView()
+                case .debugFeatures:
+                    DebugFeaturesView(store: store)
+                }
             }
-            .navigationDestination(isPresented: $showsSettings) {
-                ComposerSettingsView(store: store)
-            }
-            .navigationDestination(isPresented: $showsAbout) {
-                AboutView()
-            }
-            .navigationDestination(isPresented: $showsDebugFeatures) {
-                DebugFeaturesView(store: store)
-            }
-            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(navigationPath.isEmpty ? .hidden : .visible, for: .navigationBar)
         }
         .task {
             store.start()
@@ -220,7 +221,7 @@ struct ComposerView: View {
 
             Button {
                 prepareForChildNavigation()
-                showsHistory = true
+                navigationPath = [.history]
             } label: {
                 HeaderHistoryButtonLabel(
                     badgeText: store.draftBadgeText,
@@ -234,21 +235,21 @@ struct ComposerView: View {
             Menu {
                 Button {
                     prepareForChildNavigation()
-                    showsSettings = true
+                    navigationPath = [.settings]
                 } label: {
                     Label("设置", systemImage: "gearshape")
                 }
 
                 Button {
                     prepareForChildNavigation()
-                    showsAbout = true
+                    navigationPath = [.about]
                 } label: {
                     Label("关于", systemImage: "info.circle")
                 }
 
                 Button {
                     prepareForChildNavigation()
-                    showsDebugFeatures = true
+                    navigationPath = [.debugFeatures]
                 } label: {
                     Label("调试功能", systemImage: "wrench.and.screwdriver")
                 }
