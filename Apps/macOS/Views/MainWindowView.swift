@@ -3,20 +3,32 @@ import SwiftUI
 import TypeCarrierCore
 
 struct MainWindowView: View {
-    @ObservedObject var store: MacCarrierStore
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var selectedSection: MainWindowSection? = .received
+    @ObservedObject var coordinator: MacAppCoordinator
+    @ObservedObject private var store: MacCarrierStore
+    @ObservedObject private var editor: ReceivedRecordEditor
     @State private var selectedRecordID: UUID?
-    @State private var selectedSettingsSection: SettingsSection? = .about
+    @State private var measuredListWidth: CGFloat = 240
+    @State private var recordSelectionRevision = 0
+    @State private var pageSelectionRevision = 0
+
+    init(coordinator: MacAppCoordinator) {
+        self.coordinator = coordinator
+        store = coordinator.store
+        editor = coordinator.recordEditor
+    }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView {
             sidebar
-        } content: {
-            contentColumn
+                .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 210)
         } detail: {
-            detailColumn
+            content
+                .navigationTitle(activePage.title)
         }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
+        .frame(minWidth: 740, idealWidth: 740, minHeight: 557, idealHeight: 557)
+        .font(.system(size: 13))
         .onAppear {
             store.refreshAccessibilityStatus()
             ensureSelectedRecord()
@@ -24,1643 +36,211 @@ struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshAccessibilityStatus()
         }
-        .onChange(of: store.records) { _, _ in
+        .onChange(of: store.records) { _, _ in ensureSelectedRecord() }
+        .onChange(of: editor.recordID) { _, _ in
+            coordinator.updateEditingCloseGuard()
             ensureSelectedRecord()
         }
-        .onChange(of: selectedSection) { _, newValue in
-            if newValue == .received {
-                ensureSelectedRecord()
-            }
-        }
-        .frame(
-            minWidth: 860,
-            idealWidth: 980,
-            maxWidth: 1_160,
-            minHeight: 600,
-            idealHeight: 700
-        )
-        .toolbar(removing: .sidebarToggle)
     }
 
+    private var activePage: MacManagementPage { coordinator.selectedPage ?? .received }
     private var selectedRecord: CarrierRecord? {
         store.receivedHistory.first { $0.id == selectedRecordID }
+            ?? (editor.recordID == selectedRecordID ? editor.targetRecord : nil)
     }
 
-    private var activeSection: MainWindowSection {
-        selectedSection ?? .received
-    }
-
-    private var hasAutomaticPasteWarning: Bool {
-        !store.accessibilityTrusted
-    }
-
-    @ViewBuilder
     private var sidebar: some View {
-        AppSidebar(
-            selectedSection: $selectedSection,
-            receivedCount: store.receivedHistory.count,
-            connectionState: store.receiverDisplayConnectionState,
-            hasConnectionWarning: store.receiverHealthWarning != nil,
-            hasSettingsWarning: hasAutomaticPasteWarning
-        )
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+        List(selection: Binding<ManagementSelection<MacManagementPage>?>(
+            get: { ManagementSelection(value: (coordinator.selectedPage ?? .received).sidebarPage, revision: pageSelectionRevision) },
+            set: { selection in
+                coordinator.selectPage(selection?.value, onCancel: { pageSelectionRevision &+= 1 })
+            }
+        )) {
+            Section {
+                sidebarRow(.received)
+                    .badge(store.receivedHistory.count)
+                    .tag(ManagementSelection(value: MacManagementPage.received, revision: pageSelectionRevision))
+                sidebarRow(.connections)
+            }
+            Section("设置") {
+                sidebarRow(.receiving)
+                sidebarRow(.diagnostics)
+                sidebarRow(.about)
+            }
+        }
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .top, spacing: 4) {
+            Label { Text("TypeCarrier") } icon: { Image(systemName: "waveform").font(.system(size: 14)) }
+                .font(.system(size: 15, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+        }
     }
 
-    @ViewBuilder
-    private var contentColumn: some View {
-        switch activeSection {
+    private func sidebarRow(_ page: MacManagementPage) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: page.symbol)
+                .font(.system(size: 16))
+                .frame(width: 20)
+            Text(page.title).font(.system(size: 13, weight: .regular))
+            Spacer(minLength: 0)
+            if page == .connections, store.receiverStatusSummary.overallHealth != .ok {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            } else if page == .diagnostics, !store.accessibilityTrusted {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(.vertical, 3)
+        .tag(ManagementSelection(value: page, revision: pageSelectionRevision))
+        .simultaneousGesture(TapGesture().onEnded {
+            coordinator.selectPage(page, onCancel: { pageSelectionRevision &+= 1 })
+        })
+    }
+
+    @ViewBuilder private var content: some View {
+        switch activePage {
         case .received:
-            receivedListColumn
-        case .settings:
-            settingsListColumn
-        case .connectionStatus, .functionTest:
-            Color.clear
-                .accessibilityHidden(true)
-                .navigationSplitViewColumnWidth(min: 0, ideal: 0, max: 0)
-        }
-    }
-
-    private var receivedListColumn: some View {
-        ReceivedRecordsListPane(
-            records: store.receivedHistory,
-            selectedRecordID: $selectedRecordID,
-            store: store
-        )
-        .navigationTitle("已接收文本")
-        .navigationSubtitle("\(store.receivedHistory.count) 个文本")
-        .navigationSplitViewColumnWidth(min: 270, ideal: 320, max: 380)
-    }
-
-    private var settingsListColumn: some View {
-        SettingsListPane(
-            selectedSection: $selectedSettingsSection,
-            hasDiagnosticsWarning: hasAutomaticPasteWarning
-        )
-            .navigationTitle("设置")
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-    }
-
-    @ViewBuilder
-    private var receivedDetailColumn: some View {
-        if let selectedRecord {
-            ReceivedRecordDetail(record: selectedRecord, store: store)
-                .id(selectedRecord.id)
-        } else {
-            ContentUnavailableView("选择一条接收记录", systemImage: "text.page")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    @ViewBuilder
-    private var detailColumn: some View {
-        switch activeSection {
-        case .received:
-            receivedDetailColumn
-        case .connectionStatus:
-            ReceiverStatusPage(store: store)
-                .navigationTitle("连接管理")
-        case .functionTest:
-            FunctionTestPage(store: store)
-                .navigationTitle("功能测试")
-        case .settings:
-            settingsDetailColumn
-        }
-    }
-
-    @ViewBuilder
-    private var settingsDetailColumn: some View {
-        switch selectedSettingsSection {
+            GeometryReader { available in
+            HSplitView {
+                ReceivedRecordsListPane(records: store.receivedHistory, selectedRecordID: Binding(
+                    get: { selectedRecordID },
+                    set: { id in
+                        // A pruned row must not dismiss its still-visible draft.
+                        if id == nil, editor.recordID == selectedRecordID { return }
+                        guard id != selectedRecordID else { return }
+                        coordinator.resolveRecordEdits(onCancel: { recordSelectionRevision &+= 1 }) { selectedRecordID = id }
+                    }
+                ), store: store, editor: coordinator.recordEditor, selectionRevision: recordSelectionRevision, onDelete: coordinator.deleteConfirmedRecords)
+                    .frame(minWidth: 220, idealWidth: 240, maxWidth: max(220, min(300, available.size.width - 288 - 1)))
+                    .frame(maxHeight: .infinity)
+                    .background(GeometryReader { listGeometry in
+                        Color.clear
+                            .onAppear { measuredListWidth = listGeometry.size.width }
+                            .onChange(of: listGeometry.size.width) { _, width in
+                                if measuredListWidth != width { measuredListWidth = width }
+                            }
+                    })
+                if let selectedRecord {
+                    ReceivedRecordDetail(record: selectedRecord, store: store, coordinator: coordinator,
+                                         showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
+                        .id(selectedRecord.id)
+                        .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                } else {
+                    ContentUnavailableView("暂无接收文本", systemImage: "tray", description: Text("从手机发送后，文本会保存在这里。"))
+                        .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                }
+            }
+            .frame(width: available.size.width, height: available.size.height)
+            }
+            .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
+        case .connections:
+            ReceiverStatusPage(store: store) { coordinator.selectPage(.diagnostics) }
         case .receiving:
             SettingsReceivingPage(store: store)
-                .navigationTitle("接收")
+        case .diagnostics:
+            SettingsDiagnosticsPage(store: store) { coordinator.selectPage(.functionTest) }
+        case .functionTest:
+            FunctionTestPage(store: store)
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button { coordinator.selectPage(.diagnostics) } label: { Label("诊断与测试", systemImage: "chevron.left") }
+                    }
+                }
         case .about:
             SettingsAboutPage()
-                .navigationTitle("关于")
-        case .diagnostics:
-            SettingsDiagnosticsPage(store: store)
-                .navigationTitle("诊断")
-        case nil:
-            ContentUnavailableView("选择一个设置项", systemImage: "gearshape")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private func hasDuplicateSourceName(_ record: CarrierRecord) -> Bool {
+        let identities = store.receivedHistory.filter { $0.sourceDeviceName == record.sourceDeviceName }.compactMap(\.sourceDeviceID)
+        return Set(identities).count > 1
     }
 
     private func ensureSelectedRecord() {
-        guard !store.receivedHistory.isEmpty else {
-            selectedRecordID = nil
-            return
-        }
-
-        if selectedRecordID == nil || selectedRecord == nil {
-            selectedRecordID = store.receivedHistory.first?.id
-        }
+        guard selectedRecord == nil else { return }
+        let nextID = store.receivedHistory.first?.id
+        guard selectedRecordID != nextID else { return }
+        coordinator.resolveRecordEdits { selectedRecordID = nextID }
     }
 }
 
-private enum MainWindowSection: String, Hashable, Identifiable {
-    case received
-    case connectionStatus
-    case functionTest
-    case settings
-
-    var id: Self {
-        self
-    }
+/// Reapply a rejected native List selection without rebuilding rows or their scroll position.
+struct ManagementSelection<Value: Hashable>: Hashable {
+    let value: Value
+    let revision: Int
 }
 
-private enum SettingsSection: String, Hashable, Identifiable {
-    case receiving
-    case about
-    case diagnostics
-
-    var id: Self {
-        self
-    }
-}
-
-private struct AppSidebar: View {
-    @Binding var selectedSection: MainWindowSection?
-    let receivedCount: Int
-    let connectionState: ConnectionState
-    let hasConnectionWarning: Bool
-    let hasSettingsWarning: Bool
-
+/// A constrained native management page; padding scrolls with the content.
+struct MacManagementForm<Content: View>: View {
+    @ViewBuilder let content: Content
     var body: some View {
-        List(selection: $selectedSection) {
-            Label("接收列表", systemImage: "tray.and.arrow.down")
-                .badge(receivedCount)
-                .tag(MainWindowSection.received)
-
-            HStack(spacing: 8) {
-                Label("连接管理", systemImage: "antenna.radiowaves.left.and.right")
-
-                Spacer(minLength: 8)
-
-                Image(systemName: connectionStatusImage)
-                    .imageScale(.small)
-                    .foregroundStyle(connectionStatusTint)
-                    .accessibilityLabel(connectionState.localizedDisplayText)
-            }
-            .help(connectionState.localizedDisplayText)
-                .tag(MainWindowSection.connectionStatus)
-
-            Label("功能测试", systemImage: "checkmark.seal")
-                .tag(MainWindowSection.functionTest)
-
-            HStack(spacing: 8) {
-                Label("设置", systemImage: "gearshape")
-
-                Spacer(minLength: 8)
-
-                if hasSettingsWarning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .imageScale(.small)
-                        .foregroundStyle(.red)
-                        .accessibilityLabel("设置中有需要处理的问题")
-                }
-            }
-            .help(hasSettingsWarning ? "自动粘贴需要处理辅助功能权限" : "设置")
-                .tag(MainWindowSection.settings)
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("")
-        .safeAreaInset(edge: .top, spacing: 10) {
-            Text("TypeCarrier")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 8)
-        }
-    }
-
-    private var connectionStatusImage: String {
-        if hasConnectionWarning {
-            return "exclamationmark.triangle.fill"
-        }
-
-        switch connectionState {
-        case .connected:
-            return "checkmark.circle.fill"
-        case .connecting, .reconnecting, .searching, .advertising:
-            return "dot.radiowaves.left.and.right"
-        case .idle:
-            return "circle"
-        case .failed:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-
-    private var connectionStatusTint: Color {
-        if hasConnectionWarning {
-            return .orange
-        }
-
-        switch connectionState {
-        case .connected:
-            return .green
-        case .connecting, .reconnecting, .searching, .advertising:
-            return .orange
-        case .failed:
-            return .orange
-        case .idle:
-            return .secondary
-        }
+        Form { content }
+            .formStyle(.grouped)
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
-private struct ReceivedRecordsListPane: View {
-    let records: [CarrierRecord]
-    @Binding var selectedRecordID: UUID?
-    @ObservedObject var store: MacCarrierStore
 
-    var body: some View {
-        List(selection: $selectedRecordID) {
-            if records.isEmpty {
-                Text("暂无接收文本")
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(groupedRecords) { group in
-                    Section {
-                        ForEach(group.records) { record in
-                            ReceivedRecordRow(record: record)
-                                .tag(record.id)
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                store.delete(group.records[index])
-                            }
-                        }
-                    } header: {
-                        Text(group.title)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .textCase(nil)
-                            .padding(.bottom, 6)
-                    } footer: {
-                        if !group.isLast {
-                            Spacer(minLength: 0)
-                                .frame(height: 18)
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-    }
-
-    private var groupedRecords: [ReceivedRecordTimeGroup] {
-        ReceivedRecordTimeGroup.group(records)
-    }
-}
-
-private struct ReceivedRecordTimeGroup: Identifiable {
-    let id: String
-    let title: String
-    let records: [CarrierRecord]
-    let isFirst: Bool
-    let isLast: Bool
-
-    static func group(_ records: [CarrierRecord], calendar: Calendar = .current, now: Date = Date()) -> [Self] {
-        let todayStart = calendar.startOfDay(for: now)
-        let weekStart = calendar.date(byAdding: .day, value: -7, to: todayStart) ?? todayStart
-        let monthStart = calendar.date(byAdding: .month, value: -1, to: todayStart) ?? todayStart
-
-        var today: [CarrierRecord] = []
-        var pastWeek: [CarrierRecord] = []
-        var pastMonth: [CarrierRecord] = []
-        var older: [CarrierRecord] = []
-
-        for record in records {
-            let timestamp = record.updatedAt
-            if calendar.isDate(timestamp, inSameDayAs: now) {
-                today.append(record)
-            } else if timestamp >= weekStart {
-                pastWeek.append(record)
-            } else if timestamp >= monthStart {
-                pastMonth.append(record)
-            } else {
-                older.append(record)
-            }
-        }
-
-        let buckets = [
-            ("today", "今天", today),
-            ("pastWeek", "过去一周", pastWeek),
-            ("pastMonth", "过去一个月", pastMonth),
-            ("older", "更早", older)
-        ]
-        .filter { !$0.2.isEmpty }
-
-        return buckets.enumerated()
-        .map { index, bucket in
-            Self(
-                id: bucket.0,
-                title: bucket.1,
-                records: bucket.2,
-                isFirst: index == 0,
-                isLast: index == buckets.count - 1
-            )
-        }
-    }
-}
-
-private struct ReceivedRecordRow: View {
-    let record: CarrierRecord
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(record.text)
-                .lineLimit(1)
-
-            Text(recordMetadataText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-        .padding(.vertical, 2)
-        .padding(.horizontal, 4)
-    }
-
-    private var recordMetadataText: String {
-        let timestamp = CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt)
-        guard let sourceDeviceName = record.sourceDeviceName, !sourceDeviceName.isEmpty else {
-            return timestamp
-        }
-
-        return "\(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
-    }
-}
-
-private struct ReceivedRecordDetail: View {
-    let record: CarrierRecord
-    @ObservedObject var store: MacCarrierStore
-    @State private var editedText: String
-    @State private var isDeleting = false
-
-    init(record: CarrierRecord, store: MacCarrierStore) {
-        self.record = record
-        self.store = store
-        _editedText = State(initialValue: record.text)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            timestampMetadata
-
-            editableText
-
-            if let detail = PasteFailureGuidance.userFacingRecordDetail(
-                status: record.status,
-                detail: record.detail
-            ) {
-                Label(detail, systemImage: "lightbulb")
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 48)
-        .padding(.top, 12)
-        .padding(.bottom, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                recordActionButtons
-            }
-            .sharedBackgroundVisibility(.visible)
-        }
-        .toolbar(removing: .title)
-        .onDisappear {
-            saveEditedText()
-        }
-    }
-
-    @ViewBuilder
-    private var recordActionButtons: some View {
-        Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(editedText, forType: .string)
-        } label: {
-            Label("复制", systemImage: "doc.on.doc")
-        }
-        .labelStyle(.iconOnly)
-        .help("复制")
-
-        if !store.accessibilityTrusted {
-            Button {
-                store.requestAccessibilityAccess()
-            } label: {
-                Label("请求辅助功能权限", systemImage: "lock.open")
-            }
-            .labelStyle(.iconOnly)
-            .help("请求辅助功能权限")
-        }
-
-        Button(role: .destructive) {
-            isDeleting = true
-            store.delete(record)
-        } label: {
-            Label("删除", systemImage: "trash")
-        }
-        .labelStyle(.iconOnly)
-        .help("删除")
-    }
-
-    private var timestampMetadata: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(receivedMetadataText)
-
-            if hasVisibleModificationTimestamp {
-                Text("修改于 \(CarrierRecordTimestampFormatter.historyListText(for: record.updatedAt))")
-            }
-        }
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .monospacedDigit()
-    }
-
-    private var hasVisibleModificationTimestamp: Bool {
-        abs(record.updatedAt.timeIntervalSince(record.createdAt)) >= 1
-    }
-
-    private var receivedMetadataText: String {
-        let timestamp = CarrierRecordTimestampFormatter.historyListText(for: record.createdAt)
-        guard let sourceDeviceName = record.sourceDeviceName, !sourceDeviceName.isEmpty else {
-            return "接收于 \(timestamp)"
-        }
-
-        return "接收于 \(timestamp) · 来自 \(sourceDeviceName)\(record.sourceDeviceID.map { " · \($0.suffix(8))" } ?? "")"
-    }
-
-    private var editableText: some View {
-        TextField("", text: $editedText, axis: .vertical)
-            .textFieldStyle(.plain)
-            .font(.system(size: 15.5, weight: .regular))
-            .lineSpacing(3)
-            .lineLimit(1...24)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private var hasUnsavedChanges: Bool {
-        editedText != record.text
-    }
-
-    private func saveEditedText() {
-        guard !isDeleting else {
-            return
-        }
-
-        guard hasUnsavedChanges else {
-            return
-        }
-
-        store.updateText(for: record, text: editedText)
-    }
-}
-
-private struct ReceiverStatusPage: View {
-    @ObservedObject var store: MacCarrierStore
-    @State private var showsAdvancedInfo = false
-
+struct MacManagementPageContent<Content: View>: View {
+    @ViewBuilder let content: Content
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("连接管理")
-                    .font(.title2.weight(.semibold))
-
-                receiverReadinessSection
-                receiverActionsSection
-                if !summary.issues.isEmpty {
-                    issuesSection
-                }
-                connectedDevicesSection
-                connectNewDeviceSection
-                advancedInfoDisclosure
-            }
-            .frame(maxWidth: 640, alignment: .leading)
+            VStack(alignment: .leading, spacing: 24) { content }
+                .frame(maxWidth: 552, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 30)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 48)
-        .padding(.top, 44)
-        .padding(.bottom, 28)
-    }
-
-    private var summary: ReceiverStatusSummary {
-        store.receiverStatusSummary
-    }
-
-    private var diagnostics: CarrierDiagnostics {
-        store.carrierService.diagnostics
-    }
-
-    private var receiverReadinessSection: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(receiverReadinessTitle)
-                    .font(.title3.weight(.semibold))
-                Text(receiverReadinessDetail)
-                    .foregroundStyle(.secondary)
-            }
-        } icon: {
-            Image(systemName: receiverHealthSystemImage)
-                .font(.title2)
-                .foregroundStyle(receiverHealthTint)
-        }
-    }
-
-    private var receiverActionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("接收器操作")
-
-            Button {
-                store.restartFromUserAction()
-            } label: {
-                Label("重启接收器", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-
-            Text("重新启动 Apple 与 Android 接收服务；当前连接的设备可能需要重新连接。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var connectedDevicesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("已连接设备")
-
-            if summary.connectedDevices.isEmpty {
-                Text("暂无已连接设备")
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(summary.connectedDevices.enumerated()), id: \.offset) { _, device in
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(device.name)
-                                Text("已连接")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: device.platform.systemImageName)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var issuesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(summary.requiresGlobalAttention ? "需要处理" : "局部异常")
-
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(summary.issues.enumerated()), id: \.offset) { _, issue in
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(issue.message.localizedDiagnosticMessageText)
-                            Text(issue.impact.localizedManagementText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: issue.severity.systemImageName)
-                    }
-                    .foregroundStyle(issue.severity == .actionRequired ? .orange : .secondary)
-                }
-            }
-        }
-    }
-
-    private var connectNewDeviceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("连接新设备")
-            Text("在发送端选择这台 Mac，并在发送端输入下面的匹配码完成连接。")
-                .foregroundStyle(.secondary)
-
-            statusLine("本机匹配码", store.androidBridge.pairingCode)
-
-            Text("Mac 只负责提供匹配码并等待接收；连接由 iOS 或 Android 发送端发起。已信任设备会自动重连。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var advancedInfoDisclosure: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                showsAdvancedInfo.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: showsAdvancedInfo ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 12)
-                    sectionHeader("高级信息")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("高级信息")
-            .accessibilityValue(showsAdvancedInfo ? "已展开" : "已折叠")
-
-            if showsAdvancedInfo {
-                VStack(alignment: .leading, spacing: 18) {
-                    connectionDetailsSection
-                    manualDiagnosticsSection
-                }
-                .padding(.top, 2)
-            }
-        }
-    }
-
-    private var connectionDetailsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("连接详情")
-            statusLine("本机设备", diagnostics.localPeerName)
-            statusLine("服务标识", diagnostics.serviceType)
-            statusLine("Android 接收服务", pairingServiceAvailabilityText)
-            statusLine("已发现设备", discoveredDevicesText)
-
-            if let lastError = diagnostics.lastErrorMessage {
-                statusLine("最近错误", lastError)
-            }
-            if let androidLastError = store.androidBridge.lastErrorMessage {
-                statusLine("Android 最近错误", androidLastError)
-            }
-        }
-    }
-
-    private var manualDiagnosticsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("手动诊断")
-            statusLine("连接地址", store.androidBridge.manualConnectionHints)
-            Text("仅用于自动连接失败时排查，不是正常连接步骤。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var receiverReadinessTitle: String {
-        switch summary.overallHealth {
-        case .ok:
-            summary.connectedDevices.isEmpty ? "等待设备连接" : "可以接收"
-        case .degraded:
-            "部分入口异常"
-        case .actionRequired:
-            "接收器需要处理"
-        }
-    }
-
-    private var receiverReadinessDetail: String {
-        switch summary.overallHealth {
-        case .ok:
-            if summary.connectedDevices.isEmpty {
-                return "手机端 TypeCarrier 可以连接到这台 Mac。"
-            }
-            return "已连接设备可以发送到这台 Mac。"
-        case .degraded:
-            if summary.connectedDevices.isEmpty {
-                return "仍有连接方式可用；受影响范围见下方。"
-            }
-            return "已连接设备仍可发送；受影响范围见下方。"
-        case .actionRequired:
-            return "当前问题会影响接收能力，需要处理后再使用。"
-        }
-    }
-
-    private var receiverHealthSystemImage: String {
-        switch summary.overallHealth {
-        case .ok:
-            summary.connectedDevices.isEmpty ? "antenna.radiowaves.left.and.right" : "checkmark.circle.fill"
-        case .degraded:
-            "exclamationmark.triangle"
-        case .actionRequired:
-            "exclamationmark.triangle.fill"
-        }
-    }
-
-    private var receiverHealthTint: Color {
-        switch summary.overallHealth {
-        case .ok:
-            summary.connectedDevices.isEmpty ? .secondary : .green
-        case .degraded, .actionRequired:
-            .orange
-        }
-    }
-
-    private var discoveredDevicesText: String {
-        var devices: [String: String] = [:]
-
-        for device in summary.connectedDevices {
-            devices[device.name] = "已连接"
-        }
-
-        for peer in diagnostics.discoveredPeers where devices[peer] == nil {
-            devices[peer] = "未连接"
-        }
-
-        for peer in diagnostics.invitedPeers where devices[peer] == nil {
-            devices[peer] = "连接中"
-        }
-
-        guard !devices.isEmpty else {
-            return "无"
-        }
-        return devices
-            .sorted { lhs, rhs in
-                if lhs.value == rhs.value {
-                    return lhs.key < rhs.key
-                }
-                return lhs.value < rhs.value
-            }
-            .map { "\($0.value)：\($0.key)" }
-            .joined(separator: "\n")
-    }
-
-    private var pairingServiceAvailabilityText: String {
-        switch store.androidBridge.state {
-        case .stopped:
-            return "未启动"
-        case .listening(let port):
-            return port.map { "监听中：\($0)" } ?? "监听中"
-        case .failed(let message):
-            return "失败：\(message)"
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.headline)
-    }
-
-    private func statusLine(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .textSelection(.enabled)
-                .lineLimit(3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct FunctionTestPage: View {
-    @ObservedObject var store: MacCarrierStore
-    @State private var testText = ""
-    @State private var hasPressedReturn = false
-    @State private var focusRequest = 0
-    @State private var isRunningPasteSelfTest = false
-    @State private var pasteSelfTestResult: PasteInjectionResult?
-    @State private var lastPasteSelfTestText: String?
-
-
-    private var didPassPasteSelfTest: Bool {
-        guard let lastPasteSelfTestText else {
-            return false
-        }
-        return testText.contains(lastPasteSelfTestText)
-    }
-
+struct MacManagementGroup<Content: View>: View {
+    @ViewBuilder let content: Content
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("功能测试")
-                        .font(.title2.weight(.semibold))
-                    Text("点击下方输入框，让它成为当前焦点。手机端发送普通文本时，内容应出现在输入框里；发送+回车时，内容应出现且回车状态变为已按下。也可以只测试本机辅助功能粘贴。")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 12) {
-                    Button {
-                        runPasteSelfTest()
-                    } label: {
-                        Label("仅测试辅助功能粘贴", systemImage: "doc.on.clipboard")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isRunningPasteSelfTest)
-
-                    Button {
-                    } label: {
-                        Label(
-                            hasPressedReturn ? "回车已按下" : "等待回车",
-                            systemImage: hasPressedReturn ? "return.left" : "return"
-                        )
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        reset()
-                    } label: {
-                        Label("重置", systemImage: "arrow.counterclockwise")
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if isRunningPasteSelfTest {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("正在把测试输入框设为焦点并发送 Command-V")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else if let pasteSelfTestResult {
-                    Label {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(didPassPasteSelfTest ? "粘贴测试通过" : pasteSelfTestResult.status)
-                            Text(pasteSelfTestResult.fullDetail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .lineLimit(3)
-                        }
-                    } icon: {
-                        Image(systemName: didPassPasteSelfTest ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(didPassPasteSelfTest ? .green : .orange)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("测试输入框")
-                        .font(.headline)
-                    FunctionTestInputView(text: $testText, focusRequest: focusRequest) {
-                        hasPressedReturn = true
-                    }
-                    .frame(minHeight: 220)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.separator, lineWidth: 1)
-                    }
-                }
-
-                Text("这个输入框只接收系统正常投递到当前焦点的键盘和粘贴事件；测试页不会直接读取手机发送内容，也不会绕过辅助功能粘贴路径。“仅测试辅助功能粘贴”会主动聚焦这个输入框，然后复用 Mac 接收端同一套辅助功能粘贴路径发送一段本机测试文本。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: 640, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 48)
-        .padding(.top, 44)
-        .padding(.bottom, 28)
-    }
-
-    private func reset() {
-        testText = ""
-        hasPressedReturn = false
-        pasteSelfTestResult = nil
-        lastPasteSelfTestText = nil
-        isRunningPasteSelfTest = false
-    }
-
-    private func runPasteSelfTest() {
-        testText = ""
-        hasPressedReturn = false
-        pasteSelfTestResult = nil
-        isRunningPasteSelfTest = true
-
-        let testText = "TypeCarrier paste test \(Int(Date().timeIntervalSince1970))"
-        lastPasteSelfTestText = testText
-        focusRequest += 1
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            store.enqueuePaste(text: testText) { result in
-                pasteSelfTestResult = result
-                isRunningPasteSelfTest = false
-            }
-        }
-    }
-}
-
-private struct FunctionTestInputView: NSViewRepresentable {
-    @Binding var text: String
-    let focusRequest: Int
-    let onReturn: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
-
-        let textView = ReturnObservingTextView()
-        textView.delegate = context.coordinator
-        textView.onReturn = onReturn
-        textView.string = text
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
-        textView.isEditable = true
-        textView.isSelectable = true
-        textView.isRichText = false
-        textView.importsGraphics = false
-        textView.allowsUndo = true
-        textView.drawsBackground = true
-        textView.backgroundColor = .textBackgroundColor
-        textView.textContainerInset = NSSize(width: 10, height: 10)
-        textView.minSize = NSSize(width: 0, height: 0)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.widthTracksTextView = true
-
-        scrollView.documentView = textView
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? ReturnObservingTextView else {
-            return
-        }
-
-        textView.onReturn = onReturn
-        if textView.string != text {
-            textView.string = text
-        }
-        context.coordinator.focusIfNeeded(
-            request: focusRequest,
-            textView: textView
-        )
-    }
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        @Binding private var text: String
-        private var lastHandledFocusRequest = 0
-
-        init(text: Binding<String>) {
-            _text = text
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else {
-                return
-            }
-
-            text = textView.string
-        }
-
-        func focusIfNeeded(request: Int, textView: NSTextView) {
-            guard request != lastHandledFocusRequest else {
-                return
-            }
-
-            lastHandledFocusRequest = request
-            DispatchQueue.main.async {
-                textView.window?.makeFirstResponder(textView)
-            }
-        }
-    }
-
-    final class ReturnObservingTextView: NSTextView {
-        var onReturn: (() -> Void)?
-
-        override func insertNewline(_ sender: Any?) {
-            onReturn?()
-            super.insertNewline(sender)
-        }
-    }
-}
-
-private struct SettingsListPane: View {
-    @Binding var selectedSection: SettingsSection?
-    let hasDiagnosticsWarning: Bool
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("设置")
-                    .font(.title2.weight(.semibold))
-                    .padding(.horizontal, 22)
-                    .padding(.top, 26)
-                    .padding(.bottom, 10)
-
-                SettingsSidebarRow(
-                    title: "接收",
-                    systemImage: "tray.and.arrow.down",
-                    tint: .green,
-                    isSelected: selectedSection == .receiving
-                ) {
-                    selectedSection = .receiving
-                }
-                .padding(.horizontal, 14)
-
-                SettingsSidebarRow(
-                    title: "关于",
-                    systemImage: "info.circle",
-                    tint: .purple,
-                    isSelected: selectedSection == .about
-                ) {
-                    selectedSection = .about
-                }
-                .padding(.horizontal, 14)
-
-                SettingsSidebarRow(
-                    title: "诊断",
-                    systemImage: "stethoscope",
-                    tint: .blue,
-                    isSelected: selectedSection == .diagnostics,
-                    showsWarning: hasDiagnosticsWarning
-                ) {
-                    selectedSection = .diagnostics
-                }
-                .padding(.horizontal, 14)
-            }
+        VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
-private enum PlatformDownloadLinks {
-    static let appStorePlaceholderURL = URL(string: "https://apps.apple.com/app/typecarrier")!
-    static let latestGitHubReleaseURL = URL(string: "https://github.com/AK22AK/TypeCarrier/releases/latest")!
-}
-
-private struct SettingsAboutPage: View {
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("关于")
-                    .font(.title2.weight(.semibold))
-
-                VStack(alignment: .leading, spacing: 10) {
-                    statusLine("应用", "TypeCarrier")
-                    statusLine("版本", appVersionText)
-                }
-                .frame(maxWidth: 640, alignment: .leading)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("更多平台")
-                        .font(.headline)
-
-                    PlatformDownloadItem(
-                        title: "iOS",
-                        detail: "前往 App Store 下载。App Store 页面尚未上架，当前链接是占位位置；正式上架后替换为真实商店地址。",
-                        systemImage: "iphone",
-                        url: PlatformDownloadLinks.appStorePlaceholderURL
-                    )
-
-                    Divider()
-
-                    PlatformDownloadItem(
-                        title: "Android",
-                        detail: "在 GitHub 最新 Release 下载 APK 侧载包。",
-                        systemImage: "app",
-                        url: PlatformDownloadLinks.latestGitHubReleaseURL
-                    )
-
-                    Divider()
-
-                    PlatformDownloadItem(
-                        title: "macOS",
-                        detail: "在 GitHub 最新 Release 下载 Mac 侧载包。",
-                        systemImage: "laptopcomputer",
-                        url: PlatformDownloadLinks.latestGitHubReleaseURL
-                    )
-                }
-                .frame(maxWidth: 640, alignment: .leading)
-            }
-            .frame(maxWidth: 640, alignment: .leading)
-            .padding(.horizontal, 42)
-            .padding(.top, 48)
-            .padding(.bottom, 28)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var appVersionText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-
-        switch (version, build) {
-        case let (version?, build?) where !version.isEmpty && !build.isEmpty:
-            return "\(version) (\(build))"
-        case let (version?, _) where !version.isEmpty:
-            return version
-        default:
-            return "未知"
-        }
-    }
-
-    private func statusLine(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .textSelection(.enabled)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct PlatformDownloadItem: View {
+struct MacManagementHeader: View {
     let title: String
     let detail: String
-    let systemImage: String
-    let url: URL
-
+    let symbol: String
+    var tint: Color = .secondary
     var body: some View {
-        Link(destination: url) {
-            Label {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.headline)
-                    Text(detail)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } icon: {
-                Image(systemName: systemImage)
-                    .font(.title3)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SettingsReceivingPage: View {
-    @ObservedObject var store: MacCarrierStore
-
-    @State private var nameEditor = DeviceNameEditState()
-    @State private var showsNameGuidance = false
-    private let nameGuidance = "建议中文 10 字、英文 18 字符；过长会省略显示。"
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Text("本机名称")
-                        Button {
-                            showsNameGuidance.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
-                        }
-                        .buttonStyle(.plain)
-                        .help(nameGuidance)
-                        .accessibilityLabel("名称长度建议")
-                        .accessibilityIdentifier("receiverNameHelp")
-                        .popover(isPresented: $showsNameGuidance) {
-                            Text(nameGuidance)
-                                .frame(width: 300, alignment: .leading)
-                                .padding(16)
-                        }
-                    }
-                    if nameEditor.isEditing {
-                        TextField("例如：书房 Mac", text: $nameEditor.draft)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("本机显示名称")
-                            .accessibilityIdentifier("receiverNameDraft")
-                        HStack {
-                            Button("取消") { nameEditor.cancel() }
-                            Button("保存") {
-                                if let name = nameEditor.savedName() { store.setCustomReceiverDisplayName(name) }
-                            }
-                            .disabled(!nameEditor.canSave)
-                            Button("使用系统名称") {
-                                nameEditor.selectSystemName(store.systemReceiverDisplayName)
-                            }
-                            .disabled(store.customReceiverDisplayName.isEmpty || nameEditor.pendingSource == .system)
-                        }
-                    } else {
-                        HStack(alignment: .top) {
-                            Text(store.receiverDisplayName)
-                                .font(.title3.weight(.semibold))
-                                .textSelection(.enabled)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .layoutPriority(1)
-                                .accessibilityIdentifier("receiverEffectiveName")
-                            Spacer(minLength: 8)
-                            Button("编辑") {
-                                nameEditor.begin(effectiveName: store.receiverDisplayName, hasCustomName: !store.customReceiverDisplayName.isEmpty)
-                            }
-                            .fixedSize()
-                        }
-                        Text(store.customReceiverDisplayName.isEmpty ? "系统名称" : "自定义名称")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        "自动粘贴后恢复剪贴板",
-                        isOn: Binding(
-                            get: { store.restoresClipboardAfterAutomaticPaste },
-                            set: { store.setRestoresClipboardAfterAutomaticPaste($0) }
-                        )
-                    )
-
-                    Text("开启后，自动粘贴会尝试恢复原剪贴板内容。")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: 640, alignment: .leading)
-            .padding(.horizontal, 42)
-            .padding(.top, 48)
-            .padding(.bottom, 28)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onDisappear { nameEditor.cancel() }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
-            if let window = notification.object as? NSWindow, window.identifier?.rawValue == MacAppCoordinator.mainWindowID {
-                nameEditor.cancel()
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 22)).foregroundStyle(tint).frame(width: 22)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 20, weight: .semibold))
+                Text(detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                    .lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 }
 
-private struct SettingsDiagnosticsPage: View {
-    @ObservedObject var store: MacCarrierStore
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                HStack(spacing: 10) {
-                    Button {
-                        store.runManualDiagnostics()
-                    } label: {
-                        Label("主动诊断", systemImage: "stethoscope")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button {
-                        store.exportConnectionDiagnosticsToFinder()
-                    } label: {
-                        Label("导出诊断", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if let exportError = store.lastDiagnosticExportErrorMessage {
-                    statusLine("导出错误", exportError)
-                } else if let exportURL = store.lastDiagnosticExportURL {
-                    statusLine("最近导出", exportURL.path)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("连接自检")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(selfCheckFindings) { finding in
-                        VStack(alignment: .leading, spacing: 10) {
-                            SettingsSelfCheckFindingRow(finding: finding)
-
-                            if finding.id.hasPrefix("mac.accessibility") {
-                                AccessibilityRecoveryActions(store: store)
-                            }
-                        }
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("最近事件")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-
-                    if recentEvents.isEmpty {
-                        Text("暂无事件")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(recentEvents) { event in
-                                DiagnosticEventListRow(event: event)
-                            }
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: 760, alignment: .leading)
-            .padding(.horizontal, 42)
-            .padding(.top, 48)
-            .padding(.bottom, 28)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var selfCheckFindings: [SelfCheckFinding] {
-        ConnectionSelfCheck.findings(
-            receiverSummary: store.receiverStatusSummary,
-            accessibilityTrusted: store.accessibilityTrusted
-        )
-    }
-
-    private var recentEvents: [SettingsDiagnosticEvent] {
-        store.recentConnectionDiagnosticLogEntries(limit: 50).enumerated().map { offset, entry in
-            SettingsDiagnosticEvent(
-                id: offset,
-                timestamp: entry.timestamp,
-                name: entry.name,
-                message: entry.message,
-                summary: entry.compactDiagnosticSummary
-            )
-        }
-    }
-
-    private func statusLine(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .textSelection(.enabled)
-                .lineLimit(3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct SettingsSidebarRow: View {
+struct MacManagementActionRow: View {
     let title: String
-    let systemImage: String
-    let tint: Color
-    let isSelected: Bool
-    var showsWarning = false
+    let symbol: String
     let action: () -> Void
-
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(tint.gradient)
-                    Image(systemName: systemImage)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 30, height: 30)
-                .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
-
-                Text(title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : .primary)
-
-                Spacer(minLength: 0)
-
-                if showsWarning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .imageScale(.small)
-                        .foregroundStyle(isSelected ? .white : .red)
-                        .accessibilityLabel("\(title)中有需要处理的问题")
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .padding(.horizontal, 10)
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.accentColor)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SettingsSelfCheckFindingRow: View {
-    let finding: SelfCheckFinding
-
-    var body: some View {
-        Label {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(finding.title.localizedDiagnosticMessageText)
-                    .font(.body.weight(.semibold))
-                Text(finding.detail.localizedDiagnosticMessageText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let actionTitle = finding.actionTitle {
-                    Text(actionTitle.localizedDiagnosticMessageText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } icon: {
-            Image(systemName: finding.systemImageName)
-                .foregroundStyle(finding.tint)
-        }
-        .padding(finding.requiresAttention ? 12 : 0)
-        .background {
-            if finding.requiresAttention {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(finding.tint.opacity(0.09))
-            }
-        }
-        .overlay {
-            if finding.requiresAttention {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(finding.tint.opacity(0.35), lineWidth: 1)
-            }
-        }
-    }
-}
-
-private struct AccessibilityRecoveryActions: View {
-    @ObservedObject var store: MacCarrierStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Button {
-                    store.openAccessibilitySettings()
-                } label: {
-                    Label("打开辅助功能设置", systemImage: "gearshape")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    store.resetAccessibilityAuthorization()
-                } label: {
-                    Label("重置辅助功能授权", systemImage: "arrow.counterclockwise")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    store.revealCurrentApplicationInFinder()
-                } label: {
-                    Label("显示当前 App", systemImage: "app.dashed")
-                }
-                .buttonStyle(.bordered)
+                Image(systemName: symbol).font(.system(size: 15)).frame(width: 18)
+                Text(title)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.secondary)
             }
-
-            Text("授权后返回 TypeCarrier 会自动刷新；也可以点顶部“主动诊断”立即检查。重置会把 TypeCarrier 从辅助功能列表中移除；如果列表里找不到它，点击“显示当前 App”，再用系统设置左下角 + 添加该 app。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let message = store.lastAccessibilityResetMessage {
-                Text(message)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-        }
-    }
-}
-
-private struct SettingsDiagnosticEvent: Identifiable {
-    let id: Int
-    let timestamp: Date
-    let name: String
-    let message: String
-    let summary: String
-}
-
-private struct DiagnosticEventListRow: View {
-    let event: SettingsDiagnosticEvent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(event.name)
-                .font(.caption.weight(.semibold))
-
-            Text(event.summary)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .textSelection(.enabled)
-
-            Text("\(event.timestamp.formatted(date: .omitted, time: .standard)) \(event.message)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-private extension SelfCheckFinding {
-    var requiresAttention: Bool {
-        severity == .warning || severity == .blocking
-    }
-
-    var systemImageName: String {
-        switch severity {
-        case .ok:
-            "checkmark.circle.fill"
-        case .warning:
-            "exclamationmark.triangle.fill"
-        case .blocking:
-            "xmark.octagon.fill"
-        case .unknown:
-            "questionmark.circle.fill"
-        }
-    }
-
-    var tint: Color {
-        switch severity {
-        case .ok:
-            .green
-        case .warning:
-            .orange
-        case .blocking:
-            .red
-        case .unknown:
-            .secondary
-        }
-    }
-}
-
-private extension CarrierRecord.Status {
-    var localizedDisplayText: String {
-        switch self {
-        case .draft:
-            "草稿"
-        case .queued:
-            "排队中"
-        case .sent:
-            "已发送"
-        case .received:
-            "已接收"
-        case .pastePosted, .pasteUnverified, .pasteFailed:
-            "已接收"
-        case .failed:
-            "失败"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .draft:
-            "tray"
-        case .queued:
-            "clock"
-        case .sent:
-            "paperplane"
-        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
-            "checkmark.circle"
-        case .failed:
-            "exclamationmark.triangle.fill"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .failed:
-            .red
-        case .received, .pastePosted, .pasteUnverified, .pasteFailed:
-            .green
-        case .queued:
-            .orange
-        default:
-            .secondary
-        }
-    }
-}
-
-private extension ReceiverDevicePlatform {
-    var systemImageName: String {
-        switch self {
-        case .apple:
-            "iphone"
-        case .android:
-            "apps.iphone"
-        }
-    }
-}
-
-private extension ReceiverIssueImpact {
-    var localizedManagementText: String {
-        switch self {
-        case .allDevices:
-            "影响所有设备"
-        case .endpoint(let endpoint):
-            switch endpoint {
-            case .appleMultipeer:
-                "可能影响设备发现"
-            case .androidBridge:
-                "可能影响配对服务或已信任设备连接"
-            }
-        }
-    }
-}
-
-private extension ReceiverIssueSeverity {
-    var systemImageName: String {
-        switch self {
-        case .warning:
-            "exclamationmark.triangle"
-        case .actionRequired:
-            "exclamationmark.triangle.fill"
-        }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 }

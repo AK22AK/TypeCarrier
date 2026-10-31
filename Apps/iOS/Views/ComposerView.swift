@@ -14,10 +14,12 @@ struct ComposerView: View {
     @AppStorage(ComposerPreferenceKeys.enablesSendReturnGesture) private var enablesSendReturnGesture = false
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
-    @State private var showsDebugFeatures = false
-    @State private var showsHistory = false
-    @State private var showsSettings = false
-    @State private var showsAbout = false
+    private enum Route: Hashable {
+        case history, settings, about, debugFeatures
+    }
+
+    @State private var navigationPath: [Route] = []
+    @State private var contentWidth: CGFloat = 0
     @State private var isHeaderCollapsed = false
     @State private var pendingEditorRefocus = false
     @State private var hasRequestedInitialEditorFocus = false
@@ -31,7 +33,7 @@ struct ComposerView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color(uiColor: .systemGroupedBackground)
                     .ignoresSafeArea()
@@ -46,20 +48,27 @@ struct ComposerView: View {
                 .padding(.top, pageTopPadding)
                 .padding(.bottom, 18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
             }
-            .navigationDestination(isPresented: $showsHistory) {
-                CarrierHistoryView(store: store)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .history:
+                    CarrierHistoryView(store: store)
+                case .settings:
+                    ComposerSettingsView(store: store)
+                case .about:
+                    AboutView()
+                case .debugFeatures:
+                    DebugFeaturesView(store: store)
+                }
             }
-            .navigationDestination(isPresented: $showsSettings) {
-                ComposerSettingsView(store: store)
-            }
-            .navigationDestination(isPresented: $showsAbout) {
-                AboutView()
-            }
-            .navigationDestination(isPresented: $showsDebugFeatures) {
-                DebugFeaturesView(store: store)
-            }
-            .toolbar(.hidden, for: .navigationBar)
+            // 首页一直保留系统导航栏（标题为空、inline），不随路由隐藏/显示，
+            // 这样从子页面侧滑返回时导航栏不会在大标题和隐藏之间切换而跳变。
+            .navigationTitle("")
+            .navigationSubtitle("")
+            .toolbarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar { homeToolbar }
         }
         .task {
             store.start()
@@ -103,100 +112,105 @@ struct ComposerView: View {
         }
     }
 
+    @ViewBuilder
     private var header: some View {
-        let progress = headerCollapseProgress
-        let headerHeight = interpolated(expanded: expandedHeaderHeight, compact: compactHeaderHeight, progress: progress)
-
-        return GeometryReader { proxy in
-            let titleX = interpolated(expanded: headerLogoSize + 12, compact: 0, progress: progress)
-            let titleY = interpolated(expanded: expandedHeaderContentY, compact: compactHeaderTitleY, progress: progress)
-            let actionsWidth = headerActionsGroupWidth
-            let titleWidth = max(
-                120,
-                proxy.size.width - titleX - (actionsWidth + 12) * progress
-            )
-            let logoY = expandedHeaderContentY
-            let actionsY = expandedHeaderActionsY
-
-            ZStack(alignment: .topLeading) {
+        if !isHeaderCollapsed {
+            HStack(alignment: .center, spacing: 12) {
                 TypeCarrierHeaderLogoMark()
                     .frame(width: headerLogoSize, height: headerLogoSize)
                     .glassEffect(.regular.interactive(), in: .circle)
-                    .opacity(1 - progress)
-                    .scaleEffect(interpolated(expanded: 1, compact: 0.88, progress: progress))
-                    .offset(x: 0, y: logoY)
                     .accessibilityHidden(true)
 
-                animatedHeaderTitle(progress: progress)
-                    .frame(width: titleWidth, alignment: .topLeading)
-                    .offset(x: titleX, y: titleY)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TypeCarrier")
+                        .font(.system(size: 34, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
 
-                headerActions
-                    .frame(width: actionsWidth, height: headerActionsGroupHeight)
-                    .offset(x: proxy.size.width - actionsWidth, y: actionsY)
+                    targetRow(fontSize: 17)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, minHeight: headerHeight, maxHeight: headerHeight, alignment: .topLeading)
     }
 
-    private func animatedHeaderTitle(progress: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: interpolated(expanded: 2, compact: 1, progress: progress)) {
-            Text("TypeCarrier")
-                .font(.system(size: interpolated(expanded: 34, compact: 24, progress: progress), weight: .bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(height: interpolated(expanded: 40, compact: 29, progress: progress), alignment: .topLeading)
-
-            HStack(spacing: interpolated(expanded: 7, compact: 5, progress: progress)) {
-                ConnectionStatusIndicator(status: store.connectionStatus)
-                    .id(store.connectionStatus)
-                    .fixedSize()
-
-                Group {
-                    if store.showsTargetPicker {
-                        Menu {
-                            ForEach(store.connectedReceivers) { peer in
-                                Button {
-                                    store.selectReceiver(peer)
-                                } label: {
-                                    Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(store.headerStatusText)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                Image(systemName: "chevron.down")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .fixedSize()
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
-                        .accessibilityHint("切换已连接的 Mac")
-                        .accessibilityIdentifier("receiverTargetPicker")
-                    } else {
-                        Text(store.headerStatusText)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .accessibilityLabel(store.headerAccessibilityText)
-                            .accessibilityIdentifier("connectionStatusText")
-                    }
-                }
-                .font(.system(size: interpolated(expanded: 17, compact: 14, progress: progress), weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .layoutPriority(1)
+    /// 编辑时 header 收起，品牌和设备行移到系统导航栏的标题位。
+    @ToolbarContentBuilder
+    private var homeToolbar: some ToolbarContent {
+        if navigationPath.isEmpty {
+            ToolbarItem(placement: .title) {
+                Text("TypeCarrier")
+                    .font(.system(size: 22, weight: .bold))
+                    .lineLimit(1)
+                    .opacity(isHeaderCollapsed ? 1 : 0)
+                    .allowsHitTesting(isHeaderCollapsed)
+                    .accessibilityHidden(!isHeaderCollapsed)
             }
-            .frame(height: interpolated(expanded: 22, compact: 18, progress: progress), alignment: .leading)
+
+            ToolbarItem(placement: .subtitle) {
+                targetRow(fontSize: 13)
+                    .frame(width: compactTargetRowWidth, alignment: .leading)
+                    .opacity(isHeaderCollapsed ? 1 : 0)
+                    .allowsHitTesting(isHeaderCollapsed)
+                    .accessibilityHidden(!isHeaderCollapsed)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            headerActions
+        }
+        .sharedBackgroundVisibility(.visible)
+    }
+
+    private var compactTargetRowWidth: CGFloat {
+        max(0, contentWidth - (store.canRestartConnection ? 212 : 168))
+    }
+
+    private func targetRow(fontSize: CGFloat) -> some View {
+        HStack(spacing: fontSize > 15 ? 7 : 5) {
+            ConnectionStatusIndicator(status: store.connectionStatus)
+                .id(store.connectionStatus)
+                .fixedSize()
+
+            Group {
+                if store.showsTargetPicker {
+                    Menu {
+                        ForEach(store.connectedReceivers) { peer in
+                            Button {
+                                store.selectReceiver(peer)
+                            } label: {
+                                Label(receiverLabel(peer), systemImage: store.targetSelection.selectedID == peer.id ? "checkmark" : "desktopcomputer")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(store.headerStatusText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .fixedSize()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
+                    .accessibilityHint("切换已连接的 Mac")
+                    .accessibilityIdentifier("receiverTargetPicker")
+                } else {
+                    Text(store.headerStatusText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .accessibilityLabel(store.headerAccessibilityText)
+                        .accessibilityIdentifier("connectionStatusText")
+                }
+            }
+            .font(.system(size: fontSize, weight: .medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .layoutPriority(1)
+        }
     }
 
     private func receiverLabel(_ peer: CarrierPeer) -> String {
@@ -207,65 +221,60 @@ struct ComposerView: View {
         return peer.displayName + variant + " · " + String(deviceID.suffix(6))
     }
 
+    @ViewBuilder
     private var headerActions: some View {
-        HStack(spacing: 2) {
-            if store.canRestartConnection {
-                Button {
-                    store.restartConnection()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 21, weight: .medium))
-                        .frame(width: headerActionWidth, height: headerActionHeight)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("重试连接")
+        if store.canRestartConnection {
+            Button {
+                store.restartConnection()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .accessibilityLabel("重试连接")
+        }
+
+        Button {
+            open(.history)
+        } label: {
+            HeaderHistoryButtonLabel(
+                badgeText: store.draftBadgeText,
+                width: headerActionWidth,
+                height: headerActionHeight
+            )
+        }
+        .accessibilityLabel(historyAccessibilityLabel)
+
+        Menu {
+            Button {
+                open(.settings)
+            } label: {
+                Label("设置", systemImage: "gearshape")
             }
 
             Button {
-                prepareForChildNavigation()
-                showsHistory = true
+                open(.about)
             } label: {
-                HeaderHistoryButtonLabel(
-                    badgeText: store.draftBadgeText,
-                    width: headerActionWidth,
-                    height: headerActionHeight
-                )
+                Label("关于", systemImage: "info.circle")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(historyAccessibilityLabel)
 
-            Menu {
-                Button {
-                    prepareForChildNavigation()
-                    showsSettings = true
-                } label: {
-                    Label("设置", systemImage: "gearshape")
-                }
-
-                Button {
-                    prepareForChildNavigation()
-                    showsAbout = true
-                } label: {
-                    Label("关于", systemImage: "info.circle")
-                }
-
-                Button {
-                    prepareForChildNavigation()
-                    showsDebugFeatures = true
-                } label: {
-                    Label("调试功能", systemImage: "wrench.and.screwdriver")
-                }
+            Button {
+                open(.debugFeatures)
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 22, weight: .medium))
-                    .frame(width: headerActionWidth, height: headerActionHeight)
+                Label("调试功能", systemImage: "wrench.and.screwdriver")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("更多")
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 21))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityLabel("更多")
+    }
+
+    private func open(_ route: Route) {
+        prepareForChildNavigation()
+        // 重复点击同一入口保持幂等，不叠加页面。
+        guard navigationPath != [route] else {
+            return
+        }
+        navigationPath = [route]
     }
 
     @ViewBuilder
@@ -547,49 +556,12 @@ struct ComposerView: View {
         4
     }
 
-    private var expandedHeaderHeight: CGFloat {
-        114
-    }
-
-    private var compactHeaderHeight: CGFloat {
-        46
-    }
-
-    private var expandedHeaderContentY: CGFloat {
-        56
-    }
-
-    private var compactHeaderTitleY: CGFloat {
-        2
-    }
-
-    private var expandedHeaderActionsY: CGFloat {
-        -5
-    }
-
-    private var headerCollapseProgress: CGFloat {
-        isHeaderCollapsed ? 1 : 0
-    }
-
-    private var headerActionsGroupWidth: CGFloat {
-        let actionCount: CGFloat = store.canRestartConnection ? 3 : 2
-        return headerActionWidth * actionCount + 2 * (actionCount - 1) + 16
-    }
-
-    private var headerActionsGroupHeight: CGFloat {
-        headerActionHeight + 8
-    }
-
     private var historyAccessibilityLabel: String {
         if store.draftCount > 0 {
             return "历史和草稿，\(store.draftCount) 条草稿"
         }
 
         return "历史和草稿"
-    }
-
-    private func interpolated(expanded: CGFloat, compact: CGFloat, progress: CGFloat) -> CGFloat {
-        expanded + (compact - expanded) * progress
     }
 
     private func focusEditor() {
@@ -684,11 +656,11 @@ struct ComposerView: View {
     }
 
     private var headerActionWidth: CGFloat {
-        46
+        36
     }
 
     private var headerActionHeight: CGFloat {
-        40
+        36
     }
 
     private var editorAccessoryHeight: CGFloat {
@@ -1372,6 +1344,7 @@ private struct CarrierHistoryView: View {
         .navigationTitle(selectedTab.title)
         .navigationSubtitle(currentSubtitle)
         .navigationBarTitleDisplayMode(.large)
+        .expandsLargeTitleOnPush()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 historyActionMenu

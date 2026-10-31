@@ -14,10 +14,10 @@ struct TypeCarrierMacApp: App {
 
     var body: some Scene {
         Window("TypeCarrier", id: MacAppCoordinator.mainWindowID) {
-            MainWindowView(store: coordinator.store)
+            MainWindowView(coordinator: coordinator)
                 .onAppear { coordinator.managementWindowDidAppear() }
         }
-        .defaultSize(width: 900, height: 620)
+        .defaultSize(width: 740, height: 609)
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)
@@ -81,7 +81,7 @@ private struct MenuBarStatusIcon: View {
     }
 
     private var state: MenuBarStatusIconState {
-        if store.receiverHealthWarning != nil {
+        if ReceiverManagementPresentation(summary: store.receiverStatusSummary, accessibilityTrusted: store.accessibilityTrusted).needsAttention {
             return .warning
         }
 
@@ -89,8 +89,8 @@ private struct MenuBarStatusIcon: View {
     }
 
     private var accessibilityLabel: String {
-        if store.receiverHealthWarning != nil {
-            return "TypeCarrier 接收器异常"
+        if ReceiverManagementPresentation(summary: store.receiverStatusSummary, accessibilityTrusted: store.accessibilityTrusted).needsAttention {
+            return "TypeCarrier 有待处理的问题"
         }
 
         return store.receiverDisplayConnectionState.isConnected ? "TypeCarrier 已连接" : "TypeCarrier 空闲"

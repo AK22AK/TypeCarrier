@@ -21,6 +21,7 @@
 		26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */; };
 		2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */; };
 		30A472EA089DAF82F06D3039 /* TextEditHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1307D3D66F359CD335C92E0E /* TextEditHistoryTests.swift */; };
+		314269C87F82681DDD361FF1 /* ReceiverManagementPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F975BDE51A6297BC8A98C6B /* ReceiverManagementPresentation.swift */; };
 		32F880BC01CC7844811B2225 /* DeviceNamePreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4072E9891F423FB3118665 /* DeviceNamePreferenceTests.swift */; };
 		33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */; };
 		3414B67D3309CDB6439A6D96 /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -28,10 +29,12 @@
 		36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CBC5EDEAA504D926640A76F /* ComposerView.swift */; };
 		3C4F9EA09CB90AA641F34D19 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		4146E2420C2748C0D766898E /* AndroidPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC933378CA1A7C808D756866 /* AndroidPairing.swift */; };
+		4213AC4014F2986D7ABAEB2D /* ReceiverStatusPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3926DDD3A90E43FB20FFECE /* ReceiverStatusPage.swift */; };
 		42FC298DADDF8B8A446D47F6 /* AndroidPairingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */; };
 		450437EFF2E6D2A89975DAAD /* ReceiverTargetSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDABD2B35FDEDF249F291616 /* ReceiverTargetSelectionTests.swift */; };
 		472A340E53BD1B7E9540DEC6 /* MultipeerCarrierServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */; };
 		4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */; };
+		4F030E82AE60BAD8283D1056 /* MacSettingsPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85E0134D26176B58210FB10 /* MacSettingsPages.swift */; };
 		505D4CAB42A8B9CA3F1DB3E4 /* TypeCarrierCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; };
 		509579E652181C56851316AD /* ComposerRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFEBE06E80198FCB17CB2C56 /* ComposerRecordStoreTests.swift */; };
 		54785CB94981FB90324D7C7B /* EditorTextReplacementPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E2BE0561136D756708D78B /* EditorTextReplacementPolicyTests.swift */; };
@@ -42,6 +45,7 @@
 		61D2DCE04ABB2A97BD1C816C /* ForegroundConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB1D208C4737B329BB7ECDE /* ForegroundConnectionRecoveryTests.swift */; };
 		6451EE37559BA71A9E1591C3 /* AndroidBonjourAdvertisement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58A0A5ACC199A1A360856EAE /* AndroidBonjourAdvertisement.swift */; };
 		65430E3DBD8D9E265D3BD48E /* CarrierPeer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */; };
+		66F88CF541052FA030DEF6EE /* FunctionTestPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
 		6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */; };
 		6CDAC5BFE6622D12C6EB2E3E /* SoftTopScrollEdge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */; };
@@ -62,7 +66,9 @@
 		B1C2036907E336791A66DC4D /* TextInsertionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */; };
 		B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */; };
 		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
+		B7443F32EEDEF6DDB1F7ACCE /* LargeTitleExpansion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C74F8959C9D2A48625CB10 /* LargeTitleExpansion.swift */; };
 		BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */; };
+		BD52A7A1E8271A4144EC239C /* SettingsAboutPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54784EEAD65610CA2B10AB35 /* SettingsAboutPage.swift */; };
 		BEA42D4E4643D3900D40B85D /* CarrierPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD706CDE712B3914E65FEB /* CarrierPayload.swift */; };
 		C02533A2C136AC2F4E2E56FC /* PasteFailureGuidanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */; };
 		C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */; };
@@ -70,14 +76,17 @@
 		C4634B570D0FD8A8CC5198D9 /* CarrierRecordTimestampFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */; };
 		C523232758A6D1BFE48E6EFA /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C6B1F653BE1074BB1E5A9921 /* AndroidBonjourAdvertisementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F5B760415544FDE9BD9126 /* AndroidBonjourAdvertisementTests.swift */; };
+		CDBC5AAABC1147BC2A507B88 /* ReceivedRecordEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */; };
 		CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */; };
 		D29DFCEC0317EDAF31C3BC4A /* CarrierPasteQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8FAC2781DA749A4C9EE722F /* CarrierPasteQueue.swift */; };
+		D2B4BBD8548A11D2620389F7 /* MacManagementPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EB5A9914747F0C973A1B33 /* MacManagementPage.swift */; };
 		D2F42D8A2332776B17522EDF /* AndroidBridgeProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */; };
 		E9B7C2500095F36E136F4110 /* TypeCarrierCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		ECF3054E79797488E79395CC /* DeliveryConfirmationWaitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE7BA2CD261B8EB0F2C2052 /* DeliveryConfirmationWaitTests.swift */; };
 		EFB4AB49D905BB0A902072DC /* DeviceNamePreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B884732280106D18ACEB44A /* DeviceNamePreference.swift */; };
 		F1205DF3E291DA2763CDFB6D /* TextInsertionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */; };
 		F334F55AE0BF13F3283F7520 /* CarrierEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */; };
+		F82692FE30684D1DF44A6DA3 /* ReceivedRecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */; };
 		F97FC096858232A6C5B18104 /* MultiDeviceRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA8686FFE4FACAAAA7406DF /* MultiDeviceRoutingTests.swift */; };
 		FCDC0E72CAE29F546607F35D /* DeliveryConfirmationWait.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BC6EF1AF971AB8BCCB8CA2 /* DeliveryConfirmationWait.swift */; };
 /* End PBXBuildFile section */
@@ -153,6 +162,8 @@
 		18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidTrustTokenStore.swift; sourceTree = "<group>"; };
 		1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrameTests.swift; sourceTree = "<group>"; };
+		1F975BDE51A6297BC8A98C6B /* ReceiverManagementPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverManagementPresentation.swift; sourceTree = "<group>"; };
+		23C74F8959C9D2A48625CB10 /* LargeTitleExpansion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeTitleExpansion.swift; sourceTree = "<group>"; };
 		23E3C567B6A076BE1BC6667F /* MultipeerCarrierServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipeerCarrierServiceTests.swift; sourceTree = "<group>"; };
 		2D31927EFFBDB3DD748370B1 /* ConnectionSelfCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelfCheckTests.swift; sourceTree = "<group>"; };
 		2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidCarrierBridge.swift; sourceTree = "<group>"; };
@@ -163,6 +174,7 @@
 		4B884732280106D18ACEB44A /* DeviceNamePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNamePreference.swift; sourceTree = "<group>"; };
 		4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyMonitor.swift; sourceTree = "<group>"; };
 		4CE7BA2CD261B8EB0F2C2052 /* DeliveryConfirmationWaitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeliveryConfirmationWaitTests.swift; sourceTree = "<group>"; };
+		54784EEAD65610CA2B10AB35 /* SettingsAboutPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAboutPage.swift; sourceTree = "<group>"; };
 		55EE223233955B5C05E1B67D /* CarrierPasteQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPasteQueueTests.swift; sourceTree = "<group>"; };
 		57CD706CDE712B3914E65FEB /* CarrierPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPayload.swift; sourceTree = "<group>"; };
 		57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecord.swift; sourceTree = "<group>"; };
@@ -205,12 +217,18 @@
 		D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInsertionPolicy.swift; sourceTree = "<group>"; };
 		DBB85D30D093D2E61328806C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DDABD2B35FDEDF249F291616 /* ReceiverTargetSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverTargetSelectionTests.swift; sourceTree = "<group>"; };
+		E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionTestPage.swift; sourceTree = "<group>"; };
+		E85E0134D26176B58210FB10 /* MacSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsPages.swift; sourceTree = "<group>"; };
+		E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedRecordEditor.swift; sourceTree = "<group>"; };
+		EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedRecordsView.swift; sourceTree = "<group>"; };
 		EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidPairingTests.swift; sourceTree = "<group>"; };
 		EFEBE06E80198FCB17CB2C56 /* ComposerRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRecordStoreTests.swift; sourceTree = "<group>"; };
 		F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidBridgeProtocolTests.swift; sourceTree = "<group>"; };
 		F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStore.swift; sourceTree = "<group>"; };
 		F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppCoordinator.swift; sourceTree = "<group>"; };
+		F3926DDD3A90E43FB20FFECE /* ReceiverStatusPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverStatusPage.swift; sourceTree = "<group>"; };
 		F6C6A96C65AB0B7816FF80A7 /* CarrierPeer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPeer.swift; sourceTree = "<group>"; };
+		F6EB5A9914747F0C973A1B33 /* MacManagementPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacManagementPage.swift; sourceTree = "<group>"; };
 		F87F986372F7595027ADCFA9 /* TypeCarrieriOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrieriOSApp.swift; sourceTree = "<group>"; };
 		F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelope.swift; sourceTree = "<group>"; };
 		F96EC8B1DA9061B45D4C1C9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -284,6 +302,7 @@
 			children = (
 				0CBC5EDEAA504D926640A76F /* ComposerView.swift */,
 				98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */,
+				23C74F8959C9D2A48625CB10 /* LargeTitleExpansion.swift */,
 				08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */,
 			);
 			path = Views;
@@ -378,6 +397,7 @@
 			isa = PBXGroup;
 			children = (
 				FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */,
+				E88772AD70E400CF5096D90D /* ReceivedRecordEditor.swift */,
 			);
 			path = Stores;
 			sourceTree = "<group>";
@@ -386,6 +406,7 @@
 			isa = PBXGroup;
 			children = (
 				F35D37032B3321166FB06C04 /* MacAppCoordinator.swift */,
+				F6EB5A9914747F0C973A1B33 /* MacManagementPage.swift */,
 				8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */,
 			);
 			path = App;
@@ -409,9 +430,15 @@
 		A76D4DB0B1A2B9A860598E9A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */,
+				E85E0134D26176B58210FB10 /* MacSettingsPages.swift */,
 				BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */,
 				18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */,
 				74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */,
+				EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */,
+				1F975BDE51A6297BC8A98C6B /* ReceiverManagementPresentation.swift */,
+				F3926DDD3A90E43FB20FFECE /* ReceiverStatusPage.swift */,
+				54784EEAD65610CA2B10AB35 /* SettingsAboutPage.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -611,13 +638,21 @@
 				6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */,
 				5FA6D2DA1B56F2BE0AA3C078 /* AndroidCarrierBridge.swift in Sources */,
 				94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */,
+				66F88CF541052FA030DEF6EE /* FunctionTestPage.swift in Sources */,
 				26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */,
 				33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */,
 				690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */,
+				D2B4BBD8548A11D2620389F7 /* MacManagementPage.swift in Sources */,
+				4F030E82AE60BAD8283D1056 /* MacSettingsPages.swift in Sources */,
 				26A4BF2022474F76DFEF01E0 /* MacUILocalization.swift in Sources */,
 				4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */,
 				CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */,
 				865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */,
+				CDBC5AAABC1147BC2A507B88 /* ReceivedRecordEditor.swift in Sources */,
+				F82692FE30684D1DF44A6DA3 /* ReceivedRecordsView.swift in Sources */,
+				314269C87F82681DDD361FF1 /* ReceiverManagementPresentation.swift in Sources */,
+				4213AC4014F2986D7ABAEB2D /* ReceiverStatusPage.swift in Sources */,
+				BD52A7A1E8271A4144EC239C /* SettingsAboutPage.swift in Sources */,
 				2280932E9B287A87DEE156CE /* TypeCarrierMacApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -691,6 +726,7 @@
 			files = (
 				54F3D88FD5729F530E21005D /* ComposerStore.swift in Sources */,
 				36CDBFD3FC2F5B656F891F93 /* ComposerView.swift in Sources */,
+				B7443F32EEDEF6DDB1F7ACCE /* LargeTitleExpansion.swift in Sources */,
 				6CDAC5BFE6622D12C6EB2E3E /* SoftTopScrollEdge.swift in Sources */,
 				BC47E2DD8CB861D72EA32FCE /* TypeCarrieriOSApp.swift in Sources */,
 				B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */,

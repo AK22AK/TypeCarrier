@@ -66,4 +66,56 @@ final class CarrierRecordStoreTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("records.json")
     }
+
+    func testFailedUpdateAndPruneDoNotLeakIntoLaterSave() throws {
+        let url = try temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = try CarrierRecordStore(fileURL: url, limit: 2)
+        let first = fixtureRecord("original", time: 1_777_777_001)
+        let second = fixtureRecord("second", time: 1_777_777_002)
+        try store.upsert(first)
+        try store.upsert(second)
+        let originalRecords = store.records
+        try withBlockedDestination(url) {
+            var edited = first
+            edited.text = "unsaved edit"
+            edited.updatedAt = Date(timeIntervalSince1970: 1_777_777_010)
+            XCTAssertThrowsError(try store.upsert(edited))
+            XCTAssertEqual(store.records, originalRecords)
+            XCTAssertThrowsError(try store.upsert(fixtureRecord("would prune", time: 1_777_777_020)))
+            XCTAssertEqual(store.records, originalRecords)
+        }
+        try store.upsert(second)
+        XCTAssertEqual(try CarrierRecordStore(fileURL: url).records, originalRecords)
+    }
+
+    func testFailedDeleteDoesNotLeakIntoLaterSave() throws {
+        let url = try temporaryStoreURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = try CarrierRecordStore(fileURL: url)
+        let original = fixtureRecord("keep after failed delete", time: 1_777_777_001)
+        try store.upsert(original)
+        try withBlockedDestination(url) {
+            XCTAssertThrowsError(try store.delete(id: original.id))
+            XCTAssertEqual(store.records, [original])
+        }
+        try store.upsert(fixtureRecord("later successful write", time: 1_777_777_002))
+        XCTAssertTrue(try CarrierRecordStore(fileURL: url).records.contains(original))
+    }
+
+    private func fixtureRecord(_ text: String, time: TimeInterval) -> CarrierRecord {
+        CarrierRecord(kind: .incoming, status: .received, text: text,
+                      createdAt: Date(timeIntervalSince1970: time), updatedAt: Date(timeIntervalSince1970: time))
+    }
+
+    private func withBlockedDestination(_ url: URL, body: () throws -> Void) throws {
+        let backup = url.appendingPathExtension("backup")
+        try FileManager.default.moveItem(at: url, to: backup)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.moveItem(at: backup, to: url)
+        }
+        try body()
+    }
 }

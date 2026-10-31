@@ -46,20 +46,23 @@ public final class CarrierRecordStore {
     }
 
     public func upsert(_ record: CarrierRecord) throws {
-        if let index = records.firstIndex(where: { $0.id == record.id }) {
-            records[index] = record
+        var candidate = records
+        if let index = candidate.firstIndex(where: { $0.id == record.id }) {
+            candidate[index] = record
         } else {
-            records.append(record)
+            candidate.append(record)
         }
 
-        records.sort(by: Self.newestFirst)
-        prune()
-        try save()
+        candidate.sort(by: Self.newestFirst)
+        if candidate.count > limit { candidate = Array(candidate.prefix(limit)) }
+        try save(candidate)
+        records = candidate
     }
 
     public func delete(id: UUID) throws {
-        records.removeAll { $0.id == id }
-        try save()
+        let candidate = records.filter { $0.id != id }
+        try save(candidate)
+        records = candidate
     }
 
     public func record(matchingPayloadID payloadID: UUID) -> CarrierRecord? {
@@ -74,7 +77,7 @@ public final class CarrierRecordStore {
         records = Array(records.prefix(limit))
     }
 
-    private func save() throws {
+    private func save(_ records: [CarrierRecord]) throws {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try encoder.encode(records)
