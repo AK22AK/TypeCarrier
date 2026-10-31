@@ -139,18 +139,12 @@ struct ComposerView: View {
     private var homeToolbar: some ToolbarContent {
         if navigationPath.isEmpty {
             ToolbarItem(placement: .title) {
-                HStack(spacing: 6) {
-                    TypeCarrierHeaderLogoMark()
-                        .padding(-5)
-                        .frame(width: 22, height: 22)
-                        .accessibilityHidden(true)
-                    Text("TypeCarrier")
-                        .font(.system(size: 22, weight: .bold))
-                        .lineLimit(1)
-                }
-                .opacity(isHeaderCollapsed ? 1 : 0)
-                .allowsHitTesting(isHeaderCollapsed)
-                .accessibilityHidden(!isHeaderCollapsed)
+                Text("TypeCarrier")
+                    .font(.system(size: 22, weight: .bold))
+                    .lineLimit(1)
+                    .opacity(isHeaderCollapsed ? 1 : 0)
+                    .allowsHitTesting(isHeaderCollapsed)
+                    .accessibilityHidden(!isHeaderCollapsed)
             }
 
             ToolbarItem(placement: .subtitle) {
