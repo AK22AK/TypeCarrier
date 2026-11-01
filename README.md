@@ -10,12 +10,12 @@ TypeCarrier 是一个轻量的手机到 Mac 文本传送工具。
 
 ## 当前状态
 
-当前源码版本为 **0.1.4 Beta**，包含 iPhone、Android 发送端和 macOS 菜单栏接收端：
+当前源码版本为 **0.1.5 Beta**，包含 iPhone、Android 发送端和 macOS 菜单栏接收端：
 
 - iPhone 使用 Multipeer Connectivity；Android 使用局域网 TCP，支持 NSD / mDNS 发现和手动地址连接。
 - iPhone 自动发现并连接 Mac；Android 首次连接使用 Mac 显示的配对码。手机可同时连接多台 Mac，并选择唯一发送目标；Mac 接受多个手机，按到达顺序统一排队粘贴。
 - 支持普通发送和发送后回车；Mac 自动粘贴需要辅助功能权限，实际结果取决于当前焦点和目标应用。
-- iOS 提供草稿、发送历史、重新发送及撤销/重做；草稿独立保存，发送历史可按条数或时间保留；Mac 提供接收历史和剪贴板恢复开关。
+- iOS 提供草稿、发送历史、重新发送及撤销/重做；草稿独立保存，发送历史可按条数或时间保留；Mac 提供接收历史（先阅读，需要时再编辑并显式保存）和剪贴板恢复开关。
 - 提供连接状态、自检和诊断导出。前后台恢复与重连已有实现，稳定性仍需按设备和网络场景验证。
 
 无需账号或服务器。系统要求为 iOS 26.0、macOS 26.0、Android 8.0 或更新版本。云同步、互联网中转、Windows 和触控板模式尚未支持。
@@ -81,6 +81,7 @@ GitHub Actions 提供基础检查。Apple 端测试与构建仅在 runner 的 Xc
 - [技术说明](docs/technical-notes.md)
 - [MVP 计划](docs/mvp-plan.md)
 - [路线图](docs/roadmap.md)
+- [0.1.5 发行说明](docs/releases/0.1.5.md)
 - [0.1.4 发行说明](docs/releases/0.1.4.md)
 - [0.1.3 发行说明](docs/releases/0.1.3.md)
 - [0.1.2 发行说明](docs/releases/0.1.2.md)
