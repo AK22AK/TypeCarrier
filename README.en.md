@@ -10,12 +10,12 @@ It uses your phone's existing keyboard and dictation tools, and handles local tr
 
 ## Current Status
 
-The current source version is **0.1.4 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
+The current source version is **0.1.5 Beta**, with iPhone and Android senders and a macOS menu bar receiver:
 
 - iPhone uses Multipeer Connectivity; Android uses local TCP with NSD / mDNS discovery and manual address connection.
 - iPhone discovers and connects to the Mac automatically; Android uses a code shown on the Mac for first-time pairing. Phones can connect to multiple Macs and select one send target. Mac accepts multiple phones and pastes their text through one arrival-order queue.
 - Plain send and send-with-Return are supported. Automatic paste needs macOS Accessibility permission; results depend on the current focus and target app.
-- iOS provides drafts, send history, resend, and undo/redo. Drafts are stored independently; send history can be retained by count or age. Mac provides receive history and a clipboard restoration toggle.
+- iOS provides drafts, send history, resend, and undo/redo. Drafts are stored independently; send history can be retained by count or age. Mac provides receive history (read first, edit on demand with explicit save) and a clipboard restoration toggle.
 - Connection state, self-checks, and diagnostic export are available. Foreground recovery and reconnect are implemented; reliability still needs device and network validation.
 
 No account or server is required. Requirements: iOS 26.0, macOS 26.0, or Android 8.0 or later. Cloud sync, internet relay, Windows and touchpad mode are not supported yet.
@@ -81,6 +81,7 @@ GitHub Actions perform baseline checks. Apple tests and builds run only when the
 - [Technical Notes](docs/technical-notes.md)
 - [MVP Plan](docs/mvp-plan.md)
 - [Roadmap](docs/roadmap.md)
+- [0.1.5 Release Notes](docs/releases/0.1.5.en.md)
 - [0.1.4 Release Notes](docs/releases/0.1.4.en.md)
 - [0.1.3 Release Notes](docs/releases/0.1.3.en.md)
 - [0.1.2 Release Notes](docs/releases/0.1.2.en.md)
