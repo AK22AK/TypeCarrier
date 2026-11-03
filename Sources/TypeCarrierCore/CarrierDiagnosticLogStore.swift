@@ -39,19 +39,42 @@ public final class CarrierDiagnosticLogStore {
         self.fileURL = fileURL
 
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = Self.timestampEncodingStrategy
         encoder.outputFormatting = [.sortedKeys]
         self.encoder = encoder
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        self.decoder = Self.makeDecoder()
 
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: fileURL.path) {
             _ = FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         }
+    }
+
+    // Millisecond timestamps let connection soak runs measure sub-second connects;
+    // entries written before this change have whole seconds and still decode.
+    private static let millisecondTimestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+    private static let timestampEncodingStrategy = JSONEncoder.DateEncodingStrategy.custom { date, encoder in
+        var container = encoder.singleValueContainer()
+        try container.encode(date.formatted(CarrierDiagnosticLogStore.millisecondTimestampStyle))
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let text = try container.decode(String.self)
+            if let date = try? Date(text, strategy: millisecondTimestampStyle) {
+                return date
+            }
+            if let date = try? Date(text, strategy: .iso8601) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO 8601 timestamp: \(text)")
+        }
+        return decoder
     }
 
     public static func defaultFileURL(fileName: String) throws -> URL {
@@ -99,9 +122,7 @@ public final class CarrierDiagnosticLogStore {
     }
 
     public static func recentEntries(fileURL: URL, limit: Int) throws -> [CarrierDiagnosticLogEntry] {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try recentEntries(fileURL: fileURL, limit: limit, decoder: decoder)
+        try recentEntries(fileURL: fileURL, limit: limit, decoder: makeDecoder())
     }
 
     private static func recentEntries(

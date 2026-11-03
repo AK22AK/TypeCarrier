@@ -73,6 +73,33 @@ final class CarrierDiagnosticExportTests: XCTestCase {
         XCTAssertEqual(entries.map(\.name), ["paste.command.posted", "advertiser.start"])
     }
 
+    func testDiagnosticLogKeepsMillisecondsAndReadsOlderWholeSecondEntries() throws {
+        let sourceURL = try temporaryFileURL(fileName: "mac-connection-events.jsonl")
+        try """
+        {"connectedPeers":[],"connectionState":"Advertising","discoveredPeers":[],"invitedPeers":[],"localPeerName":"Mac","logSessionID":"E6D1F731-0A9A-4025-8DF0-8E49E95EE7D3","message":"Starting receiver","name":"service.start","role":"receiver","serviceType":"typecarrier","timestamp":"2026-06-03T09:00:00Z"}
+
+        """.write(to: sourceURL, atomically: true, encoding: .utf8)
+        let store = try CarrierDiagnosticLogStore(fileURL: sourceURL)
+        let timestamp = Date(timeIntervalSince1970: 1_780_000_000.123)
+
+        try store.append(
+            event: CarrierDiagnosticEvent(
+                timestamp: timestamp,
+                name: "session.connected",
+                message: "Connected",
+                peerName: "iPhone",
+                connectionState: .connected("iPhone"),
+                connectedPeers: ["iPhone"]
+            ),
+            diagnostics: CarrierDiagnostics(role: "receiver", localPeerName: "Mac", serviceType: "typecarrier")
+        )
+
+        XCTAssertNotNil(try String(contentsOf: sourceURL, encoding: .utf8).range(of: #"T\d{2}:\d{2}:\d{2}\.\d{3}Z"#, options: .regularExpression))
+        let entries = try store.recentEntries(limit: 2)
+        XCTAssertEqual(entries.map(\.name), ["session.connected", "service.start"])
+        XCTAssertEqual(try XCTUnwrap(entries.first).timestamp.timeIntervalSince1970, 1_780_000_000.123, accuracy: 0.001)
+    }
+
     func testDiagnosticLogEntryCompactSummaryIncludesRouteAndConnectionState() throws {
         let entry = CarrierDiagnosticLogEntry(
             logSessionID: UUID(uuidString: "E6D1F731-0A9A-4025-8DF0-8E49E95EE7D3")!,
