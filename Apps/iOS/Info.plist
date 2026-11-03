@@ -25,6 +25,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_typecarrier._tcp</string>
+		<string>_typecarrier-v2._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。</string>

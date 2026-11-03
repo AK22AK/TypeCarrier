@@ -17,6 +17,7 @@
 		2280932E9B287A87DEE156CE /* TypeCarrierMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */; };
 		2306B2656B9CF782674EF173 /* CarrierDeliveryReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */; };
 		25D8564D6AD1C3C38ED8E5A9 /* CarrierRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */; };
+		2633E72B03F5CA78407D3DC4 /* CarrierV2Receiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C67E57F8F5D863227AC205 /* CarrierV2Receiver.swift */; };
 		26A4BF2022474F76DFEF01E0 /* MacUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */; };
 		26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */; };
 		2EF2D8B92E46BC7AAA0393E7 /* ForegroundConnectionRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED39EC731BE433107005630 /* ForegroundConnectionRecovery.swift */; };
@@ -68,6 +69,7 @@
 		9F3108DE2D4B957BF6FC03A9 /* CarrierV2SessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36062541E3D434B4FE393752 /* CarrierV2SessionTests.swift */; };
 		9FF5E28E4BE80DFFCB1A42BE /* PasteFailureGuidance.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */; };
 		A7C93C910750ABBFC2BC146C /* EditorTextReplacementPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2BAA2A12A5D6C428D87834 /* EditorTextReplacementPolicy.swift */; };
+		AF2DF42974DD4EFCCF71FCE3 /* CarrierV2PairingSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9D57B83ADCF216FE1164DD /* CarrierV2PairingSection.swift */; };
 		B1C2036907E336791A66DC4D /* TextInsertionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */; };
 		B55953D925503B7E4E58AEBF /* iOSUILocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */; };
 		B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */; };
@@ -181,6 +183,7 @@
 		36062541E3D434B4FE393752 /* CarrierV2SessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2SessionTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
 		3FDE61EFC232581E0D43F11A /* TypeCarrierMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TypeCarrierMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		47C67E57F8F5D863227AC205 /* CarrierV2Receiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2Receiver.swift; sourceTree = "<group>"; };
 		48C30BB74AE7F9EECB38B858 /* CarrierDiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDiagnosticLogStore.swift; sourceTree = "<group>"; };
 		4B884732280106D18ACEB44A /* DeviceNamePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNamePreference.swift; sourceTree = "<group>"; };
 		4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyMonitor.swift; sourceTree = "<group>"; };
@@ -191,6 +194,7 @@
 		57CD706CDE712B3914E65FEB /* CarrierPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierPayload.swift; sourceTree = "<group>"; };
 		57CF1BAA609CA124CE8EDC82 /* CarrierRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecord.swift; sourceTree = "<group>"; };
 		58A0A5ACC199A1A360856EAE /* AndroidBonjourAdvertisement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidBonjourAdvertisement.swift; sourceTree = "<group>"; };
+		5C9D57B83ADCF216FE1164DD /* CarrierV2PairingSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2PairingSection.swift; sourceTree = "<group>"; };
 		61558E86B02DFFB0EDEC64AA /* ComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerStore.swift; sourceTree = "<group>"; };
 		65AF15A17502B39B8EF6BCC0 /* PasteFailureGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteFailureGuidanceTests.swift; sourceTree = "<group>"; };
 		65C015B4EDD91BF5D039F699 /* ReceiverTargetSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverTargetSelection.swift; sourceTree = "<group>"; };
@@ -352,6 +356,7 @@
 				08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */,
 				2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */,
 				1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */,
+				47C67E57F8F5D863227AC205 /* CarrierV2Receiver.swift */,
 				4C11C4B65B4BB06F8B48A7B6 /* GlobalHotKeyMonitor.swift */,
 				6A5AA3611DB341E07B39CD93 /* PasteInjector.swift */,
 			);
@@ -457,6 +462,7 @@
 		A76D4DB0B1A2B9A860598E9A /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				5C9D57B83ADCF216FE1164DD /* CarrierV2PairingSection.swift */,
 				E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */,
 				E85E0134D26176B58210FB10 /* MacSettingsPages.swift */,
 				BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */,
@@ -665,6 +671,8 @@
 				6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */,
 				5FA6D2DA1B56F2BE0AA3C078 /* AndroidCarrierBridge.swift in Sources */,
 				94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */,
+				AF2DF42974DD4EFCCF71FCE3 /* CarrierV2PairingSection.swift in Sources */,
+				2633E72B03F5CA78407D3DC4 /* CarrierV2Receiver.swift in Sources */,
 				66F88CF541052FA030DEF6EE /* FunctionTestPage.swift in Sources */,
 				26D56C6B7135EE7DD6EAD029 /* GlobalHotKeyMonitor.swift in Sources */,
 				33187B483D7C9D3D0EFDF6C8 /* MacAppCoordinator.swift in Sources */,

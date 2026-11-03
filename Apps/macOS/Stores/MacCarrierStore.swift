@@ -25,6 +25,7 @@ final class MacCarrierStore: ObservableObject {
 
     @Published private(set) var carrierService: MultipeerCarrierService
     @Published private(set) var androidBridge: AndroidCarrierBridge
+    @Published private(set) var v2Receiver: CarrierV2Receiver
     let connectionDiagnosticLogFileURL: URL?
     private let userDefaults: UserDefaults
     private let displayNamePreference: DeviceNamePreference
@@ -34,6 +35,7 @@ final class MacCarrierStore: ObservableObject {
     private let permissionChecker = AccessibilityPermissionChecker()
     private var carrierServiceCancellable: AnyCancellable?
     private var androidBridgeCancellable: AnyCancellable?
+    private var v2ReceiverCancellable: AnyCancellable?
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -55,6 +57,10 @@ final class MacCarrierStore: ObservableObject {
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
         androidBridge = bridge
+        v2Receiver = CarrierV2Receiver(
+            displayName: initialReceiverDisplayName,
+            diagnosticLogFileURL: connectionDiagnosticLogFileURL
+        )
         carrierService = Self.makeCarrierService(
             displayName: initialReceiverDisplayName,
             receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: bridge.bonjourDiscoveryInfo),
@@ -73,6 +79,8 @@ final class MacCarrierStore: ObservableObject {
 
         bindCarrierService()
         bindAndroidBridge()
+        v2ReceiverCancellable = v2Receiver.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
         refreshAccessibilityStatus()
         start()
     }
@@ -104,7 +112,7 @@ final class MacCarrierStore: ObservableObject {
             appleConnectedDeviceNames: carrierService.connectedPeers.map { peer in
                 let hasDuplicateName = carrierService.connectedPeers.filter { $0.displayName == peer.displayName }.count > 1
                 return peer.displayName + (hasDuplicateName ? " · \(peer.id.suffix(8))" : "")
-            },
+            } + v2Receiver.connectedDeviceNames,
             androidConnectionState: androidEndpointConnectionState,
             androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
             sharedIssue: sharedReceiverIssue
@@ -119,6 +127,10 @@ final class MacCarrierStore: ObservableObject {
 
         if carrierService.connectionState.isConnected {
             return carrierService.connectionState
+        }
+
+        if let v2DeviceName = v2Receiver.connectedDeviceNames.first {
+            return .connected(v2DeviceName)
         }
 
         if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
@@ -159,6 +171,13 @@ final class MacCarrierStore: ObservableObject {
     func start() {
         startCarrierService()
         startAndroidBridge()
+        startV2Receiver()
+    }
+
+    private func startV2Receiver() {
+        v2Receiver.start { [weak self] envelope, deviceName, deviceID, reply in
+            self?.handle(envelope, from: deviceName, sourceDeviceID: deviceID, sendReceipt: reply)
+        }
     }
 
     private func startCarrierService() {
@@ -191,6 +210,7 @@ final class MacCarrierStore: ObservableObject {
         guard effectiveName != receiverDisplayName else { return }
         receiverDisplayName = effectiveName
         androidBridge.updateDisplayName(effectiveName)
+        v2Receiver.updateDisplayName(effectiveName)
         // Apple peer names are immutable: rebuild only that transport. Android
         // retains its authenticated sockets and publishes the new discovery name.
         rebuildReceiverService(rebuiltReason: "receiver.displayName.updated", restartsAndroidBridge: false)
@@ -215,6 +235,7 @@ final class MacCarrierStore: ObservableObject {
         startCarrierService()
 
         if restartsAndroidBridge {
+            v2Receiver.restart()
             androidBridge.restart { [weak self] envelope, deviceID, deviceName, reply in
                 self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
             }

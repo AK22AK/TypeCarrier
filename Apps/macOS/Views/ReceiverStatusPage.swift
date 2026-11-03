@@ -74,6 +74,7 @@ struct ReceiverStatusPage: View {
                     }
                 }
             }
+            CarrierV2PairingSection(receiver: store.v2Receiver)
             if presentation.canReceive {
                 VStack(alignment: .leading, spacing: 8) {
                     MacManagementGroup {
@@ -104,6 +105,7 @@ struct ReceiverStatusPage: View {
                         LabeledContent("服务标识", value: store.carrierService.diagnostics.serviceType)
                         LabeledContent("Apple 接收入口", value: store.carrierService.connectionState.localizedDisplayText)
                         LabeledContent("Android 接收入口", value: androidAvailability)
+                        LabeledContent("新连接入口", value: v2Availability)
                         LabeledContent("已发现设备", value: store.carrierService.diagnostics.discoveredPeers.joined(separator: "、"))
                         LabeledContent("连接中设备", value: store.carrierService.diagnostics.invitedPeers.joined(separator: "、"))
                         Text(store.androidBridge.manualConnectionHints).textSelection(.enabled).foregroundStyle(.secondary)
@@ -139,6 +141,14 @@ struct ReceiverStatusPage: View {
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+    }
+
+    private var v2Availability: String {
+        switch store.v2Receiver.state {
+        case .stopped: "未启动"
+        case .listening(let port): port.map { "监听中：\($0)" } ?? "监听中"
+        case .failed(let message): "失败：\(message)"
+        }
     }
 
     private var androidAvailability: String {

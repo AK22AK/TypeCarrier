@@ -60,6 +60,7 @@ targets:
         NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，接收附近手机发来的文本。
         NSBonjourServices:
           - _typecarrier._tcp
+          - _typecarrier-v2._tcp
     entitlements:
       path: Apps/macOS/TypeCarrierMac.entitlements
       properties:
@@ -97,6 +98,7 @@ targets:
         NSLocalNetworkUsageDescription: TypeCarrier 需要使用本地网络，将文本发送到附近的 Mac。
         NSBonjourServices:
           - _typecarrier._tcp
+          - _typecarrier-v2._tcp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).ios
