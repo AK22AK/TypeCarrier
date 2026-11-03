@@ -248,7 +248,7 @@ final class CarrierV2Receiver: ObservableObject {
         var txt = NWTXTRecord()
         txt[Self.deviceIDTXTKey] = deviceID
         txt["proto"] = String(CarrierProtocolV2.version)
-        return NWListener.Service(name: CarrierDeviceIdentity.multipeerDisplayName(displayName), type: Self.serviceType, txtRecord: txt)
+        return NWListener.Service(name: CarrierDeviceIdentity.serviceInstanceName(displayName), type: Self.serviceType, txtRecord: txt)
     }
 
     // MARK: - Connections

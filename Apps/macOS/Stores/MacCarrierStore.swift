@@ -23,7 +23,6 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var customReceiverDisplayName: String
     @Published private(set) var receiverDisplayName: String
 
-    @Published private(set) var carrierService: MultipeerCarrierService
     @Published private(set) var androidBridge: AndroidCarrierBridge
     @Published private(set) var v2Receiver: CarrierV2Receiver
     let connectionDiagnosticLogFileURL: URL?
@@ -33,7 +32,7 @@ final class MacCarrierStore: ObservableObject {
     private let pasteInjector = PasteInjector()
     private let pasteQueue = CarrierPasteQueue()
     private let permissionChecker = AccessibilityPermissionChecker()
-    private var carrierServiceCancellable: AnyCancellable?
+    private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var androidBridgeCancellable: AnyCancellable?
     private var v2ReceiverCancellable: AnyCancellable?
 
@@ -61,11 +60,7 @@ final class MacCarrierStore: ObservableObject {
             displayName: initialReceiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
         )
-        carrierService = Self.makeCarrierService(
-            displayName: initialReceiverDisplayName,
-            receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: bridge.bonjourDiscoveryInfo),
-            diagnosticLogFileURL: connectionDiagnosticLogFileURL
-        )
+        diagnosticLogStore = connectionDiagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
         do {
             recordStore = try CarrierRecordStore(
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
@@ -77,7 +72,6 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
-        bindCarrierService()
         bindAndroidBridge()
         v2ReceiverCancellable = v2Receiver.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -86,33 +80,25 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var connectionState: ConnectionState {
-        carrierService.connectionState
+        appleConnectionState
     }
 
-    private static var appVariant: String {
-#if DEBUG
-        "debug"
-#else
-        "release"
-#endif
-    }
-
-    private static func receiverDiscoveryInfoExtras(androidDiscoveryInfo: [String: String]) -> [String: String] {
-        var info = androidDiscoveryInfo
-        if let bundleIdentifier = Bundle.main.bundleIdentifier, !bundleIdentifier.isEmpty {
-            info[CarrierReceiverDiscoveryInfo.appBundleIDKey] = bundleIdentifier
+    /// The paired-device (v2) receiver, in the shape the status summary expects.
+    private var appleConnectionState: ConnectionState {
+        if let name = v2Receiver.connectedDeviceNames.first {
+            return .connected(name)
         }
-        info[CarrierReceiverDiscoveryInfo.appVariantKey] = appVariant
-        return info
+        switch v2Receiver.state {
+        case .stopped: return .idle
+        case .listening: return .advertising
+        case .failed(let message): return .failed(message)
+        }
     }
 
     var receiverStatusSummary: ReceiverStatusSummary {
         ReceiverStatusSummary(
-            appleConnectionState: carrierService.connectionState,
-            appleConnectedDeviceNames: carrierService.connectedPeers.map { peer in
-                let hasDuplicateName = carrierService.connectedPeers.filter { $0.displayName == peer.displayName }.count > 1
-                return peer.displayName + (hasDuplicateName ? " · \(peer.id.suffix(8))" : "")
-            } + v2Receiver.connectedDeviceNames,
+            appleConnectionState: appleConnectionState,
+            appleConnectedDeviceNames: v2Receiver.connectedDeviceNames,
             androidConnectionState: androidEndpointConnectionState,
             androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
             sharedIssue: sharedReceiverIssue
@@ -125,23 +111,19 @@ final class MacCarrierStore: ObservableObject {
             return .connected("\(connectedDeviceCount) 台设备")
         }
 
-        if carrierService.connectionState.isConnected {
-            return carrierService.connectionState
-        }
-
-        if let v2DeviceName = v2Receiver.connectedDeviceNames.first {
-            return .connected(v2DeviceName)
+        if appleConnectionState.isConnected {
+            return appleConnectionState
         }
 
         if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
             return .connected(androidDeviceName)
         }
 
-        if carrierService.connectionState.isFailed, androidEndpointConnectionState == .listening {
+        if appleConnectionState.isFailed, androidEndpointConnectionState == .listening {
             return .advertising
         }
 
-        return carrierService.connectionState
+        return appleConnectionState
     }
 
     var receiverConnectedDeviceNames: [String] {
@@ -169,7 +151,6 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func start() {
-        startCarrierService()
         startAndroidBridge()
         startV2Receiver()
     }
@@ -177,16 +158,6 @@ final class MacCarrierStore: ObservableObject {
     private func startV2Receiver() {
         v2Receiver.start { [weak self] envelope, deviceName, deviceID, reply in
             self?.handle(envelope, from: deviceName, sourceDeviceID: deviceID, sendReceipt: reply)
-        }
-    }
-
-    private func startCarrierService() {
-        carrierService.start { [weak self] envelope, peerID in
-            guard let self else { return }
-            let source = self.carrierService.peerIdentity(for: peerID)
-            self.handle(envelope, from: source.displayName, sourceDeviceID: source.id) { receipt in
-                try? self.carrierService.send(receipt, to: source.id)
-            }
         }
     }
 
@@ -211,42 +182,15 @@ final class MacCarrierStore: ObservableObject {
         receiverDisplayName = effectiveName
         androidBridge.updateDisplayName(effectiveName)
         v2Receiver.updateDisplayName(effectiveName)
-        // Apple peer names are immutable: rebuild only that transport. Android
-        // retains its authenticated sockets and publishes the new discovery name.
-        rebuildReceiverService(rebuiltReason: "receiver.displayName.updated", restartsAndroidBridge: false)
+        recordDiagnosticMarker("receiver.displayName.updated", message: "Updated the advertised receiver name.")
     }
 
     func restart() {
-        rebuildReceiverService(
-            rebuiltReason: "receiver.restart.rebuilt",
-            restartsAndroidBridge: true
-        )
-    }
-
-    private func rebuildReceiverService(rebuiltReason: String, restartsAndroidBridge: Bool) {
-        carrierService.stop()
-        carrierServiceCancellable = nil
-        carrierService = Self.makeCarrierService(
-            displayName: receiverDisplayName,
-            receiverDiscoveryInfoExtras: Self.receiverDiscoveryInfoExtras(androidDiscoveryInfo: androidBridge.bonjourDiscoveryInfo),
-            diagnosticLogFileURL: connectionDiagnosticLogFileURL
-        )
-        bindCarrierService()
-        startCarrierService()
-
-        if restartsAndroidBridge {
-            v2Receiver.restart()
-            androidBridge.restart { [weak self] envelope, deviceID, deviceName, reply in
-                self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
-            }
+        v2Receiver.restart()
+        androidBridge.restart { [weak self] envelope, deviceID, deviceName, reply in
+            self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
         }
-
-        carrierService.recordDiagnosticMarker(
-            rebuiltReason,
-            message: restartsAndroidBridge
-                ? "Created fresh Apple and Android receiver services after restart."
-                : "Created a fresh Apple receiver service after Multipeer session invalidation."
-        )
+        recordDiagnosticMarker("receiver.restart.rebuilt", message: "Restarted the paired-device and Android receivers.")
     }
 
     func restartFromUserAction() {
@@ -265,7 +209,26 @@ final class MacCarrierStore: ObservableObject {
     }
 
     func recordLifecycleMarker(_ name: String, message: String) {
-        carrierService.recordDiagnosticMarker(name, message: message)
+        recordDiagnosticMarker(name, message: message)
+    }
+
+    private func recordDiagnosticMarker(_ name: String, message: String, peerName: String? = nil) {
+        let state = receiverDisplayConnectionState
+        let diagnostics = CarrierDiagnostics(
+            role: "receiver",
+            localPeerName: receiverDisplayName,
+            serviceType: CarrierV2Receiver.serviceType,
+            connectionState: state,
+            connectedPeers: receiverConnectedDeviceNames
+        )
+        let event = CarrierDiagnosticEvent(
+            name: name,
+            message: message,
+            peerName: peerName,
+            connectionState: state,
+            connectedPeers: receiverConnectedDeviceNames
+        )
+        try? diagnosticLogStore?.append(event: event, diagnostics: diagnostics)
     }
 
     func exportConnectionDiagnosticsToFinder(now: Date = Date()) {
@@ -284,7 +247,7 @@ final class MacCarrierStore: ObservableObject {
             throw CarrierDiagnosticExportError.missingLogFile
         }
 
-        carrierService.recordDiagnosticMarker(
+        recordDiagnosticMarker(
             "diagnostic.exportPrepared",
             message: "Prepared timestamped diagnostic export."
         )
@@ -313,7 +276,7 @@ final class MacCarrierStore: ObservableObject {
 
     func runManualDiagnostics() {
         refreshAccessibilityStatus()
-        carrierService.recordDiagnosticMarker(
+        recordDiagnosticMarker(
             "diagnostic.manualCheck",
             message: "Manual diagnostics completed. accessibilityTrusted=\(accessibilityTrusted)."
         )
@@ -343,7 +306,7 @@ final class MacCarrierStore: ObservableObject {
             process.waitUntilExit()
         } catch {
             lastAccessibilityResetMessage = "重置辅助功能授权失败：\(error.localizedDescription)"
-            carrierService.recordDiagnosticMarker(
+            recordDiagnosticMarker(
                 "accessibility.reset.failed",
                 message: "Failed to reset Accessibility authorization for \(bundleIdentifier): \(error.localizedDescription)"
             )
@@ -353,14 +316,14 @@ final class MacCarrierStore: ObservableObject {
         if process.terminationStatus == 0 {
             accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
             lastAccessibilityResetMessage = "已重置 \(bundleIdentifier) 的辅助功能授权。列表里找不到 TypeCarrier 时，用 + 手动添加当前 App。"
-            carrierService.recordDiagnosticMarker(
+            recordDiagnosticMarker(
                 "accessibility.reset.succeeded",
                 message: "Reset Accessibility authorization for \(bundleIdentifier)."
             )
             permissionChecker.openAccessibilitySettings()
         } else {
             lastAccessibilityResetMessage = "重置辅助功能授权失败：tccutil 退出码 \(process.terminationStatus)。"
-            carrierService.recordDiagnosticMarker(
+            recordDiagnosticMarker(
                 "accessibility.reset.failed",
                 message: "tccutil reset Accessibility \(bundleIdentifier) exited with \(process.terminationStatus)."
             )
@@ -380,37 +343,8 @@ final class MacCarrierStore: ObservableObject {
     }
 
     private func restart(reason: String, message: String) {
-        carrierService.recordDiagnosticMarker(reason, message: message)
+        recordDiagnosticMarker(reason, message: message)
         restart()
-    }
-
-    private func restartAfterReceiverSessionInvalidated(peerName: String, previousState: ConnectionState) {
-        carrierService.recordDiagnosticMarker(
-            "receiver.restart.sessionInvalidated",
-            message: "Automatically rebuilding receiver after \(peerName) changed from \(previousState.displayText) to not connected."
-        )
-        rebuildReceiverService(
-            rebuiltReason: "receiver.restart.appleSessionRebuilt",
-            restartsAndroidBridge: false
-        )
-    }
-
-    private static func makeCarrierService(
-        displayName: String,
-        receiverDiscoveryInfoExtras: [String: String],
-        diagnosticLogFileURL: URL?
-    ) -> MultipeerCarrierService {
-        MultipeerCarrierService(
-            role: .receiver,
-            displayName: displayName,
-            receiverDiscoveryInfoExtras: receiverDiscoveryInfoExtras,
-            diagnosticLogFileURL: diagnosticLogFileURL
-        )
-    }
-
-    private func bindCarrierService() {
-        carrierServiceCancellable = carrierService.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     private func bindAndroidBridge() {
@@ -498,7 +432,7 @@ final class MacCarrierStore: ObservableObject {
                     try recordStore.upsert(record)
                     self.syncRecords()
                 } catch {
-                    self.carrierService.recordDiagnosticMarker("record.pasteStatusUpdate.failed", message: error.localizedDescription)
+                    self.recordDiagnosticMarker("record.pasteStatusUpdate.failed", message: error.localizedDescription)
                 }
             }
             completion?(result)
@@ -558,7 +492,7 @@ final class MacCarrierStore: ObservableObject {
         lastPayloadText = payload.text
         let now = Date()
         let sourceDeviceName = peerDisplayName
-        carrierService.recordDiagnosticMarker(
+        recordDiagnosticMarker(
             "receiver.payload.received",
             message: "Received text payload \(payload.id) from \(sourceDeviceName).",
             peerName: sourceDeviceName
@@ -600,7 +534,7 @@ final class MacCarrierStore: ObservableObject {
     }
 
     private func recordPasteDiagnostic(_ result: PasteInjectionResult, peerName: String? = nil) {
-        carrierService.recordDiagnosticMarker(
+        recordDiagnosticMarker(
             result.diagnosticEventName,
             message: result.fullDetail,
             peerName: peerName

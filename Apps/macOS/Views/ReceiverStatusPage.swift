@@ -80,7 +80,7 @@ struct ReceiverStatusPage: View {
                     MacManagementGroup {
                         DisclosureGroup("连接新设备", isExpanded: $showsConnectionGuide) {
                             VStack(alignment: .leading, spacing: 0) {
-                                guidanceRow("iPhone", symbol: "iphone", detail: "打开手机上的 TypeCarrier，自动发现这台 Mac。")
+                                guidanceRow("iPhone", symbol: "iphone", detail: "首次连接时，点上方“开始配对”，在手机上选择这台 Mac 并核对数字。")
                                 Divider()
                                 guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，在手机输入配对码。", pairingCode: store.androidBridge.pairingCode)
                             }
@@ -102,14 +102,12 @@ struct ReceiverStatusPage: View {
                 DisclosureGroup(isExpanded: $showsAdvancedInfo) {
                     VStack(alignment: .leading, spacing: 12) {
                         LabeledContent("本机名称", value: store.receiverDisplayName)
-                        LabeledContent("服务标识", value: store.carrierService.diagnostics.serviceType)
-                        LabeledContent("Apple 接收入口", value: store.carrierService.connectionState.localizedDisplayText)
+                        LabeledContent("服务标识", value: CarrierV2Receiver.serviceType)
+                        LabeledContent("iPhone 接收入口", value: v2Availability)
                         LabeledContent("Android 接收入口", value: androidAvailability)
-                        LabeledContent("新连接入口", value: v2Availability)
-                        LabeledContent("已发现设备", value: store.carrierService.diagnostics.discoveredPeers.joined(separator: "、"))
-                        LabeledContent("连接中设备", value: store.carrierService.diagnostics.invitedPeers.joined(separator: "、"))
+                        LabeledContent("已配对设备", value: store.v2Receiver.pairedDevices.map(\.deviceName).joined(separator: "、"))
                         Text(store.androidBridge.manualConnectionHints).textSelection(.enabled).foregroundStyle(.secondary)
-                        if let error = store.carrierService.diagnostics.lastErrorMessage { Text(error).textSelection(.enabled) }
+                        if let error = store.v2Receiver.lastErrorMessage { Text(error).textSelection(.enabled) }
                         if let error = store.androidBridge.lastErrorMessage { Text(error).textSelection(.enabled) }
                         Button("重启接收器") { store.restartFromUserAction() }
                         Text("会中断当前连接，手机可能需要重新连接。")

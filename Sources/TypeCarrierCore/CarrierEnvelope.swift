@@ -19,9 +19,9 @@ public struct CarrierDeviceIdentity: Codable, Equatable, Sendable {
         return systemDisplayName.isEmpty ? fallbackName : systemDisplayName
     }
 
-    /// MCPeerID requires a nonempty name of at most 63 UTF-8 bytes.
+    /// A DNS-SD (Bonjour) instance name must be nonempty and at most 63 UTF-8 bytes.
     /// This transport alias never replaces the stored or envelope display name.
-    public static func multipeerDisplayName(_ name: String) -> String {
+    public static func serviceInstanceName(_ name: String) -> String {
         let full = normalizedDisplayName(name)
         var alias = ""
         for character in full {

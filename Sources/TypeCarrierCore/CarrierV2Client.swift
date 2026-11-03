@@ -17,7 +17,7 @@ public enum CarrierV2PairingState: Equatable, Sendable {
 /// The sending side of protocol v2. It keeps one session to each paired receiver it can reach:
 /// on start it dials the receiver's last known address right away and browses Bonjour in parallel,
 /// then reconnects with backoff whenever a session drops while running. Its surface mirrors what the
-/// iOS composer used from `MultipeerCarrierService`, so the composer only swaps the type.
+/// iOS composer used from the earlier Multipeer sender, so the composer only swapped the type.
 @MainActor
 public final class CarrierV2Client: ObservableObject {
     public typealias EnvelopeHandler = (CarrierEnvelope, CarrierPeer) -> Void

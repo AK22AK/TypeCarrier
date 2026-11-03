@@ -95,6 +95,15 @@ final class AndroidCarrierBridge: ObservableObject {
 
     func updateDisplayName(_ name: String) {
         displayName = name
+        listener?.service = bonjourService
+    }
+
+    private var bonjourService: NWListener.Service {
+        NWListener.Service(
+            name: CarrierDeviceIdentity.serviceInstanceName(displayName),
+            type: Self.serviceType,
+            txtRecord: NWTXTRecord(bonjourDiscoveryInfo)
+        )
     }
 
     func start(onEnvelope: @escaping EnvelopeHandler) {
@@ -119,9 +128,11 @@ final class AndroidCarrierBridge: ObservableObject {
 
         do {
             let listener = try NWListener(using: .tcp, on: Self.defaultPort)
+            // The listener advertises itself; Android resolves it and reads the port from the TXT record.
+            listener.service = bonjourService
             recordDiagnosticEvent(
-                "androidBridge.bonjour.publish.delegated",
-                message: "Android discovery metadata is advertised by the Apple receiver over \(Self.serviceType)."
+                "androidBridge.bonjour.publish.start",
+                message: "Advertising Android discovery metadata over \(Self.serviceType)."
             )
             listener.stateUpdateHandler = { [weak self, weak listener] state in
                 guard let listener else {
