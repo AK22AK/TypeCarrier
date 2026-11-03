@@ -215,7 +215,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     }
 
     private let role: Role
-    private let peerID: MCPeerID
+    private var peerID: MCPeerID
     private let searchTimeout: Duration
     private let connectionTimeout: Duration
     private let connectionRetryDelay: Duration
@@ -223,7 +223,9 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
     private let maxConnectionAttempts: Int
     private let discoveryInviteDelay: Duration
     private let receiverDiscoveryInfoExtras: [String: String]
-    private let receiverInstanceStartedAt: String
+    private var receiverInstanceStartedAt: String
+    private let receiverTimeoutsBeforeAdvertiserRebuild: Int
+    private var consecutiveReceiverTimeouts = 0
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
     private var peerSessions: [String: MCSession] = [:]
     private var peerStates: [String: MCSessionState] = [:]
@@ -261,6 +263,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         maxConnectionAttempts: Int = 3,
         discoveryInviteDelay: Duration = .milliseconds(250),
         receiverDiscoveryInfoExtras: [String: String] = [:],
+        receiverTimeoutsBeforeAdvertiserRebuild: Int = 2,
         diagnosticLogFileURL: URL? = nil
     ) {
         self.role = role
@@ -272,6 +275,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         self.maxConnectionAttempts = max(1, maxConnectionAttempts)
         self.discoveryInviteDelay = discoveryInviteDelay
         self.receiverDiscoveryInfoExtras = receiverDiscoveryInfoExtras
+        self.receiverTimeoutsBeforeAdvertiserRebuild = max(1, receiverTimeoutsBeforeAdvertiserRebuild)
         receiverInstanceStartedAt = String(Date().timeIntervalSince1970)
         diagnosticLogStore = diagnosticLogFileURL.flatMap { try? CarrierDiagnosticLogStore(fileURL: $0) }
         localDisplayName = CarrierDeviceIdentity.preferredDisplayName(
@@ -325,6 +329,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         peerDiscoveryFreshness = [:]
         invitedPeerIDs = []
         connectionAttemptCounts = [:]
+        consecutiveReceiverTimeouts = 0
         peerIdentityKeysByObject = [:]
         peerDisplayNamesByIdentity = [:]
         recordDiagnosticEvent("service.stop", message: "Stopped \(roleName)")
@@ -414,6 +419,20 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         advertiser.startAdvertisingPeer()
         recordDiagnosticEvent("advertiser.start", message: "Advertising \(Self.serviceType)")
         logger.info("Started advertising peer")
+    }
+
+    /// A long-running advertiser can stop delivering remote invitations after repeated failed
+    /// handshakes. Advertise under a fresh peer ID and instance stamp so senders prefer the new
+    /// record; sessions that are already connected keep running.
+    private func rebuildReceiverAdvertiser(reason: String) {
+        guard case .receiver = role else { return }
+        consecutiveReceiverTimeouts = 0
+        peerID = MCPeerID(displayName: peerID.displayName)
+        receiverInstanceStartedAt = String(Date().timeIntervalSince1970)
+        startAdvertising()
+        refreshAggregateState()
+        recordDiagnosticEvent("advertiser.rebuilt", message: "Rebuilt advertiser after \(reason)")
+        logger.info("Rebuilt advertiser reason=\(reason, privacy: .public)")
     }
 
     private func stopBrowsing() {
@@ -650,6 +669,7 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
             cancelConnectionTimeout(for: identity.key)
             invitedPeerIDs.remove(identity.key)
             connectionAttemptCounts[identity.key] = nil
+            consecutiveReceiverTimeouts = 0
             lastErrorMessage = nil
             refreshAggregateState()
             cancelSearchTimeout()
@@ -685,10 +705,13 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         remember(identity, for: peerID)
         knownPeerIDs[identity.key] = peerID
         peerRoles[identity.key] = .sender
-        if let existing = peerSessions[identity.key] {
-            recordDiagnosticEvent("advertiser.invitation.acceptedExistingSession", message: "Accepted repeated invitation", peerName: peerID.displayName)
-            reply.handler(true, existing)
-            return
+        // Multipeer can redeliver an invitation, and a restarted sender re-invites with the
+        // same peer ID. Handing back the half-finished session never completes the handshake,
+        // so every invitation gets a fresh session.
+        if peerSessions[identity.key] != nil {
+            cancelConnectionTimeout(for: identity.key)
+            dropSession(for: identity.key)
+            recordDiagnosticEvent("advertiser.invitation.replacedPendingSession", message: "Replaced previous session for repeated invitation", peerName: peerID.displayName)
         }
         let session = Self.makeSession(peerID: self.peerID)
         session.delegate = self
@@ -857,6 +880,10 @@ public final class MultipeerCarrierService: NSObject, ObservableObject {
         refreshAggregateState()
         if case .receiver = role {
             recordDiagnosticEvent("connection.timeout", message: "Receiver connection timed out for \(identity.diagnosticSummary)", peerName: identity.displayName)
+            consecutiveReceiverTimeouts += 1
+            if consecutiveReceiverTimeouts >= receiverTimeoutsBeforeAdvertiserRebuild {
+                rebuildReceiverAdvertiser(reason: "\(consecutiveReceiverTimeouts) consecutive receiver handshake timeouts")
+            }
             return
         }
         recordDiagnosticEvent("session.resetForRetry", message: "Reset isolated peer session", peerName: identity.displayName)

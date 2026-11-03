@@ -648,7 +648,7 @@ final class MultipeerCarrierServiceTests: XCTestCase {
         XCTAssertTrue(service.diagnostics.events.contains { $0.name == "browser.ignoredStaleCallback" && $0.peerName == "MacBook Pro" })
     }
 
-    func testReceiverReusesSessionForRepeatedInvitationFromSamePeer() async {
+    func testReceiverReplacesPendingSessionForRepeatedInvitationFromSamePeer() async {
         let service = MultipeerCarrierService(role: .receiver, displayName: "MacBook Pro")
         let peerID = MCPeerID(displayName: "iPhone")
         var firstSession: MCSession?
@@ -664,12 +664,52 @@ final class MultipeerCarrierServiceTests: XCTestCase {
 
         XCTAssertNotNil(firstSession)
         XCTAssertNotNil(secondSession)
-        XCTAssertTrue(firstSession === secondSession)
-        XCTAssertEqual(
-            service.diagnostics.events.filter { $0.name == "advertiser.sessionResetForInvitation" && $0.peerName == "iPhone" }.count,
-            1
-        )
-        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.acceptedExistingSession" && $0.peerName == "iPhone" })
+        XCTAssertFalse(firstSession === secondSession)
+        XCTAssertTrue(service.sessionForTesting(peerID: peerID) === secondSession)
+        XCTAssertNil(firstSession?.delegate)
+        XCTAssertTrue(service.diagnostics.events.contains { $0.name == "advertiser.invitation.replacedPendingSession" && $0.peerName == "iPhone" })
+    }
+
+    func testReceiverRebuildsAdvertiserAfterConsecutiveHandshakeTimeouts() async throws {
+        let mac = MultipeerCarrierService(role: .receiver, displayName: "Mac", connectionTimeout: .milliseconds(20))
+        defer { mac.stop() }
+        mac.start()
+        let phone = MCPeerID(displayName: "Phone")
+        let originalStamp = mac.discoveryInfoForTesting?[CarrierReceiverDiscoveryInfo.instanceStartedAtKey]
+
+        for _ in 0..<2 {
+            mac.simulateInvitationForTesting(from: phone) { _, _ in }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while mac.sessionForTesting(peerID: phone) != nil, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+
+        XCTAssertEqual(mac.diagnostics.events.filter { $0.name == "advertiser.rebuilt" }.count, 1)
+        XCTAssertNotEqual(mac.discoveryInfoForTesting?[CarrierReceiverDiscoveryInfo.instanceStartedAtKey], originalStamp)
+        XCTAssertEqual(mac.connectionState, .advertising)
+    }
+
+    func testReceiverSuccessfulConnectionResetsAdvertiserRebuildCount() async throws {
+        let mac = MultipeerCarrierService(role: .receiver, displayName: "Mac", connectionTimeout: .milliseconds(20))
+        defer { mac.stop() }
+        mac.start()
+        let stuck = MCPeerID(displayName: "Stuck Phone")
+        let online = MCPeerID(displayName: "Online Phone")
+
+        mac.simulateInvitationForTesting(from: stuck) { _, _ in }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while mac.sessionForTesting(peerID: stuck) != nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        mac.simulateSessionStateForTesting(.connected, peerID: online)
+        mac.simulateInvitationForTesting(from: stuck) { _, _ in }
+        while mac.sessionForTesting(peerID: stuck) != nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(mac.diagnostics.events.contains { $0.name == "advertiser.rebuilt" })
+        XCTAssertNotNil(mac.sessionForTesting(peerID: online))
     }
 
     func testReceiverAcceptsInvitationFromDifferentPeerWhileConnected() async {
