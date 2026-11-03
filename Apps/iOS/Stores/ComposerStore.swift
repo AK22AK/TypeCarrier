@@ -64,7 +64,7 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var historyRetentionErrorMessage: String?
     @Published private(set) var customSenderDisplayName: String
 
-    @Published private(set) var carrierService: MultipeerCarrierService
+    @Published private(set) var carrierService: CarrierV2Client
     let debugDiagnosticLogFileURL: URL?
     private let recordStore: ComposerRecordStore?
     private let systemDeviceName: String
@@ -132,6 +132,14 @@ final class ComposerStore: ObservableObject {
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.handleAppDidBecomeActive()
+                }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleAppWillEnterForeground()
                 }
             }
             .store(in: &cancellables)
@@ -301,7 +309,7 @@ final class ComposerStore: ObservableObject {
 
         hasStarted = true
         carrierService.start { [weak self] envelope, peer in
-            self?.handle(envelope, sourceID: self?.carrierService.peerIdentity(for: peer).id)
+            self?.handle(envelope, sourceID: peer.id)
         }
     }
 
@@ -347,9 +355,8 @@ final class ComposerStore: ObservableObject {
         displayName: String,
         deviceID: String,
         diagnosticLogFileURL: URL?
-    ) -> MultipeerCarrierService {
-        MultipeerCarrierService(
-            role: .sender,
+    ) -> CarrierV2Client {
+        CarrierV2Client(
             displayName: displayName,
             deviceID: deviceID,
             diagnosticLogFileURL: diagnosticLogFileURL
@@ -464,6 +471,19 @@ final class ComposerStore: ObservableObject {
             try? await Task.sleep(nanoseconds: nanoseconds)
             self?.disconnectAfterBackgroundGrace()
         }
+    }
+
+    /// Dial as soon as the app starts coming back rather than after it finishes activating; the
+    /// connect then overlaps the system's foreground transition. didBecomeActive still runs the
+    /// usual recovery decision and finds the sender already started.
+    private func handleAppWillEnterForeground() {
+        cancelBackgroundStop()
+        guard !hasStarted, sendState != .sending else { return }
+        start()
+        carrierService.recordDiagnosticMarker(
+            "app.earlyForegroundStart",
+            message: "Started connecting on willEnterForeground."
+        )
     }
 
     private func handleAppDidBecomeActive() {

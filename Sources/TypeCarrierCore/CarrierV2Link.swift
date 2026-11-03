@@ -25,7 +25,8 @@ public final class CarrierV2Link {
     public private(set) var peer: CarrierV2Peer?
     public var endpoint: NWEndpoint { connection.endpoint }
 
-    private let onEvent: (CarrierV2Link, Event) -> Void
+    /// Replaceable so a session that finished pairing can be handed to the code that owns live sessions.
+    public var onEvent: (CarrierV2Link, Event) -> Void
     private var deadlineTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
     private var isFinished = false

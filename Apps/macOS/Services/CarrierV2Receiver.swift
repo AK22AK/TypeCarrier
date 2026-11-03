@@ -50,6 +50,8 @@ final class CarrierV2Receiver: ObservableObject {
     private var pairingCloseTask: Task<Void, Never>?
     private var restartTask: Task<Void, Never>?
     private var usesFallbackPort = false
+    /// Held while listening so App Nap does not delay accepting a phone's connection.
+    private var appNapActivity: NSObjectProtocol?
 
     init(
         displayName: String,
@@ -78,8 +80,25 @@ final class CarrierV2Receiver: ObservableObject {
             fail("无法读取钥匙串中的设备密钥：\(error.localizedDescription)")
             return
         }
+        if appNapActivity == nil {
+            appNapActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiatedAllowingIdleSystemSleep, .latencyCritical],
+                reason: "Receiving text from paired devices"
+            )
+        }
         startListener()
+#if DEBUG
+        if Self.autoPairsForTesting { openPairing() }
+#endif
     }
+
+#if DEBUG
+    /// Debug builds launched with TYPECARRIER_V2_AUTOPAIR=1 open pairing and accept the first
+    /// code without a click, so simulator runs and soak scripts can pair unattended.
+    private static var autoPairsForTesting: Bool {
+        ProcessInfo.processInfo.environment["TYPECARRIER_V2_AUTOPAIR"] == "1"
+    }
+#endif
 
     func stop() {
         restartTask?.cancel()
@@ -91,6 +110,10 @@ final class CarrierV2Receiver: ObservableObject {
         closePairing()
         updateConnectedDevices()
         state = .stopped
+        if let appNapActivity {
+            ProcessInfo.processInfo.endActivity(appNapActivity)
+            self.appNapActivity = nil
+        }
         record("v2.listener.stop", message: "Stopped v2 receiver.")
     }
 
@@ -260,6 +283,9 @@ final class CarrierV2Receiver: ObservableObject {
         case .pairingCodeReady(let code, let peer):
             pendingPairing = PendingPairing(id: id, code: code, deviceName: peer.info.deviceName, platform: peer.hello.platform)
             record("v2.pairing.codeShown", message: "Waiting for the person to compare codes.", peerName: peer.info.deviceName)
+#if DEBUG
+            if Self.autoPairsForTesting { confirmPendingPairing() }
+#endif
         case .established(let peer):
             if pendingPairing?.id == id {
                 try? trustStore.pair(CarrierV2PairedDevice(

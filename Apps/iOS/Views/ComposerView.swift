@@ -15,7 +15,7 @@ struct ComposerView: View {
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
     private enum Route: Hashable {
-        case history, settings, about, debugFeatures
+        case history, settings, about, debugFeatures, macs
     }
 
     @State private var navigationPath: [Route] = []
@@ -40,6 +40,7 @@ struct ComposerView: View {
 
                 VStack(spacing: 18) {
                     header
+                    pairingPrompt
                     connectionFailureNotice
                     editor
                     footer
@@ -60,6 +61,8 @@ struct ComposerView: View {
                     AboutView()
                 case .debugFeatures:
                     DebugFeaturesView(store: store)
+                case .macs:
+                    MacPairingView(client: store.carrierService)
                 }
             }
             // 首页一直保留系统导航栏（标题为空、inline），不随路由隐藏/显示，
@@ -245,6 +248,12 @@ struct ComposerView: View {
 
         Menu {
             Button {
+                open(.macs)
+            } label: {
+                Label("Mac 设备", systemImage: "desktopcomputer")
+            }
+
+            Button {
                 open(.settings)
             } label: {
                 Label("设置", systemImage: "gearshape")
@@ -275,6 +284,40 @@ struct ComposerView: View {
             return
         }
         navigationPath = [route]
+    }
+
+    /// Shown until the first Mac is paired; afterwards connections happen on their own.
+    @ViewBuilder
+    private var pairingPrompt: some View {
+        if store.carrierService.pairedReceivers.isEmpty {
+            Button {
+                open(.macs)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.footnote.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("还没有配对 Mac")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("首次使用需要和 Mac 核对一次 6 位数字")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular, in: .rect(cornerRadius: 18))
+            .accessibilityIdentifier("pairMacPrompt")
+        }
     }
 
     @ViewBuilder
