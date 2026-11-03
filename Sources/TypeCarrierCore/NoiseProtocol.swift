@@ -213,6 +213,9 @@ public struct NoiseHandshakeState {
 
     public var handshakeHash: Data { symmetric.handshakeHash }
 
+    /// Known up front for an IK initiator, otherwise once the handshake message carrying it is read.
+    public var remoteStaticKey: Curve25519.KeyAgreement.PublicKey? { remoteStatic }
+
     public mutating func writeMessage(payload: Data = Data()) throws -> Data {
         guard !isComplete else { throw NoiseError.handshakeAlreadyComplete }
         guard isMyTurnToWrite else { throw NoiseError.notYourTurn }
