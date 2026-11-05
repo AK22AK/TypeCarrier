@@ -15,7 +15,11 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var lastPayloadText = ""
     @Published private(set) var lastPasteResult = PasteInjectionResult.idle
     @Published private(set) var accessibilityTrusted = false
-    @Published private(set) var records: [CarrierRecord] = []
+    @Published private(set) var records: [CarrierRecord] = [] {
+        // Views read the incoming subset many times per render; filter once per change.
+        didSet { receivedHistory = records.filter { $0.kind == .incoming } }
+    }
+    private(set) var receivedHistory: [CarrierRecord] = []
     @Published private(set) var lastDiagnosticExportURL: URL?
     @Published private(set) var lastDiagnosticExportErrorMessage: String?
     @Published private(set) var lastAccessibilityResetMessage: String?
@@ -66,6 +70,8 @@ final class MacCarrierStore: ObservableObject {
                 fileURL: try CarrierRecordStore.defaultFileURL(fileName: "mac-records.json")
             )
             records = recordStore?.records ?? []
+            // didSet does not run for assignments inside init.
+            receivedHistory = records.filter { $0.kind == .incoming }
         } catch {
             recordStore = nil
             records = []
@@ -146,9 +152,6 @@ final class MacCarrierStore: ObservableObject {
         return String(lastPayloadText.prefix(160))
     }
 
-    var receivedHistory: [CarrierRecord] {
-        records.filter { $0.kind == .incoming }
-    }
 
     func start() {
         startAndroidBridge()
@@ -530,7 +533,15 @@ final class MacCarrierStore: ObservableObject {
             pasteStatus: .received,
             detail: "Mac 已接收并保存，等待粘贴"
         )))
-        enqueuePaste(text: payload.text, recordID: record.id, sourceDeviceName: sourceDeviceName, postPasteAction: payload.postPasteAction)
+        let receivedAt = ContinuousClock.now
+        enqueuePaste(text: payload.text, recordID: record.id, sourceDeviceName: sourceDeviceName, postPasteAction: payload.postPasteAction) { [weak self] _ in
+            let elapsed = ContinuousClock.now - receivedAt
+            self?.recordDiagnosticMarker(
+                "receiver.payload.pasteFinished",
+                message: "Payload \(payload.id) pasted \(elapsed.components.seconds * 1_000 + elapsed.components.attoseconds / 1_000_000_000_000_000) ms after it was saved; sent at \(payload.createdAt.formatted(.iso8601)).",
+                peerName: sourceDeviceName
+            )
+        }
     }
 
     private func recordPasteDiagnostic(_ result: PasteInjectionResult, peerName: String? = nil) {

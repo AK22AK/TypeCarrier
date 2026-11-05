@@ -113,8 +113,28 @@ public final class CarrierDiagnosticLogStore {
         defer {
             try? handle.close()
         }
-        try handle.seekToEnd()
+        let size = try handle.seekToEnd()
         try handle.write(contentsOf: data)
+        if size + UInt64(data.count) > Self.maximumFileSize {
+            try? handle.close()
+            try Self.rotate(fileURL)
+        }
+    }
+
+    /// Past this size the log moves to `<name>.1` (replacing the previous one) and starts fresh,
+    /// so reading and exporting it stays cheap however long the app runs.
+    public static let maximumFileSize: UInt64 = 5_000_000
+
+    public static func rotatedFileURL(for fileURL: URL) -> URL {
+        fileURL.appendingPathExtension("1")
+    }
+
+    private static func rotate(_ fileURL: URL) throws {
+        let manager = FileManager.default
+        let rotatedURL = rotatedFileURL(for: fileURL)
+        try? manager.removeItem(at: rotatedURL)
+        try manager.moveItem(at: fileURL, to: rotatedURL)
+        _ = manager.createFile(atPath: fileURL.path, contents: nil)
     }
 
     public func recentEntries(limit: Int) throws -> [CarrierDiagnosticLogEntry] {
@@ -134,16 +154,31 @@ public final class CarrierDiagnosticLogStore {
             return []
         }
 
-        let contents = try String(contentsOf: fileURL, encoding: .utf8)
-        return contents
-            .split(whereSeparator: \.isNewline)
-            .suffix(limit)
+        return tailLines(of: fileURL, count: limit)
             .reversed()
-            .compactMap { line in
-                guard let data = line.data(using: .utf8) else {
-                    return nil
-                }
-                return try? decoder.decode(CarrierDiagnosticLogEntry.self, from: data)
-            }
+            .compactMap { try? decoder.decode(CarrierDiagnosticLogEntry.self, from: $0) }
+    }
+}
+
+extension CarrierDiagnosticLogStore {
+    /// The last `count` lines, read backwards from the end in chunks instead of loading the whole file.
+    static func tailLines(of fileURL: URL, count: Int, chunkSize: Int = 64 * 1024) -> [Data] {
+        guard count > 0, let handle = try? FileHandle(forReadingFrom: fileURL) else { return [] }
+        defer { try? handle.close() }
+        guard let fileSize = try? handle.seekToEnd(), fileSize > 0 else { return [] }
+
+        var buffer = Data()
+        var offset = fileSize
+        // One more newline than lines wanted guarantees the oldest kept line is complete.
+        while offset > 0, buffer.reduce(0, { $1 == 0x0A ? $0 + 1 : $0 }) <= count {
+            let readSize = UInt64(min(UInt64(chunkSize), offset))
+            offset -= readSize
+            try? handle.seek(toOffset: offset)
+            guard let chunk = try? handle.read(upToCount: Int(readSize)) else { break }
+            buffer = chunk + buffer
+        }
+        let lines = buffer.split(separator: 0x0A, omittingEmptySubsequences: true)
+        let complete = offset == 0 ? lines[...] : lines.dropFirst()
+        return complete.suffix(count).map { Data($0) }
     }
 }

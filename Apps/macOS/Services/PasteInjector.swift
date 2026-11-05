@@ -55,7 +55,9 @@ struct PasteInjector {
         }
         trace.add("accessibilityTrusted", "true")
 
+        trace.mark("start")
         let focusedTextTarget = FocusedTextTarget.current(trace: &trace)
+        trace.mark("focusRead")
         let pasteboard = NSPasteboard.general
         let previousItems = pasteboard.pasteboardItems?.map { item in
             item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
@@ -74,6 +76,7 @@ struct PasteInjector {
             )
         }
         let pasteboardChangeCount = pasteboard.changeCount
+        trace.mark("pasteboardWritten")
         trace.add("pasteboardWrite", "success")
         trace.add("pasteboardChangeCount", "\(pasteboardChangeCount)")
 
@@ -90,9 +93,11 @@ struct PasteInjector {
             )
         }
         trace.add("commandVPosted", "true")
+        trace.mark("commandVPosted")
         await waitForPasteDelivery()
         trace.add("postWaitSeconds", "0.25")
         focusedTextTarget?.recordPostPasteState(expectedText: text, trace: &trace)
+        trace.mark("verified")
         let status: String
         let succeeded: Bool
         let pasteStatus: CarrierDeliveryReceipt.PasteStatus
@@ -184,6 +189,7 @@ struct PasteInjector {
 
 private struct PasteInjectionTrace {
     private var fields: [(String, String)] = []
+    private let startedAt = ContinuousClock.now
 
     init(text: String) {
         add("textChars", "\(text.count)")
@@ -192,6 +198,13 @@ private struct PasteInjectionTrace {
 
     mutating func add(_ key: String, _ value: String) {
         fields.append((key, value))
+    }
+
+    /// Milliseconds since the trace began, so a slow paste shows which step took the time.
+    mutating func mark(_ step: String) {
+        let elapsed = ContinuousClock.now - startedAt
+        let milliseconds = elapsed.components.seconds * 1_000 + elapsed.components.attoseconds / 1_000_000_000_000_000
+        add("t.\(step)", "\(milliseconds)ms")
     }
 
     var summary: String {

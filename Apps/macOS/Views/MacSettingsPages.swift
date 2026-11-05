@@ -90,6 +90,8 @@ struct SettingsDiagnosticsPage: View {
     let showFunctionTest: () -> Void
     @State private var showsRecentEvents = false
     @State private var showsRecovery = false
+    /// Loaded when the section opens rather than on every render: the log is read from disk.
+    @State private var recentEvents: [SettingsDiagnosticEvent] = []
 
     private var presentation: ReceiverManagementPresentation {
         .init(summary: store.receiverStatusSummary, accessibilityTrusted: store.accessibilityTrusted)
@@ -133,6 +135,9 @@ struct SettingsDiagnosticsPage: View {
                     }
                 }.padding(.top, 10)
             } label: { Text("最近事件").foregroundStyle(.secondary) }
+            .onChange(of: showsRecentEvents) { _, isExpanded in
+                if isExpanded { reloadRecentEvents() }
+            }
             DisclosureGroup(isExpanded: $showsRecovery) {
                 MacManagementGroup {
                     VStack(alignment: .leading, spacing: 12) {
@@ -167,8 +172,8 @@ struct SettingsDiagnosticsPage: View {
         .filter { store.receiverStatusSummary.hasUsableEndpoint || $0.id != "receiver.waiting" }
     }
 
-    private var recentEvents: [SettingsDiagnosticEvent] {
-        store.recentConnectionDiagnosticLogEntries(limit: 50).enumerated().map { offset, entry in
+    private func reloadRecentEvents() {
+        recentEvents = store.recentConnectionDiagnosticLogEntries(limit: 50).enumerated().map { offset, entry in
             SettingsDiagnosticEvent(
                 id: offset,
                 timestamp: entry.timestamp,

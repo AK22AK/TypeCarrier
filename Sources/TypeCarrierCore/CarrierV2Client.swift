@@ -118,6 +118,9 @@ public final class CarrierV2Client: ObservableObject {
             throw CarrierServiceError.noConnectedPeer
         }
         try link.send(envelope)
+        if let payload = envelope.payload {
+            recordDiagnosticMarker("v2.send", message: "Sent payload \(payload.id).", peerName: link.peer?.info.deviceName)
+        }
     }
 
     // MARK: - Pairing
