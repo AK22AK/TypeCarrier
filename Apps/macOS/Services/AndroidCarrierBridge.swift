@@ -465,10 +465,12 @@ final class AndroidCarrierBridge: ObservableObject {
                 devicesByID[deviceID] = "Android"
             }
         }
-        connectedAndroidDeviceNames = devicesByID.map { id, name in
+        let names = devicesByID.map { id, name in
             let hasDuplicateName = devicesByID.values.filter { $0 == name }.count > 1
             return name + (hasDuplicateName ? " · \(id.suffix(8))" : "")
         }.sorted()
+        // Unchanged lists must not re-render every view watching the store.
+        if names != connectedAndroidDeviceNames { connectedAndroidDeviceNames = names }
     }
 
     private func fail(_ message: String) {

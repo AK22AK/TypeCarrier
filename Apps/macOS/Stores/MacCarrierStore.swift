@@ -273,8 +273,12 @@ final class MacCarrierStore: ObservableObject {
         )) ?? []
     }
 
+    /// Called when the menu opens, the app activates, and before each paste. Assigning a
+    /// @Published value re-renders every view watching the store even when it did not change,
+    /// so only assign when the answer actually changed.
     func refreshAccessibilityStatus() {
-        accessibilityTrusted = permissionChecker.isTrusted(prompt: false)
+        let trusted = permissionChecker.isTrusted(prompt: false)
+        if accessibilityTrusted != trusted { accessibilityTrusted = trusted }
     }
 
     func runManualDiagnostics() {

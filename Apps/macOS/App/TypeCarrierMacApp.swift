@@ -76,9 +76,14 @@ private struct MenuBarStatusIcon: View {
     @ObservedObject var store: MacCarrierStore
 
     var body: some View {
-        Image(nsImage: NSImage.typeCarrierMenuBarStatusIcon(state: state))
+        Image(nsImage: Self.icons[state]!)
             .accessibilityLabel(accessibilityLabel)
     }
+
+    /// The label re-renders on every store change; draw each of the three icons once.
+    @MainActor private static let icons: [MenuBarStatusIconState: NSImage] = Dictionary(
+        uniqueKeysWithValues: [MenuBarStatusIconState.idle, .connected, .warning].map { ($0, NSImage.typeCarrierMenuBarStatusIcon(state: $0)) }
+    )
 
     private var state: MenuBarStatusIconState {
         if ReceiverManagementPresentation(summary: store.receiverStatusSummary, accessibilityTrusted: store.accessibilityTrusted).needsAttention {

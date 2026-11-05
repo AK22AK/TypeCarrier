@@ -334,10 +334,12 @@ final class CarrierV2Receiver: ObservableObject {
     }
 
     private func updateConnectedDevices() {
-        connectedDeviceNames = links.values
+        let names = links.values
             .filter(\.isEstablished)
             .compactMap { $0.peer?.info.deviceName }
             .sorted()
+        // Unchanged lists must not re-render every view watching the store.
+        if names != connectedDeviceNames { connectedDeviceNames = names }
     }
 
     private func fail(_ message: String) {
