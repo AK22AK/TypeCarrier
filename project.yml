@@ -75,6 +75,10 @@ targets:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).mac.debug
           TYPECARRIER_DISPLAY_NAME: TypeCarrier Debug
+          # System Settings lists apps by file name; a distinct name keeps the Debug build's
+          # Accessibility entry apart from the released TypeCarrierMac.
+          PRODUCT_NAME: TypeCarrier Debug
+          PRODUCT_MODULE_NAME: TypeCarrierMac
         Release:
           ENABLE_HARDENED_RUNTIME: YES
   TypeCarrieriOS:

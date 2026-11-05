@@ -14,7 +14,10 @@ struct MacPairingView: View {
             }
 
             Section {
-                if client.availableReceivers.isEmpty {
+                if client.availableReceivers.isEmpty, !client.pairedReceivers.isEmpty {
+                    // Paired Macs are listed below, so an empty list here is the expected state.
+                    Text("附近没有其他可配对的 Mac").foregroundStyle(.secondary)
+                } else if client.availableReceivers.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("正在查找同一网络中的 Mac…").foregroundStyle(.secondary)

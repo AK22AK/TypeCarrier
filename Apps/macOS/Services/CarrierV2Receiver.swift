@@ -149,6 +149,10 @@ final class CarrierV2Receiver: ObservableObject {
             try? await Task.sleep(for: Self.pairingWindow)
             guard !Task.isCancelled else { return }
             self?.closePairing()
+#if DEBUG
+            // Unattended test runs keep pairing available until a device pairs.
+            if Self.autoPairsForTesting, self?.pairedDevices.isEmpty == true { self?.openPairing() }
+#endif
         }
     }
 

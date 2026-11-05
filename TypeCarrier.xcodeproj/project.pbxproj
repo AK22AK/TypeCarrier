@@ -937,6 +937,8 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(TYPECARRIER_BUNDLE_PREFIX).mac.debug";
+				PRODUCT_MODULE_NAME = TypeCarrierMac;
+				PRODUCT_NAME = "TypeCarrier Debug";
 				SDKROOT = macosx;
 				TYPECARRIER_DISPLAY_NAME = "TypeCarrier Debug";
 			};
