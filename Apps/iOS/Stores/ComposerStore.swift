@@ -287,7 +287,11 @@ final class ComposerStore: ObservableObject {
     }
 
     var canSaveDraft: Bool {
-        CarrierPayload.canSend(text)
+        CarrierPayload.hasContent(text)
+    }
+
+    var textLengthIndicator: CarrierTextLengthIndicator {
+        CarrierTextLengthIndicator(text: text)
     }
 
     var canUndo: Bool {
@@ -591,8 +595,13 @@ final class ComposerStore: ObservableObject {
         preservesActiveInputSession: Bool = false,
         postPasteAction: CarrierPostPasteAction? = nil
     ) {
-        guard CarrierPayload.canSend(text) else {
+        guard CarrierPayload.hasContent(text) else {
             sendState = .failed("文本为空")
+            return
+        }
+
+        guard CarrierPayload.isWithinLengthLimit(text) else {
+            sendState = .failed("超过 \(CarrierPayload.maximumCharacterCount) 字，请删减后再发送")
             return
         }
 
@@ -665,7 +674,7 @@ final class ComposerStore: ObservableObject {
     }
 
     func saveDraft(preservesActiveInputSession: Bool = false) {
-        guard CarrierPayload.canSend(text) else {
+        guard CarrierPayload.hasContent(text) else {
             sendState = .failed("文本为空")
             return
         }

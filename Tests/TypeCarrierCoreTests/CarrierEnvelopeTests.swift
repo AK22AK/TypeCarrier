@@ -141,3 +141,34 @@ final class CarrierEnvelopeTests: XCTestCase {
         XCTAssertTrue(CarrierPayload.canSend(" dictated text "))
     }
 }
+
+final class CarrierPayloadLengthLimitTests: XCTestCase {
+    func testTextUpToTheCharacterLimitCanBeSentAndBeyondItCannot() {
+        let atLimit = String(repeating: "字", count: CarrierPayload.maximumCharacterCount)
+        XCTAssertTrue(CarrierPayload.canSend(atLimit))
+        XCTAssertFalse(CarrierPayload.canSend(atLimit + "字"))
+        XCTAssertTrue(CarrierPayload.hasContent(atLimit + "字"))
+    }
+
+    func testLongEmojiSequencesStayInsideOneEncryptedFrame() throws {
+        // A family emoji is one character but 25 UTF-8 bytes.
+        let family = "👨‍👩‍👧‍👦"
+        let text = String(repeating: family, count: 2_000)
+        XCTAssertLessThanOrEqual(text.count, CarrierPayload.maximumCharacterCount)
+        XCTAssertFalse(CarrierPayload.canSend(text))
+
+        let largestAllowed = String(repeating: "\u{01}", count: CarrierPayload.maximumCharacterCount)
+        XCTAssertTrue(CarrierPayload.canSend(largestAllowed))
+        let message = CarrierV2Message.envelope(.text(CarrierPayload(text: largestAllowed), sender: CarrierDeviceIdentity(displayName: String(repeating: "名", count: 60), deviceID: UUID().uuidString)))
+        XCTAssertLessThan(try message.encoded().count + 16, NoiseCipherState.maxMessageLength)
+    }
+
+    func testIndicatorStaysHiddenUntilNearTheLimit() {
+        XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "a", count: 8_999)), .hidden)
+        XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "a", count: 9_000)), .nearLimit(count: 9_000, limit: 9_999))
+        XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "a", count: 9_000)).displayText, "9000/9999")
+        XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "a", count: 10_000)), .overLimit(count: 10_000, limit: 9_999))
+        // 3,500 Chinese characters are over 9,000 UTF-8 bytes but far from the character limit.
+        XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "字", count: 3_500)), .hidden)
+    }
+}

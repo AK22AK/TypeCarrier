@@ -96,6 +96,7 @@ public enum CarrierServiceError: LocalizedError, Equatable, Sendable {
     case blankText
     case noConnectedPeer
     case targetRequired
+    case textTooLong
 
     public var errorDescription: String? {
         switch self {
@@ -105,6 +106,8 @@ public enum CarrierServiceError: LocalizedError, Equatable, Sendable {
             "没有已连接设备。"
         case .targetRequired:
             "请选择发送目标。"
+        case .textTooLong:
+            "文本太长，请删减后再发送。"
         }
     }
 }

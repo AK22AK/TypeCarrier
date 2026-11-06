@@ -117,7 +117,11 @@ public final class CarrierV2Client: ObservableObject {
               let link = links[deviceID], link.isEstablished else {
             throw CarrierServiceError.noConnectedPeer
         }
-        try link.send(envelope)
+        do {
+            try link.send(envelope)
+        } catch NoiseError.messageTooLarge, CarrierWireFrameError.payloadTooLarge {
+            throw CarrierServiceError.textTooLong
+        }
         if let payload = envelope.payload {
             recordDiagnosticMarker("v2.send", message: "Sent payload \(payload.id).", peerName: link.peer?.info.deviceName)
         }

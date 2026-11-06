@@ -483,6 +483,18 @@ struct ComposerView: View {
 
                 Spacer(minLength: 0)
 
+                if let lengthText = store.textLengthIndicator.displayText {
+                    let isOverLimit = store.textLengthIndicator.isOverLimit
+                    Text(lengthText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
+                        .accessibilityLabel(
+                            isOverLimit
+                                ? "已超过字数上限，\(lengthText)"
+                                : "字数 \(lengthText)"
+                        )
+                }
+
                 editorStandaloneToolButton(
                     systemName: "trash",
                     accessibilityLabel: "清空文本",
