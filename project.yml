@@ -24,6 +24,19 @@ targets:
     supportedDestinations: [iOS, macOS]
     sources:
       - path: Sources/TypeCarrierCore
+    dependencies:
+      - framework: Core/build/CarrierCoreFFI.xcframework
+        embed: false
+    preBuildScripts:
+      - name: Build Rust protocol core
+        basedOnDependencyAnalysis: false
+        script: |
+          # Rebuild the Rust core only when its sources are newer than the last build.
+          stamp="$SRCROOT/Core/build/.stamp"
+          if [ ! -f "$stamp" ] || [ -n "$(find "$SRCROOT/Core/carrier-core/src" "$SRCROOT/Core/carrier-core/Cargo.toml" -newer "$stamp" -print -quit)" ]; then
+            export PATH="$HOME/.cargo/bin:$PATH"
+            "$SRCROOT/script/build_carrier_core_apple.sh" && touch "$stamp"
+          fi
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

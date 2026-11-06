@@ -53,8 +53,10 @@
 		66F88CF541052FA030DEF6EE /* FunctionTestPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2749EFC2AF2715179CE182F /* FunctionTestPage.swift */; };
 		690D39DE7237F269BF6956F2 /* MacCarrierStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA9F01E2F00CFBE15F84DE20 /* MacCarrierStore.swift */; };
 		6AA34F8561C789E875644762 /* CarrierDiagnosticExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075FD96C252600678C48831E /* CarrierDiagnosticExport.swift */; };
+		6C650DF15ACCC44239BFD51C /* CarrierCoreFFI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 86DBAF21F7F2F17056CD3894 /* CarrierCoreFFI.xcframework */; };
 		6CDAC5BFE6622D12C6EB2E3E /* SoftTopScrollEdge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E2B7C49CB75411D89A7242 /* SoftTopScrollEdge.swift */; };
 		6DD72345DA9040F2987EA282 /* AccessibilityPermissionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EAF90297B755EC99D68243 /* AccessibilityPermissionChecker.swift */; };
+		73AB38D89BE009E2FAE37A1C /* carrier_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EEA626345FFF4536EFC5AAA /* carrier_core.swift */; };
 		7620C3B631E3102CE953C549 /* CarrierWireFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C053A2DCE353CB5D4D0B8F6 /* CarrierWireFrameTests.swift */; };
 		772F99F2D424B3A65BB53BB6 /* CarrierRecordStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */; };
 		78173EFC23F647DACB89D979 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6BEA6EDEDEE872D07FB2C5B3 /* Assets.xcassets */; };
@@ -65,6 +67,7 @@
 		8B6EC376C8674B06411C967E /* ReceiverTargetSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C015B4EDD91BF5D039F699 /* ReceiverTargetSelection.swift */; };
 		939D5DF870F9EE336F73B9DF /* CarrierWireFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */; };
 		94941D18FD0F849B3B95AE05 /* AndroidTrustTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B2378D47616A608DFED5CA6 /* AndroidTrustTokenStore.swift */; };
+		95093398AA5F967802A2CE35 /* CarrierCoreInteropTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7F640FD07041BE40E9C6796 /* CarrierCoreInteropTests.swift */; };
 		969A7A3EB5625CF85F1F06AE /* CarrierRecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C19CAA14D9F9F2C69CDD59 /* CarrierRecordStore.swift */; };
 		9F3108DE2D4B957BF6FC03A9 /* CarrierV2SessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36062541E3D434B4FE393752 /* CarrierV2SessionTests.swift */; };
 		9FF5E28E4BE80DFFCB1A42BE /* PasteFailureGuidance.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE8D5DEA02B7F430828897E /* PasteFailureGuidance.swift */; };
@@ -177,6 +180,7 @@
 		2AE41300F4C564DFD3125ABB /* CarrierV2Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2Session.swift; sourceTree = "<group>"; };
 		2D31927EFFBDB3DD748370B1 /* ConnectionSelfCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelfCheckTests.swift; sourceTree = "<group>"; };
 		2D41B37905814C84FE0AEB9F /* AndroidCarrierBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidCarrierBridge.swift; sourceTree = "<group>"; };
+		2EEA626345FFF4536EFC5AAA /* carrier_core.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = carrier_core.swift; sourceTree = "<group>"; };
 		32763F3EF329C22F8299AF4D /* CarrierRecordTimestampFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordTimestampFormatterTests.swift; sourceTree = "<group>"; };
 		36062541E3D434B4FE393752 /* CarrierV2SessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2SessionTests.swift; sourceTree = "<group>"; };
 		3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierEnvelopeTests.swift; sourceTree = "<group>"; };
@@ -209,6 +213,7 @@
 		821668DD50563B5C7563304B /* MacPairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacPairingView.swift; sourceTree = "<group>"; };
 		829CC626F7A3C4147A40D809 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		847B0360AAB5F8E0004D0D1F /* TypeCarrierMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TypeCarrierMac.entitlements; sourceTree = "<group>"; };
+		86DBAF21F7F2F17056CD3894 /* CarrierCoreFFI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = CarrierCoreFFI.xcframework; path = Core/build/CarrierCoreFFI.xcframework; sourceTree = "<group>"; };
 		86F76B03A87C37C519582E39 /* CarrierWireFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierWireFrame.swift; sourceTree = "<group>"; };
 		8B19E4372E1374AB5FC89B4D /* TypeCarrierCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TypeCarrierCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrierMacApp.swift; sourceTree = "<group>"; };
@@ -219,6 +224,7 @@
 		9BA8751B3877B14B54FCE73C /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
 		A2731BBB4C93F87A12502B56 /* CarrierDeliveryReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierDeliveryReceipt.swift; sourceTree = "<group>"; };
 		A6A24CEF0ABE6B63FC2922DB /* TextInsertionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInsertionPolicyTests.swift; sourceTree = "<group>"; };
+		A7F640FD07041BE40E9C6796 /* CarrierCoreInteropTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierCoreInteropTests.swift; sourceTree = "<group>"; };
 		AC933378CA1A7C808D756866 /* AndroidPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidPairing.swift; sourceTree = "<group>"; };
 		AE38102DADF4007DD5CB8CD8 /* CarrierRecordStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierRecordStoreTests.swift; sourceTree = "<group>"; };
 		AFB982C381642F271CB5BA9E /* CarrierV2TrustStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2TrustStore.swift; sourceTree = "<group>"; };
@@ -261,6 +267,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		119CDA9B683473B2A7C8FF6F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C650DF15ACCC44239BFD51C /* CarrierCoreFFI.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		23A981E4EA1B558C8576128E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -294,6 +308,7 @@
 				B5F5B760415544FDE9BD9126 /* AndroidBonjourAdvertisementTests.swift */,
 				F192A926A1D0661B1FF07974 /* AndroidBridgeProtocolTests.swift */,
 				EF1429673C81A67E29BD1DF2 /* AndroidPairingTests.swift */,
+				A7F640FD07041BE40E9C6796 /* CarrierCoreInteropTests.swift */,
 				CB51D0AE3AC45C3DFBD6AB29 /* CarrierDiagnosticExportTests.swift */,
 				3B7106806474AA029F4FAE09 /* CarrierEnvelopeTests.swift */,
 				55EE223233955B5C05E1B67D /* CarrierPasteQueueTests.swift */,
@@ -341,6 +356,14 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		2B472D19F2477013C6D8E71C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				86DBAF21F7F2F17056CD3894 /* CarrierCoreFFI.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		37F3514CCA483980EDF9836C /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -381,6 +404,7 @@
 				9C48A1D3D60FC6B83A7EE596 /* macOS */,
 				77AA3151611E4D023656AA61 /* TypeCarrierCore */,
 				1C9827CC5304AB81DFDD1A55 /* TypeCarrierCoreTests */,
+				2B472D19F2477013C6D8E71C /* Frameworks */,
 				43F69E6B80F49B98CB564792 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -420,6 +444,7 @@
 				65C015B4EDD91BF5D039F699 /* ReceiverTargetSelection.swift */,
 				FB71CFC1F0FADD872A0E27D3 /* TextEditHistory.swift */,
 				D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */,
+				A051F080E4DB18D914A125B3 /* Generated */,
 			);
 			name = TypeCarrierCore;
 			path = Sources/TypeCarrierCore;
@@ -457,6 +482,14 @@
 			);
 			name = macOS;
 			path = Apps/macOS;
+			sourceTree = "<group>";
+		};
+		A051F080E4DB18D914A125B3 /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				2EEA626345FFF4536EFC5AAA /* carrier_core.swift */,
+			);
+			path = Generated;
 			sourceTree = "<group>";
 		};
 		A76D4DB0B1A2B9A860598E9A /* Views */ = {
@@ -582,7 +615,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 07AC590CE84C36C5ED6F85B7 /* Build configuration list for PBXNativeTarget "TypeCarrierCore" */;
 			buildPhases = (
+				74C1B8788B9D358D49C87130 /* Build Rust protocol core */,
 				13171001AF9ED6D2E657437B /* Sources */,
+				119CDA9B683473B2A7C8FF6F /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -663,6 +698,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		74C1B8788B9D358D49C87130 /* Build Rust protocol core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust protocol core";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Rebuild the Rust core only when its sources are newer than the last build.\nstamp=\"$SRCROOT/Core/build/.stamp\"\nif [ ! -f \"$stamp\" ] || [ -n \"$(find \"$SRCROOT/Core/carrier-core/src\" \"$SRCROOT/Core/carrier-core/Cargo.toml\" -newer \"$stamp\" -print -quit)\" ]; then\n  export PATH=\"$HOME/.cargo/bin:$PATH\"\n  \"$SRCROOT/script/build_carrier_core_apple.sh\" && touch \"$stamp\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		0C296F512D40AAA35B8A5B61 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -728,6 +785,7 @@
 				8B6EC376C8674B06411C967E /* ReceiverTargetSelection.swift in Sources */,
 				B6451B34379FD354EA4DFCE2 /* TextEditHistory.swift in Sources */,
 				F1205DF3E291DA2763CDFB6D /* TextInsertionPolicy.swift in Sources */,
+				73AB38D89BE009E2FAE37A1C /* carrier_core.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -738,6 +796,7 @@
 				C6B1F653BE1074BB1E5A9921 /* AndroidBonjourAdvertisementTests.swift in Sources */,
 				D2F42D8A2332776B17522EDF /* AndroidBridgeProtocolTests.swift in Sources */,
 				42FC298DADDF8B8A446D47F6 /* AndroidPairingTests.swift in Sources */,
+				95093398AA5F967802A2CE35 /* CarrierCoreInteropTests.swift in Sources */,
 				039DC71ECCC2E4FEDC92499A /* CarrierDiagnosticExportTests.swift in Sources */,
 				C284646B63523FAAA32606B1 /* CarrierEnvelopeTests.swift in Sources */,
 				145FEE635CDF12DC8D5FDD0E /* CarrierPasteQueueTests.swift in Sources */,
@@ -826,6 +885,10 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Core/build\"",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -987,6 +1050,10 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Core/build\"",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = (

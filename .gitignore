@@ -13,3 +13,7 @@ Apps/Android/.gradle/
 Apps/Android/local.properties
 Apps/Android/build/
 Apps/Android/app/build/
+
+# Rust protocol core build output
+Core/carrier-core/target/
+Core/build/
