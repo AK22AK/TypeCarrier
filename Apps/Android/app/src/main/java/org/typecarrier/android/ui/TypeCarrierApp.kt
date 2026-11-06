@@ -121,6 +121,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -245,7 +246,6 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onDisconnect = viewModel::disconnectSelectedMac,
                 onManualHostChange = viewModel::updateManualHost,
                 onManualPortChange = viewModel::updateManualPort,
-                onPairingCodeChange = viewModel::updatePairingCode,
                 onConnect = { viewModel.connect() },
                 onTextChange = viewModel::updateText,
                 onUndo = viewModel::undoTextChange,
@@ -357,7 +357,6 @@ private fun HomeScreen(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
     onTextChange: (String) -> Unit,
     onUndo: () -> Unit,
@@ -451,7 +450,6 @@ private fun HomeScreen(
                 onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
             onManualPortChange = onManualPortChange,
-            onPairingCodeChange = onPairingCodeChange,
             onConnect = {
                 onConnect()
                 showsConnectionDialog = false
@@ -724,7 +722,6 @@ private fun ConnectionDialog(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
     AlertDialog(
@@ -742,7 +739,6 @@ private fun ConnectionDialog(
                 onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
                 onManualPortChange = onManualPortChange,
-                onPairingCodeChange = onPairingCodeChange,
                 onConnect = onConnect,
             )
         },
@@ -824,7 +820,6 @@ private fun ConnectionPanel(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
     var showAdvanced by remember { mutableStateOf(false) }
@@ -870,8 +865,8 @@ private fun ConnectionPanel(
                             selected = service.id == state.selectedMac?.id,
                             subtitle = when {
                                 isConnectedService -> if (service.id == state.selectedMac?.id) "已连接 · 当前发送目标" else "已连接 · 点击选择发送目标"
-                                state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，可免配对连接"
-                                else -> "首次连接需要配对码"
+                                state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，自动连接"
+                                else -> "首次连接需要在两边核对数字"
                             },
                             onClick = { onSelectMac(service) },
                         )
@@ -885,15 +880,32 @@ private fun ConnectionPanel(
                 )
             }
 
-            if (!selectedHasTrust) {
-                OutlinedTextField(
-                    value = state.pairingCode,
-                    onValueChange = onPairingCodeChange,
-                    label = { Text("Mac 匹配码") },
-                    supportingText = { Text("输入 Mac 上显示的匹配码；Mac 也可以输入本机匹配码来关联。") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+            val prompt = state.pairingPrompt
+            if (prompt != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("在 ${prompt.macName} 上核对这个数字", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (prompt.code.length == 6) "${prompt.code.take(3)} ${prompt.code.drop(3)}" else prompt.code,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            "两边一致时，在 Mac 上点“一致”完成配对。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            } else if (!selectedHasTrust) {
+                Text(
+                    "首次连接需要配对：先在 Mac 上的 TypeCarrier 里点“开始配对”，再点下方按钮，两边会显示同一个 6 位数字。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Card(
@@ -901,7 +913,7 @@ private fun ConnectionPanel(
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Text(
-                        "这台 Mac 已配对，连接时不需要再次输入匹配码。",
+                        "这台 Mac 已配对，会自动连接。",
                         modifier = Modifier.padding(12.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         style = MaterialTheme.typography.bodyMedium,
@@ -964,7 +976,8 @@ private fun ConnectionPanel(
                         state.connectionStatus == AndroidConnectionStatus.Connected -> "已连接"
                         state.isBusy && state.connectionStatus == AndroidConnectionStatus.Connecting -> "正在连接"
                         state.selectedMac == null && state.manualHost.isNotBlank() -> "用手动地址连接"
-                        selectedHasTrust -> "免配对连接"
+                        state.pairingPrompt != null -> "等待 Mac 确认"
+                        selectedHasTrust -> "连接"
                         else -> "配对并连接"
                     },
                 )

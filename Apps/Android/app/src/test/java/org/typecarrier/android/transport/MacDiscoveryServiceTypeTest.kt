@@ -8,11 +8,12 @@ import org.junit.Test
 
 class MacDiscoveryServiceTypeTest {
     @Test
-    fun matchesTypecarrierServiceWithOrWithoutTrailingDot() {
-        assertTrue(MacDiscoveryServiceType.matches("_typecarrier._tcp."))
-        assertTrue(MacDiscoveryServiceType.matches("_typecarrier._tcp"))
-        assertTrue(MacDiscoveryServiceType.matches("_TYPECARRIER._TCP."))
-        assertFalse(MacDiscoveryServiceType.matches("_tcpair._tcp."))
+    fun matchesTheV2ServiceWithOrWithoutTrailingDot() {
+        assertTrue(MacDiscoveryServiceType.matches("_typecarrier-v2._tcp."))
+        assertTrue(MacDiscoveryServiceType.matches("_typecarrier-v2._tcp"))
+        assertTrue(MacDiscoveryServiceType.matches("_TYPECARRIER-V2._TCP."))
+        // The protocol v1 bridge used the bare service type.
+        assertFalse(MacDiscoveryServiceType.matches("_typecarrier._tcp."))
     }
 
     @Test

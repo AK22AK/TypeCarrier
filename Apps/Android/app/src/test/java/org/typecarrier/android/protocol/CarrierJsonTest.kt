@@ -58,33 +58,4 @@ class CarrierJsonTest {
 
         assertEquals(false, json.contains("postPasteAction"))
     }
-
-    @Test
-    fun decodesAcceptedPairingResponse() {
-        val response = CarrierJson.decodeBridgeResponse(
-            """{"message":"Paired.","status":"accepted","trustToken":"token-1"}""",
-        )
-
-        assertEquals(AndroidBridgeResponseStatus.Accepted, response.status)
-        assertEquals("Paired.", response.message)
-        assertEquals("token-1", response.trustToken)
-    }
-
-    @Test
-    fun optionalNullsAreOmittedOnHandshake() {
-        val handshake = AndroidBridgeHandshake(
-            version = 1,
-            deviceID = "android-1",
-            deviceName = "Pixel",
-            pairingCode = "123456",
-        )
-
-        val json = CarrierJson.encode(handshake)
-
-        assertEquals(
-            """{"version":1,"deviceID":"android-1","deviceName":"Pixel","pairingCode":"123456"}""",
-            json,
-        )
-        assertNull(CarrierJson.decodeHandshake(json).tokenProof)
-    }
 }

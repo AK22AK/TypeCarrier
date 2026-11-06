@@ -14,12 +14,12 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.typecarrier.android.diagnostics.AndroidDiagnosticLogStore
-import org.typecarrier.android.protocol.AndroidBridgeResponse
-import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 import org.typecarrier.android.protocol.CarrierPostPasteAction
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
+import org.typecarrier.android.transport.AndroidConnectResult
+import org.typecarrier.android.transport.AndroidPairingPrompt
 import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
 import org.typecarrier.android.transport.MacService
 
@@ -44,7 +44,6 @@ class AndroidComposerViewModelTest {
         val repository = FakeAndroidCarrierRepository()
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
 
         viewModel.updateText("hello")
@@ -60,7 +59,6 @@ class AndroidComposerViewModelTest {
         val repository = FakeAndroidCarrierRepository()
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
 
         viewModel.updateEnablesSendReturnGesture(true)
@@ -90,7 +88,6 @@ class AndroidComposerViewModelTest {
         }
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
 
         viewModel.updateText("hello")
@@ -109,7 +106,6 @@ class AndroidComposerViewModelTest {
         }
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
 
         viewModel.updateText("keep me")
@@ -141,7 +137,6 @@ class AndroidComposerViewModelTest {
         }
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
 
         val connectJob = viewModel.connect()
 
@@ -192,42 +187,22 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
-    fun acceptedPairingClearsPairingCodeAndMarksMacTrusted() = runBlocking {
+    fun acceptedPairingMarksMacTrusted() = runBlocking {
         val repository = FakeAndroidCarrierRepository()
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
 
         viewModel.connect().join()
 
-        assertEquals("", viewModel.uiState.value.pairingCode)
         assertTrue(repository.hasTrustToken)
         assertFalse(viewModel.uiState.value.canConnect)
-    }
-
-    @Test
-    fun manualPairingCodeOverridesSavedTrustToken() = runBlocking {
-        val repository = FakeAndroidCarrierRepository().apply {
-            hasTrustToken = true
-        }
-        val viewModel = makeViewModel(repository = repository)
-        viewModel.selectMac(repository.mac)
-        viewModel.disconnectSelectedMac()
-        viewModel.updatePairingCode("000000")
-
-        viewModel.connect().join()
-
-        assertEquals("000000", repository.lastPairingCode)
     }
 
     @Test
     fun invalidSavedTrustTokenClearsTrustedMacAndAllowsRepairing() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
-            nextConnectResponse = AndroidBridgeResponse(
-                status = AndroidBridgeResponseStatus.InvalidPairing,
-                message = "Invalid pairing code or trust token.",
-            )
+            nextConnectResult = AndroidConnectResult.Rejected("Invalid pairing code or trust token.", pairingRemoved = true)
         }
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
@@ -237,14 +212,13 @@ class AndroidComposerViewModelTest {
         val rejectedState = viewModel.uiState.value
         assertFalse(repository.hasTrustToken)
         assertFalse(rejectedState.trustedMacs.any { it.id == repository.mac.id })
-        assertFalse(rejectedState.canConnect)
-        assertEquals("配对已失效，请重新输入 Mac 匹配码。", rejectedState.connectionFailureMessage)
+        assertTrue(rejectedState.canConnect)
+        assertEquals("配对已失效，请在 Mac 上点“开始配对”后重新连接。", rejectedState.connectionFailureMessage)
 
-        repository.nextConnectResponse = AndroidBridgeResponse(status = AndroidBridgeResponseStatus.Accepted, message = "paired")
-        viewModel.updatePairingCode("123456")
+        repository.nextConnectResult = AndroidConnectResult.Connected
         viewModel.connect().join()
 
-        assertEquals("123456", repository.lastPairingCode)
+        assertEquals(true, repository.lastConnectWasPairing)
         assertTrue(repository.hasTrustToken)
     }
 
@@ -280,7 +254,7 @@ class AndroidComposerViewModelTest {
         repository.publishServices(listOf(repository.mac))
 
         assertEquals(1, repository.connectAttempts)
-        assertEquals(null, repository.lastPairingCode)
+        assertEquals(false, repository.lastConnectWasPairing)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
         assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
     }
@@ -296,15 +270,13 @@ class AndroidComposerViewModelTest {
         assertEquals(0, repository.connectAttempts)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
         assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
-        assertFalse(viewModel.uiState.value.canConnect)
-
-        viewModel.updatePairingCode("123456")
+        // Pairing happens on connect, so an unpaired Mac can be connected right away.
         assertTrue(viewModel.uiState.value.canConnect)
 
         viewModel.connect().join()
 
         assertEquals(1, repository.connectAttempts)
-        assertEquals("123456", repository.lastPairingCode)
+        assertEquals(true, repository.lastConnectWasPairing)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
         assertTrue(viewModel.exportDiagnosticsText().contains("discovery.autoSelected"))
     }
@@ -355,7 +327,7 @@ class AndroidComposerViewModelTest {
         viewModel.start()
 
         assertEquals(0, repository.connectAttempts)
-        assertEquals(null, repository.lastPairingCode)
+        assertEquals(null, repository.lastConnectWasPairing)
         assertEquals(listOf(repository.mac), viewModel.uiState.value.trustedMacs)
         assertEquals(emptyList<MacService>(), viewModel.uiState.value.services)
         assertEquals(null, viewModel.uiState.value.selectedMac)
@@ -388,7 +360,7 @@ class AndroidComposerViewModelTest {
         viewModel.handleAppBecameActive()
 
         assertEquals(1, repository.connectAttempts)
-        assertEquals(null, repository.lastPairingCode)
+        assertEquals(false, repository.lastConnectWasPairing)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
         assertEquals(repository.mac.name, viewModel.uiState.value.headerStatusText)
         assertTrue(viewModel.exportDiagnosticsText().contains("app.foregroundTrustedReconnect"))
@@ -414,10 +386,7 @@ class AndroidComposerViewModelTest {
     fun automaticInvalidSavedTrustTokenShowsRepairingState() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList()).apply {
             hasTrustToken = true
-            nextConnectResponse = AndroidBridgeResponse(
-                status = AndroidBridgeResponseStatus.InvalidPairing,
-                message = "Invalid pairing code or trust token.",
-            )
+            nextConnectResult = AndroidConnectResult.Rejected("Invalid pairing code or trust token.", pairingRemoved = true)
         }
         val viewModel = makeViewModel(repository = repository)
 
@@ -427,7 +396,7 @@ class AndroidComposerViewModelTest {
         assertFalse(repository.hasTrustToken)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
         assertEquals("连接失败", viewModel.uiState.value.headerStatusText)
-        assertEquals("配对已失效，请重新输入 Mac 匹配码。", viewModel.uiState.value.connectionFailureMessage)
+        assertEquals("配对已失效，请在 Mac 上点“开始配对”后重新连接。", viewModel.uiState.value.connectionFailureMessage)
     }
 
     @Test
@@ -438,7 +407,6 @@ class AndroidComposerViewModelTest {
         viewModel.start()
         repository.publishServices(listOf(repository.mac))
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
 
         assertEquals(repository.mac, viewModel.uiState.value.selectedMac)
         assertTrue(viewModel.uiState.value.canConnect)
@@ -487,10 +455,8 @@ class AndroidComposerViewModelTest {
         val viewModel = makeViewModel(repository = repository)
         val second = MacService("Test Mac", "127.0.0.2", 17641, macID = "second")
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
         viewModel.selectMac(second)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
         assertEquals(2, viewModel.uiState.value.connectedMacs.size)
         viewModel.updateText("to second")
@@ -510,15 +476,13 @@ class AndroidComposerViewModelTest {
         val repository = FakeAndroidCarrierRepository(emptyList())
         val viewModel = makeViewModel(repository = repository)
         viewModel.selectMac(repository.mac)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
         viewModel.updateText("hello")
         viewModel.refreshDiscovery()
         assertTrue(viewModel.uiState.value.canSend)
         val second = MacService("Other Mac", "127.0.0.2", 17641, macID = "second")
         viewModel.selectMac(second)
-        viewModel.updatePairingCode("000000")
-        repository.nextConnectResponse = AndroidBridgeResponse(AndroidBridgeResponseStatus.InvalidPairing, "invalid")
+        repository.nextConnectResult = AndroidConnectResult.Rejected("invalid")
         viewModel.connect().join()
         assertEquals(listOf(repository.mac), viewModel.uiState.value.connectedMacs)
         assertEquals(second, viewModel.uiState.value.selectedMac)
@@ -533,7 +497,6 @@ class AndroidComposerViewModelTest {
         val old = MacService("Old Mac", "host", 17641, macID = "stable")
         val viewModel = makeViewModel(repository)
         viewModel.selectMac(old)
-        viewModel.updatePairingCode("123456")
         viewModel.connect().join()
         repository.publishConnectedServices(listOf(old.copy(name = "书房 Mac")))
         assertEquals(old.id, viewModel.uiState.value.selectedMac?.id)
@@ -583,12 +546,14 @@ private class FakeAndroidCarrierRepository(
     var lastPostPasteAction: CarrierPostPasteAction? = null
     var lastSendTarget: MacService? = null
     var lastConnectedService: MacService? = null
-    var lastPairingCode: String? = null
+    var lastConnectWasPairing: Boolean? = null
+    val mutablePairingPrompt = MutableStateFlow<AndroidPairingPrompt?>(null)
+    override val pairingPrompt: StateFlow<AndroidPairingPrompt?> = mutablePairingPrompt
     var connectAttempts = 0
     var sendAttempts = 0
     var refreshDiscoveryAttempts = 0
     var connectGateBeforeResponse: CompletableDeferred<Unit>? = null
-    var nextConnectResponse = AndroidBridgeResponse(status = AndroidBridgeResponseStatus.Accepted, message = "connected")
+    var nextConnectResult: AndroidConnectResult = AndroidConnectResult.Connected
 
     fun publishServices(services: List<MacService>) {
         mutableServices.value = services
@@ -609,25 +574,26 @@ private class FakeAndroidCarrierRepository(
     override fun refreshDiscovery() {
         refreshDiscoveryAttempts += 1
     }
-    override fun hasSavedTrustToken(service: MacService): Boolean =
+    override fun isPaired(service: MacService): Boolean =
         trustedServices?.any { it.id == service.id } ?: hasTrustToken
     override fun forgetTrustedMac(service: MacService) {
         hasTrustToken = false
     }
 
-    override suspend fun connect(service: MacService, pairingCode: String?): AndroidBridgeResponse {
+    override suspend fun connect(service: MacService): AndroidConnectResult {
         connectFailure?.let { throw it }
         connectAttempts += 1
         lastConnectedService = service
-        lastPairingCode = pairingCode
+        lastConnectWasPairing = !isPaired(service)
         connectGateBeforeResponse?.await()
-        if (pairingCode != null && nextConnectResponse.status == AndroidBridgeResponseStatus.Accepted) {
-            hasTrustToken = true
+        when (val result = nextConnectResult) {
+            AndroidConnectResult.Connected -> {
+                hasTrustToken = true
+                mutableConnectedServices.value = (mutableConnectedServices.value + service).distinctBy { it.id }
+            }
+            is AndroidConnectResult.Rejected -> if (result.pairingRemoved) hasTrustToken = false
         }
-        if (nextConnectResponse.status == AndroidBridgeResponseStatus.Accepted) {
-            mutableConnectedServices.value = (mutableConnectedServices.value + service).distinctBy { it.id }
-        }
-        return nextConnectResponse
+        return nextConnectResult
     }
 
     override suspend fun sendText(

@@ -12,10 +12,7 @@ object CarrierJson {
     }
 
     fun encode(envelope: CarrierEnvelope): String = json.encodeToString(envelope)
-    fun encode(handshake: AndroidBridgeHandshake): String = json.encodeToString(handshake)
     fun decodeEnvelope(value: String): CarrierEnvelope = json.decodeFromString(value)
-    fun decodeHandshake(value: String): AndroidBridgeHandshake = json.decodeFromString(value)
-    fun decodeBridgeResponse(value: String): AndroidBridgeResponse = json.decodeFromString(value)
 }
 
 @Serializable
@@ -90,38 +87,4 @@ data class CarrierEnvelope(
         fun text(payload: CarrierPayload, sender: CarrierDeviceIdentity? = null): CarrierEnvelope =
             CarrierEnvelope(kind = Kind.Text, payload = payload, sender = sender)
     }
-}
-
-@Serializable
-data class AndroidBridgeHandshake(
-    val version: Int = 1,
-    val deviceID: String,
-    val deviceName: String,
-    val pairingCode: String? = null,
-    val tokenProof: String? = null,
-    val challenge: String? = null,
-)
-
-@Serializable
-data class AndroidBridgeResponse(
-    val status: AndroidBridgeResponseStatus,
-    val message: String? = null,
-    val trustToken: String? = null,
-    val macID: String? = null,
-    val macName: String? = null,
-)
-
-@Serializable
-enum class AndroidBridgeResponseStatus {
-    @SerialName("accepted")
-    Accepted,
-
-    @SerialName("busy")
-    Busy,
-
-    @SerialName("invalidPairing")
-    InvalidPairing,
-
-    @SerialName("rejected")
-    Rejected,
 }

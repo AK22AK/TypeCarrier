@@ -17,3 +17,4 @@ Apps/Android/app/build/
 # Rust protocol core build output
 Core/carrier-core/target/
 Core/build/
+Apps/Android/app/src/main/jniLibs/

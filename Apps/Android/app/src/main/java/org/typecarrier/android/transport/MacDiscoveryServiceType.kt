@@ -1,7 +1,7 @@
 package org.typecarrier.android.transport
 
 internal object MacDiscoveryServiceType {
-    const val value = "_typecarrier._tcp."
+    const val value = "_typecarrier-v2._tcp."
 
     fun matches(serviceType: String): Boolean =
         serviceType.normalizedDnsSdType() == value.normalizedDnsSdType()

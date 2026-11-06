@@ -55,6 +55,8 @@ android {
         versionName = "0.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The ABIs script/build_carrier_core_android.sh builds the Rust core for.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 
     signingConfigs {
@@ -108,8 +110,29 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    // The Rust protocol core's Kotlin bindings call into libcarrier_core.so through JNA.
+    implementation("net.java.dev.jna:jna:5.17.0@aar")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("net.java.dev.jna:jna:5.17.0")
+}
+
+// The Rust protocol core (Core/carrier-core): build it for every ABI before compiling, and point
+// JVM unit tests at the host build so they run the same code as the device.
+val carrierCoreDir = rootDir.resolve("../../Core/carrier-core")
+val buildCarrierCore by tasks.registering(Exec::class) {
+    description = "Builds the Rust protocol core for Android and regenerates its Kotlin bindings."
+    inputs.dir(carrierCoreDir.resolve("src"))
+    inputs.file(carrierCoreDir.resolve("Cargo.toml"))
+    inputs.file(carrierCoreDir.resolve("Cargo.lock"))
+    outputs.dir(layout.projectDirectory.dir("src/main/jniLibs"))
+    outputs.file(carrierCoreDir.resolve("target/release/libcarrier_core.dylib"))
+    commandLine(rootDir.resolve("../../script/build_carrier_core_android.sh").absolutePath)
+}
+tasks.named("preBuild") { dependsOn(buildCarrierCore) }
+tasks.withType<Test>().configureEach {
+    dependsOn(buildCarrierCore)
+    systemProperty("jna.library.path", carrierCoreDir.resolve("target/release").absolutePath)
 }
