@@ -47,6 +47,8 @@ public final class CarrierV2TrustStore {
 
     private let storage: CarrierV2SecretStorage
     private var cachedDevices: [CarrierV2PairedDevice]?
+    /// Read once: every dial and every accepted connection needs it.
+    private var cachedIdentityKey: Curve25519.KeyAgreement.PrivateKey?
 
     public init(storage: CarrierV2SecretStorage = CarrierV2KeychainStorage()) {
         self.storage = storage
@@ -54,6 +56,13 @@ public final class CarrierV2TrustStore {
 
     /// The device's long-term Noise key, created on first use. Regenerating it unpairs every peer.
     public func identityKey() throws -> Curve25519.KeyAgreement.PrivateKey {
+        if let cachedIdentityKey { return cachedIdentityKey }
+        let key = try loadOrCreateIdentityKey()
+        cachedIdentityKey = key
+        return key
+    }
+
+    private func loadOrCreateIdentityKey() throws -> Curve25519.KeyAgreement.PrivateKey {
         if let raw = try storage.data(for: Self.identityAccount),
            let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: raw) {
             return key
@@ -90,13 +99,22 @@ public final class CarrierV2TrustStore {
         try save(try pairedDevices().filter { $0.deviceID != deviceID })
     }
 
+    /// Called on every established session, which is every return to the foreground. A rename is
+    /// written at once; the connection time alone at most every `connectionTimeWriteInterval`, so
+    /// routine reconnects do not keep rewriting the pairing list.
     public func recordConnection(publicKey: Data, deviceName: String, at date: Date = Date()) throws {
         var devices = try pairedDevices()
         guard let index = devices.firstIndex(where: { $0.publicKey == publicKey }) else { return }
+        let stored = devices[index]
         devices[index].lastConnectedAt = date
         devices[index].deviceName = deviceName
+        let isRenamed = stored.deviceName != deviceName
+        let isTimeStale = stored.lastConnectedAt.map { date.timeIntervalSince($0) >= Self.connectionTimeWriteInterval } ?? true
+        guard isRenamed || isTimeStale else { return }
         try save(devices)
     }
+
+    static let connectionTimeWriteInterval: TimeInterval = 15 * 60
 
     private func save(_ devices: [CarrierV2PairedDevice]) throws {
         try storage.set(try Self.encoder.encode(devices), for: Self.pairedDevicesAccount)
@@ -139,17 +157,33 @@ public final class CarrierV2KeychainStorage: CarrierV2SecretStorage {
         }
     }
 
+    /// Updates the item in place, so a failed write leaves the previous value rather than nothing.
+    /// Deleting first and then adding would lose every pairing if the add failed or the app died between.
     public func set(_ data: Data?, for account: String) throws {
-        let deleteStatus = SecItemDelete(baseQuery(account) as CFDictionary)
-        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
-            throw CarrierV2TrustStoreError.keychain(deleteStatus)
+        guard let data else {
+            let status = SecItemDelete(baseQuery(account) as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else {
+                throw CarrierV2TrustStoreError.keychain(status)
+            }
+            return
         }
-        guard let data else { return }
-        var item = baseQuery(account)
-        item[kSecValueData as String] = data
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let status = SecItemAdd(item as CFDictionary, nil)
-        guard status == errSecSuccess else { throw CarrierV2TrustStoreError.keychain(status) }
+        let update: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updateStatus = SecItemUpdate(baseQuery(account) as CFDictionary, update as CFDictionary)
+        switch updateStatus {
+        case errSecSuccess:
+            return
+        case errSecItemNotFound:
+            var item = baseQuery(account)
+            item[kSecValueData as String] = data
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let status = SecItemAdd(item as CFDictionary, nil)
+            guard status == errSecSuccess else { throw CarrierV2TrustStoreError.keychain(status) }
+        default:
+            throw CarrierV2TrustStoreError.keychain(updateStatus)
+        }
     }
 
     private func baseQuery(_ account: String) -> [String: Any] {

@@ -58,3 +58,52 @@ final class CarrierV2TrustStoreTests: XCTestCase {
         XCTAssertNil(try storage.data(for: "item"))
     }
 }
+
+final class CarrierV2TrustStoreWriteTests: XCTestCase {
+    func testRoutineReconnectsDoNotRewriteThePairingList() throws {
+        let storage = CountingStorage()
+        let store = CarrierV2TrustStore(storage: storage)
+        let key = Data(repeating: 4, count: 32)
+        let pairedAt = Date(timeIntervalSince1970: 1_780_000_000)
+        try store.pair(CarrierV2PairedDevice(deviceID: "mac", deviceName: "Mac", platform: .macOS, publicKey: key, lastConnectedAt: pairedAt))
+        let writesAfterPairing = storage.writes
+
+        try store.recordConnection(publicKey: key, deviceName: "Mac", at: pairedAt.addingTimeInterval(60))
+        try store.recordConnection(publicKey: key, deviceName: "Mac", at: pairedAt.addingTimeInterval(120))
+        XCTAssertEqual(storage.writes, writesAfterPairing)
+
+        try store.recordConnection(publicKey: key, deviceName: "Studio Mac", at: pairedAt.addingTimeInterval(180))
+        XCTAssertEqual(storage.writes, writesAfterPairing + 1)
+        XCTAssertEqual(CarrierV2TrustStore(storage: storage).pairedDevice(publicKey: key)?.deviceName, "Studio Mac")
+
+        try store.recordConnection(publicKey: key, deviceName: "Studio Mac", at: pairedAt.addingTimeInterval(180 + CarrierV2TrustStore.connectionTimeWriteInterval))
+        XCTAssertEqual(storage.writes, writesAfterPairing + 2)
+    }
+
+    func testIdentityKeyIsReadFromStorageOnce() throws {
+        let storage = CountingStorage()
+        let store = CarrierV2TrustStore(storage: storage)
+        let first = try store.identityKey()
+        let readsAfterFirst = storage.reads
+        let second = try store.identityKey()
+
+        XCTAssertEqual(first.rawRepresentation, second.rawRepresentation)
+        XCTAssertEqual(storage.reads, readsAfterFirst)
+    }
+}
+
+private final class CountingStorage: CarrierV2SecretStorage {
+    private let inner = CarrierV2MemoryStorage()
+    private(set) var reads = 0
+    private(set) var writes = 0
+
+    func data(for account: String) throws -> Data? {
+        reads += 1
+        return try inner.data(for: account)
+    }
+
+    func set(_ data: Data?, for account: String) throws {
+        writes += 1
+        try inner.set(data, for: account)
+    }
+}
