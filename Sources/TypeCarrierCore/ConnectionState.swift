@@ -79,11 +79,6 @@ public enum ConnectionState: Equatable, Sendable {
     }
 }
 
-public enum ReceiverEndpoint: Equatable, Sendable {
-    case appleMultipeer
-    case androidBridge
-}
-
 public enum ReceiverDevicePlatform: Equatable, Sendable {
     case apple
     case android
@@ -92,35 +87,10 @@ public enum ReceiverDevicePlatform: Equatable, Sendable {
 public struct ReceiverConnectedDevice: Equatable, Sendable {
     public let name: String
     public let platform: ReceiverDevicePlatform
-    public let endpoint: ReceiverEndpoint
 
-    public init(name: String, platform: ReceiverDevicePlatform, endpoint: ReceiverEndpoint) {
+    public init(name: String, platform: ReceiverDevicePlatform) {
         self.name = name
         self.platform = platform
-        self.endpoint = endpoint
-    }
-}
-
-public enum ReceiverEndpointConnectionState: Equatable, Sendable {
-    case idle
-    case listening
-    case connected(String)
-    case failed(String)
-
-    var isUsable: Bool {
-        switch self {
-        case .listening, .connected:
-            true
-        case .idle, .failed:
-            false
-        }
-    }
-
-    var failureMessage: String? {
-        if case .failed(let message) = self {
-            return message
-        }
-        return nil
     }
 }
 
@@ -136,8 +106,10 @@ public enum ReceiverIssueSeverity: Equatable, Sendable {
 }
 
 public enum ReceiverIssueImpact: Equatable, Sendable {
+    /// Something every device depends on, such as record storage.
     case allDevices
-    case endpoint(ReceiverEndpoint)
+    /// The receiver's network entry, which every paired device connects through.
+    case receiver
 }
 
 public enum ReceiverIssueAction: Equatable, Sendable {
@@ -163,6 +135,8 @@ public struct ReceiverStatusIssue: Equatable, Sendable {
     }
 }
 
+/// The receiver's state as the Mac UI presents it. iPhone and Android devices all connect through
+/// the one protocol v2 receiver.
 public struct ReceiverStatusSummary: Equatable, Sendable {
     public let overallHealth: ReceiverOverallHealth
     public let hasUsableEndpoint: Bool
@@ -174,35 +148,23 @@ public struct ReceiverStatusSummary: Equatable, Sendable {
     }
 
     public init(
-        appleConnectionState: ConnectionState,
-        appleConnectedDeviceNames: [String],
-        androidConnectionState: ReceiverEndpointConnectionState,
-        androidConnectedDeviceNames: [String],
+        connectionState: ConnectionState,
+        connectedDevices: [ReceiverConnectedDevice],
         sharedIssue: ReceiverStatusIssue? = nil
     ) {
-        hasUsableEndpoint = Self.hasAnyUsableEndpoint(
-            appleConnectionState: appleConnectionState,
-            androidConnectionState: androidConnectionState
-        )
-        connectedDevices = appleConnectedDeviceNames.map {
-            ReceiverConnectedDevice(name: $0, platform: .apple, endpoint: .appleMultipeer)
-        } + androidConnectedDeviceNames.map {
-            ReceiverConnectedDevice(name: $0, platform: .android, endpoint: .androidBridge)
+        switch connectionState {
+        case .advertising, .connected:
+            hasUsableEndpoint = true
+        case .idle, .searching, .connecting, .reconnecting, .failed:
+            hasUsableEndpoint = false
         }
+        self.connectedDevices = connectedDevices
 
         var collectedIssues: [ReceiverStatusIssue] = []
-        if case .failed(let message) = appleConnectionState {
+        if case .failed(let message) = connectionState {
             collectedIssues.append(ReceiverStatusIssue(
-                severity: .warning,
-                impact: .endpoint(.appleMultipeer),
-                message: message,
-                suggestedAction: .restartReceiver
-            ))
-        }
-        if let message = androidConnectionState.failureMessage {
-            collectedIssues.append(ReceiverStatusIssue(
-                severity: .warning,
-                impact: .endpoint(.androidBridge),
+                severity: .actionRequired,
+                impact: .receiver,
                 message: message,
                 suggestedAction: .restartReceiver
             ))
@@ -212,29 +174,12 @@ public struct ReceiverStatusSummary: Equatable, Sendable {
         }
         issues = collectedIssues
 
-        if collectedIssues.contains(where: { $0.impact == .allDevices && $0.severity == .actionRequired }) {
-            overallHealth = .actionRequired
-        } else if !Self.hasAnyUsableEndpoint(
-            appleConnectionState: appleConnectionState,
-            androidConnectionState: androidConnectionState
-        ), !collectedIssues.isEmpty {
+        if collectedIssues.contains(where: { $0.severity == .actionRequired }) || (!hasUsableEndpoint && !collectedIssues.isEmpty) {
             overallHealth = .actionRequired
         } else if collectedIssues.isEmpty {
             overallHealth = .ok
         } else {
             overallHealth = .degraded
-        }
-    }
-
-    private static func hasAnyUsableEndpoint(
-        appleConnectionState: ConnectionState,
-        androidConnectionState: ReceiverEndpointConnectionState
-    ) -> Bool {
-        switch appleConnectionState {
-        case .advertising, .connected:
-            return true
-        case .idle, .searching, .connecting, .reconnecting, .failed:
-            return androidConnectionState.isUsable
         }
     }
 }

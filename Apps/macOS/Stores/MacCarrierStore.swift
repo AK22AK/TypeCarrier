@@ -27,7 +27,6 @@ final class MacCarrierStore: ObservableObject {
     @Published private(set) var customReceiverDisplayName: String
     @Published private(set) var receiverDisplayName: String
 
-    @Published private(set) var androidBridge: AndroidCarrierBridge
     @Published private(set) var v2Receiver: CarrierV2Receiver
     let connectionDiagnosticLogFileURL: URL?
     private let userDefaults: UserDefaults
@@ -37,7 +36,6 @@ final class MacCarrierStore: ObservableObject {
     private let pasteQueue = CarrierPasteQueue()
     private let permissionChecker = AccessibilityPermissionChecker()
     private let diagnosticLogStore: CarrierDiagnosticLogStore?
-    private var androidBridgeCancellable: AnyCancellable?
     private var v2ReceiverCancellable: AnyCancellable?
 
     init(userDefaults: UserDefaults = .standard) {
@@ -55,11 +53,6 @@ final class MacCarrierStore: ObservableObject {
             forKey: MacReceiverPreferenceKeys.restoresClipboardAfterAutomaticPaste
         )
         connectionDiagnosticLogFileURL = try? CarrierDiagnosticLogStore.defaultFileURL(fileName: "mac-connection-events.jsonl")
-        let bridge = AndroidCarrierBridge(
-            displayName: initialReceiverDisplayName,
-            diagnosticLogFileURL: connectionDiagnosticLogFileURL
-        )
-        androidBridge = bridge
         v2Receiver = CarrierV2Receiver(
             displayName: initialReceiverDisplayName,
             diagnosticLogFileURL: connectionDiagnosticLogFileURL
@@ -78,7 +71,6 @@ final class MacCarrierStore: ObservableObject {
             lastPasteResult = PasteInjectionResult(status: "历史记录存储不可用：\(error.localizedDescription)", succeeded: false)
         }
 
-        bindAndroidBridge()
         v2ReceiverCancellable = v2Receiver.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
         refreshAccessibilityStatus()
@@ -86,11 +78,11 @@ final class MacCarrierStore: ObservableObject {
     }
 
     var connectionState: ConnectionState {
-        appleConnectionState
+        receiverConnectionState
     }
 
     /// The paired-device (v2) receiver, in the shape the status summary expects.
-    private var appleConnectionState: ConnectionState {
+    private var receiverConnectionState: ConnectionState {
         if let name = v2Receiver.connectedDeviceNames.first {
             return .connected(name)
         }
@@ -103,10 +95,8 @@ final class MacCarrierStore: ObservableObject {
 
     var receiverStatusSummary: ReceiverStatusSummary {
         ReceiverStatusSummary(
-            appleConnectionState: appleConnectionState,
-            appleConnectedDeviceNames: v2Receiver.connectedDeviceNames,
-            androidConnectionState: androidEndpointConnectionState,
-            androidConnectedDeviceNames: androidBridge.connectedAndroidDeviceNames,
+            connectionState: receiverConnectionState,
+            connectedDevices: v2Receiver.connectedDevices,
             sharedIssue: sharedReceiverIssue
         )
     }
@@ -117,19 +107,11 @@ final class MacCarrierStore: ObservableObject {
             return .connected("\(connectedDeviceCount) 台设备")
         }
 
-        if appleConnectionState.isConnected {
-            return appleConnectionState
+        if receiverConnectionState.isConnected {
+            return receiverConnectionState
         }
 
-        if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
-            return .connected(androidDeviceName)
-        }
-
-        if appleConnectionState.isFailed, androidEndpointConnectionState == .listening {
-            return .advertising
-        }
-
-        return appleConnectionState
+        return receiverConnectionState
     }
 
     var receiverConnectedDeviceNames: [String] {
@@ -154,19 +136,12 @@ final class MacCarrierStore: ObservableObject {
 
 
     func start() {
-        startAndroidBridge()
         startV2Receiver()
     }
 
     private func startV2Receiver() {
         v2Receiver.start { [weak self] envelope, deviceName, deviceID, reply in
             self?.handle(envelope, from: deviceName, sourceDeviceID: deviceID, sendReceipt: reply)
-        }
-    }
-
-    private func startAndroidBridge() {
-        androidBridge.start { [weak self] envelope, deviceID, deviceName, reply in
-            self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
         }
     }
 
@@ -183,17 +158,13 @@ final class MacCarrierStore: ObservableObject {
         )
         guard effectiveName != receiverDisplayName else { return }
         receiverDisplayName = effectiveName
-        androidBridge.updateDisplayName(effectiveName)
         v2Receiver.updateDisplayName(effectiveName)
         recordDiagnosticMarker("receiver.displayName.updated", message: "Updated the advertised receiver name.")
     }
 
     func restart() {
         v2Receiver.restart()
-        androidBridge.restart { [weak self] envelope, deviceID, deviceName, reply in
-            self?.handle(envelope, from: deviceName, sourceDeviceID: "android:\(deviceID)", sendReceipt: reply)
-        }
-        recordDiagnosticMarker("receiver.restart.rebuilt", message: "Restarted the paired-device and Android receivers.")
+        recordDiagnosticMarker("receiver.restart.rebuilt", message: "Restarted the receiver.")
     }
 
     func restartFromUserAction() {
@@ -352,26 +323,6 @@ final class MacCarrierStore: ObservableObject {
     private func restart(reason: String, message: String) {
         recordDiagnosticMarker(reason, message: message)
         restart()
-    }
-
-    private func bindAndroidBridge() {
-        androidBridgeCancellable = androidBridge.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-    }
-
-    private var androidEndpointConnectionState: ReceiverEndpointConnectionState {
-        if let androidDeviceName = androidBridge.connectedAndroidDeviceNames.first {
-            return .connected(androidDeviceName)
-        }
-
-        switch androidBridge.state {
-        case .stopped:
-            return .idle
-        case .listening:
-            return .listening
-        case .failed(let message):
-            return .failed(message)
-        }
     }
 
     private var sharedReceiverIssue: ReceiverStatusIssue? {

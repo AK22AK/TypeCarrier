@@ -92,12 +92,7 @@ struct ConnectionSelfCheckTests {
     @Test("Mac diagnostics confirm Accessibility when automatic paste is available")
     func accessibilityFindingConfirmsAutomaticPasteAvailable() {
         let findings = ConnectionSelfCheck.findings(
-            receiverSummary: ReceiverStatusSummary(
-                appleConnectionState: .advertising,
-                appleConnectedDeviceNames: [],
-                androidConnectionState: .listening,
-                androidConnectedDeviceNames: []
-            ),
+            receiverSummary: ReceiverStatusSummary(connectionState: .advertising, connectedDevices: []),
             accessibilityTrusted: true
         )
 
@@ -124,21 +119,16 @@ struct ConnectionSelfCheckTests {
         #expect(findings.first?.actionTitle == nil)
     }
 
-    @Test("Receiver self-check reports Android endpoint issues without hiding Apple availability")
-    func receiverSelfCheckReportsEndpointIssueScope() {
+    @Test("Receiver self-check blocks on a failed receiver and offers a restart")
+    func receiverSelfCheckBlocksOnFailedReceiver() {
         let findings = ConnectionSelfCheck.findings(
-            receiverSummary: ReceiverStatusSummary(
-                appleConnectionState: .advertising,
-                appleConnectedDeviceNames: [],
-                androidConnectionState: .failed("Address already in use"),
-                androidConnectedDeviceNames: []
-            ),
+            receiverSummary: ReceiverStatusSummary(connectionState: .failed("Address already in use"), connectedDevices: []),
             accessibilityTrusted: true
         )
 
-        #expect(findings.first?.severity == .warning)
-        #expect(findings.first?.title == "部分连接入口异常")
-        #expect(findings.first?.detail == "Apple 设备仍可发现这台 Mac；Android 入口异常：Address already in use")
+        #expect(findings.first?.severity == .blocking)
+        #expect(findings.first?.title == "接收器需要处理")
+        #expect(findings.first?.detail == "Address already in use")
         #expect(findings.first?.actionTitle == "重启接收器")
     }
 
@@ -146,10 +136,11 @@ struct ConnectionSelfCheckTests {
     func receiverSelfCheckNamesSimultaneousConnections() {
         let findings = ConnectionSelfCheck.findings(
             receiverSummary: ReceiverStatusSummary(
-                appleConnectionState: .connected("iPhone"),
-                appleConnectedDeviceNames: ["iPhone"],
-                androidConnectionState: .connected("Pixel"),
-                androidConnectedDeviceNames: ["Pixel"]
+                connectionState: .connected("iPhone"),
+                connectedDevices: [
+                    ReceiverConnectedDevice(name: "iPhone", platform: .apple),
+                    ReceiverConnectedDevice(name: "Pixel", platform: .android),
+                ]
             ),
             accessibilityTrusted: true
         )

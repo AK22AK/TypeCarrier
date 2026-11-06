@@ -34,6 +34,7 @@ final class CarrierV2Receiver: ObservableObject {
 
     @Published private(set) var state: ListenerState = .stopped
     @Published private(set) var connectedDeviceNames: [String] = []
+    @Published private(set) var connectedDevices: [ReceiverConnectedDevice] = []
     @Published private(set) var pendingPairing: PendingPairing?
     @Published private(set) var isPairingOpen = false
     @Published private(set) var pairedDevices: [CarrierV2PairedDevice] = []
@@ -137,6 +138,61 @@ final class CarrierV2Receiver: ObservableObject {
             )
         }
         listener?.service = makeService()
+    }
+
+    /// This Mac's LAN addresses with the listening port, for typing into a phone when discovery fails.
+    var manualConnectionHints: String {
+        let port: String
+        if case .listening(let listeningPort?) = state {
+            port = String(listeningPort)
+        } else {
+            port = String(Self.defaultPort.rawValue)
+        }
+        let addresses = Self.localIPv4Addresses()
+        guard !addresses.isEmpty else { return "端口 \(port)" }
+        return addresses.map { "\($0.address):\(port)（\($0.interfaceName)）" }.joined(separator: "\n")
+    }
+
+    private static func localIPv4Addresses() -> [LocalIPv4Address] {
+        var interfaces: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
+            return []
+        }
+        defer { freeifaddrs(interfaces) }
+
+        var addresses: [LocalIPv4Address] = []
+        var current: UnsafeMutablePointer<ifaddrs>? = firstInterface
+        while let interface = current {
+            defer { current = interface.pointee.ifa_next }
+
+            let flags = Int32(interface.pointee.ifa_flags)
+            guard flags & IFF_UP == IFF_UP,
+                  flags & IFF_LOOPBACK == 0,
+                  interface.pointee.ifa_addr.pointee.sa_family == UInt8(AF_INET) else {
+                continue
+            }
+
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            let result = getnameinfo(
+                interface.pointee.ifa_addr,
+                socklen_t(interface.pointee.ifa_addr.pointee.sa_len),
+                &hostname,
+                socklen_t(hostname.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            )
+            if result == 0 {
+                addresses.append(LocalIPv4Address(
+                    interfaceName: String(cString: interface.pointee.ifa_name),
+                    address: String(cString: hostname)
+                ))
+            }
+        }
+
+        return Dictionary(grouping: addresses, by: { "\($0.interfaceName)|\($0.address)" })
+            .compactMap { $0.value.first }
+            .sorted()
     }
 
     // MARK: - Pairing
@@ -334,12 +390,17 @@ final class CarrierV2Receiver: ObservableObject {
     }
 
     private func updateConnectedDevices() {
-        let names = links.values
+        let devices = links.values
             .filter(\.isEstablished)
-            .compactMap { $0.peer?.info.deviceName }
-            .sorted()
+            .compactMap { link in
+                link.peer.map { ReceiverConnectedDevice(name: $0.info.deviceName, platform: $0.platform == .android ? .android : .apple) }
+            }
+            .sorted { $0.name < $1.name }
         // Unchanged lists must not re-render every view watching the store.
-        if names != connectedDeviceNames { connectedDeviceNames = names }
+        if devices != connectedDevices {
+            connectedDevices = devices
+            connectedDeviceNames = devices.map(\.name)
+        }
     }
 
     private func fail(_ message: String) {
@@ -385,5 +446,36 @@ final class CarrierV2Receiver: ObservableObject {
         let next = UUID().uuidString
         defaults.set(next, forKey: deviceIDDefaultsKey)
         return next
+    }
+}
+
+private struct LocalIPv4Address: Comparable {
+    let interfaceName: String
+    let address: String
+
+    static func < (lhs: LocalIPv4Address, rhs: LocalIPv4Address) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority < rhs.priority
+        }
+        if lhs.interfaceName != rhs.interfaceName {
+            return lhs.interfaceName < rhs.interfaceName
+        }
+        return lhs.address < rhs.address
+    }
+
+    private var priority: Int {
+        if interfaceName == "en0" {
+            return 0
+        }
+        if interfaceName.hasPrefix("en") {
+            return 1
+        }
+        if interfaceName.hasPrefix("bridge") {
+            return 2
+        }
+        if interfaceName.hasPrefix("utun") || interfaceName.hasPrefix("awdl") || interfaceName.hasPrefix("llw") {
+            return 9
+        }
+        return 5
     }
 }

@@ -24,7 +24,6 @@
 	<false/>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_typecarrier._tcp</string>
 		<string>_typecarrier-v2._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>

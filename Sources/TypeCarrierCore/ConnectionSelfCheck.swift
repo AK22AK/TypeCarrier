@@ -216,29 +216,15 @@ public enum ConnectionSelfCheck {
         _ summary: ReceiverStatusSummary,
         issue: ReceiverStatusIssue
     ) -> String {
-        let availableText: String
-        switch issue.impact {
-        case .endpoint(.androidBridge):
-            availableText = "Apple 设备仍可发现这台 Mac"
-        case .endpoint(.appleMultipeer):
-            availableText = summary.connectedDevices.contains { $0.endpoint == .androidBridge }
-                ? "Android 设备仍可发送到这台 Mac"
-                : "Android 入口仍可用"
-        case .allDevices:
-            availableText = "接收器存在共享问题"
-        }
-
-        return "\(availableText)；\(issueTitle(for: issue.impact))：\(issue.message)"
+        "\(issueTitle(for: issue.impact))：\(issue.message)"
     }
 
     private static func issueTitle(for impact: ReceiverIssueImpact) -> String {
         switch impact {
         case .allDevices:
             return "接收器异常"
-        case .endpoint(.appleMultipeer):
-            return "Apple 入口异常"
-        case .endpoint(.androidBridge):
-            return "Android 入口异常"
+        case .receiver:
+            return "接收入口异常"
         }
     }
 

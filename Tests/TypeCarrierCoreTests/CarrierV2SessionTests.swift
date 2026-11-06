@@ -97,7 +97,9 @@ final class CarrierV2SessionTests: XCTestCase {
         var mac = makeMac(trusted: [])
         let futureHello = Data(#"{"capabilities":[],"minProto":9,"mode":"connect","platform":"windows","proto":9}"#.utf8)
 
-        let events = mac.receive(try CarrierWireFrame.encode(futureHello))
+        var frame = withUnsafeBytes(of: UInt32(futureHello.count).bigEndian) { Data($0) }
+        frame.append(futureHello)
+        let events = mac.receive(frame)
 
         XCTAssertEqual(events.last, .closed(.unsupportedVersion))
     }

@@ -116,35 +116,13 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertNil(diagnostics.connectionRecoverySuggestion)
     }
 
-    func testAndroidBridgeFailureIsDegradedWhenAppleReceiverIsConnected() {
+    func testIPhoneAndAndroidDevicesShareTheOneReceiver() {
         let summary = ReceiverStatusSummary(
-            appleConnectionState: .connected("iPhone15Pro"),
-            appleConnectedDeviceNames: ["iPhone15Pro"],
-            androidConnectionState: .failed("Address already in use"),
-            androidConnectedDeviceNames: []
-        )
-
-        XCTAssertEqual(summary.overallHealth, .degraded)
-        XCTAssertFalse(summary.requiresGlobalAttention)
-        XCTAssertEqual(
-            summary.connectedDevices,
-            [
-                ReceiverConnectedDevice(
-                    name: "iPhone15Pro",
-                    platform: .apple,
-                    endpoint: .appleMultipeer
-                )
+            connectionState: .connected("iPhone15Pro"),
+            connectedDevices: [
+                ReceiverConnectedDevice(name: "iPhone15Pro", platform: .apple),
+                ReceiverConnectedDevice(name: "Pixel", platform: .android),
             ]
-        )
-        XCTAssertEqual(summary.issues.map(\.impact), [.endpoint(.androidBridge)])
-    }
-
-    func testMultipleConnectedEndpointsShowAllDevices() {
-        let summary = ReceiverStatusSummary(
-            appleConnectionState: .connected("iPhone15Pro"),
-            appleConnectedDeviceNames: ["iPhone15Pro"],
-            androidConnectionState: .connected("Pixel"),
-            androidConnectedDeviceNames: ["Pixel"]
         )
 
         XCTAssertEqual(summary.overallHealth, .ok)
@@ -152,25 +130,19 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertEqual(summary.connectedDevices.map(\.name), ["iPhone15Pro", "Pixel"])
     }
 
-    func testEveryEndpointFailedRequiresGlobalAttention() {
-        let summary = ReceiverStatusSummary(
-            appleConnectionState: .failed("Multipeer failed"),
-            appleConnectedDeviceNames: [],
-            androidConnectionState: .failed("Address already in use"),
-            androidConnectedDeviceNames: []
-        )
+    func testReceiverFailureRequiresGlobalAttention() {
+        let summary = ReceiverStatusSummary(connectionState: .failed("Address already in use"), connectedDevices: [])
 
         XCTAssertEqual(summary.overallHealth, .actionRequired)
         XCTAssertTrue(summary.requiresGlobalAttention)
-        XCTAssertEqual(summary.issues.map(\.impact), [.endpoint(.appleMultipeer), .endpoint(.androidBridge)])
+        XCTAssertFalse(summary.hasUsableEndpoint)
+        XCTAssertEqual(summary.issues.map(\.impact), [.receiver])
     }
 
     func testSharedExecutionIssueRequiresGlobalAttention() {
         let summary = ReceiverStatusSummary(
-            appleConnectionState: .connected("iPhone15Pro"),
-            appleConnectedDeviceNames: ["iPhone15Pro"],
-            androidConnectionState: .listening,
-            androidConnectedDeviceNames: [],
+            connectionState: .connected("iPhone15Pro"),
+            connectedDevices: [ReceiverConnectedDevice(name: "iPhone15Pro", platform: .apple)],
             sharedIssue: ReceiverStatusIssue(
                 severity: .actionRequired,
                 impact: .allDevices,
@@ -183,32 +155,17 @@ final class ConnectionStateTests: XCTestCase {
         XCTAssertTrue(summary.requiresGlobalAttention)
         XCTAssertEqual(summary.issues.map(\.impact), [.allDevices])
     }
-    func testReadyReceiverWithoutDevicesHasUsableEndpoint() {
-        let summary = ReceiverStatusSummary(
-            appleConnectionState: .advertising, appleConnectedDeviceNames: [],
-            androidConnectionState: .listening, androidConnectedDeviceNames: []
-        )
+
+    func testListeningReceiverWithoutDevicesIsReady() {
+        let summary = ReceiverStatusSummary(connectionState: .advertising, connectedDevices: [])
         XCTAssertTrue(summary.hasUsableEndpoint)
         XCTAssertTrue(summary.connectedDevices.isEmpty)
         XCTAssertEqual(summary.overallHealth, .ok)
     }
 
-    func testStoppedEndpointsAreUnavailableEvenWithoutReportedErrors() {
-        let summary = ReceiverStatusSummary(
-            appleConnectionState: .idle, appleConnectedDeviceNames: [],
-            androidConnectionState: .idle, androidConnectedDeviceNames: []
-        )
+    func testStoppedReceiverIsUnavailableEvenWithoutReportedErrors() {
+        let summary = ReceiverStatusSummary(connectionState: .idle, connectedDevices: [])
         XCTAssertFalse(summary.hasUsableEndpoint)
         XCTAssertTrue(summary.issues.isEmpty)
     }
-
-    func testPartialFailureRetainsUsableReceiverEndpoint() {
-        let summary = ReceiverStatusSummary(
-            appleConnectionState: .failed("Apple unavailable"), appleConnectedDeviceNames: [],
-            androidConnectionState: .listening, androidConnectedDeviceNames: []
-        )
-        XCTAssertTrue(summary.hasUsableEndpoint)
-        XCTAssertEqual(summary.overallHealth, .degraded)
-    }
-
 }

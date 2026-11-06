@@ -114,16 +114,4 @@ final class DeviceNamePreferenceTests: XCTestCase {
             XCTAssertTrue(name.isEmpty || name.hasPrefix(alias))
         }
     }
-
-    func testDiscoveryUsesActualTXTEntryCapacityAndFallsBackSafely() throws {
-        let limit = 255 - AndroidBonjourAdvertisement.macNameKey.utf8.count - 1
-        let fits = String(repeating: "n", count: limit)
-        XCTAssertEqual(AndroidBonjourAdvertisement.discoveryInfo(macID: "id", macName: fits, port: 17641)["macName"], fits)
-        let oversized = String(repeating: "名", count: 100)
-        let data = AndroidBonjourAdvertisement.txtRecordData(macID: "id", macName: oversized)
-        let nameData = try XCTUnwrap(AndroidBonjourAdvertisement.txtRecordDictionary(from: data)["macName"])
-        XCTAssertLessThanOrEqual(nameData.count + "macName=".utf8.count, 255)
-        XCTAssertEqual(String(data: nameData, encoding: .utf8), CarrierDeviceIdentity.serviceInstanceName(oversized))
-        XCTAssertEqual(AndroidBonjourAdvertisement.discoveryInfo(macID: "id", macName: oversized, port: 17641)["macID"], "id")
-    }
 }
