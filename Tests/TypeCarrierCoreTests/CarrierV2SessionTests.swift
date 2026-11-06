@@ -21,7 +21,7 @@ final class CarrierV2SessionTests: XCTestCase {
         XCTAssertFalse(mac.isEstablished)
         XCTAssertEqual(mac.peer?.info.deviceName, "iPhone")
         XCTAssertEqual(mac.peer?.publicKey, phoneKey.publicKey.rawRepresentation)
-        XCTAssertEqual(mac.peer?.hello.platform, .iOS)
+        XCTAssertEqual(mac.peer?.platform, .iOS)
 
         let (afterPhone, afterMac) = pump(&phone, &mac, initial: [], macFirst: mac.confirmPairing())
 
@@ -95,7 +95,7 @@ final class CarrierV2SessionTests: XCTestCase {
 
     func testIncompatibleVersionsCloseWithUnsupportedVersion() throws {
         var mac = makeMac(trusted: [])
-        let futureHello = try CarrierHello(proto: 9, minProto: 9, mode: .connect, platform: .windows, capabilities: []).encoded()
+        let futureHello = Data(#"{"capabilities":[],"minProto":9,"mode":"connect","platform":"windows","proto":9}"#.utf8)
 
         let events = mac.receive(try CarrierWireFrame.encode(futureHello))
 
@@ -148,22 +148,6 @@ final class CarrierV2SessionTests: XCTestCase {
         frame[frame.count - 1] ^= 0xFF
 
         XCTAssertEqual(mac.receive(frame).last, .closed(.handshakeFailed))
-    }
-
-    func testPairingCodeIsStableForAHashAndSixDigits() {
-        let hash = Data(repeating: 0xAB, count: 32)
-        XCTAssertEqual(CarrierProtocolV2.pairingCode(handshakeHash: hash), CarrierProtocolV2.pairingCode(handshakeHash: hash))
-        XCTAssertEqual(CarrierProtocolV2.pairingCode(handshakeHash: hash).count, 6)
-        XCTAssertNotEqual(
-            CarrierProtocolV2.pairingCode(handshakeHash: hash),
-            CarrierProtocolV2.pairingCode(handshakeHash: Data(repeating: 0xAC, count: 32))
-        )
-    }
-
-    func testMessagesUseTypeTaggedJSON() throws {
-        let json = String(decoding: try CarrierV2Message.ping(7).encoded(), as: UTF8.self)
-        XCTAssertEqual(json, #"{"id":7,"type":"ping"}"#)
-        XCTAssertEqual(try CarrierV2Message.decode(Data(#"{"type":"close","reason":"replaced"}"#.utf8)), .close(.replaced))
     }
 
     // MARK: - Helpers

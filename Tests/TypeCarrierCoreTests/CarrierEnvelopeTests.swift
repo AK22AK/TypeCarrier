@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import TypeCarrierCore
 
@@ -159,8 +160,26 @@ final class CarrierPayloadLengthLimitTests: XCTestCase {
 
         let largestAllowed = String(repeating: "\u{01}", count: CarrierPayload.maximumCharacterCount)
         XCTAssertTrue(CarrierPayload.canSend(largestAllowed))
-        let message = CarrierV2Message.envelope(.text(CarrierPayload(text: largestAllowed), sender: CarrierDeviceIdentity(displayName: String(repeating: "名", count: 60), deviceID: UUID().uuidString)))
-        XCTAssertLessThan(try message.encoded().count + 16, NoiseCipherState.maxMessageLength)
+        // Control characters encode as six-byte JSON escapes: the worst case for one envelope.
+        let envelope = CarrierEnvelope.text(CarrierPayload(createdAt: Date(timeIntervalSince1970: 1_780_000_000), text: largestAllowed), sender: CarrierDeviceIdentity(displayName: String(repeating: "名", count: 60), deviceID: UUID().uuidString))
+        let phoneKey = Curve25519.KeyAgreement.PrivateKey()
+        let macKey = Curve25519.KeyAgreement.PrivateKey()
+        let phone = CarrierV2Session(
+            role: .initiator(.connect, remoteStaticKey: macKey.publicKey.rawRepresentation),
+            identity: CarrierV2Identity(staticKey: phoneKey, info: CarrierV2DeviceInfo(deviceID: "p", deviceName: "p"), platform: .iOS, capabilities: [])
+        )
+        let mac = CarrierV2Session(
+            role: .responder,
+            identity: CarrierV2Identity(staticKey: macKey, info: CarrierV2DeviceInfo(deviceID: "m", deviceName: "m"), platform: .macOS, capabilities: []),
+            isTrusted: { _ in true }
+        )
+        var toMac = Self.written(phone.start())
+        while !toMac.isEmpty {
+            toMac = Self.written(phone.receive(Self.written(mac.receive(toMac))))
+        }
+        XCTAssertTrue(phone.isEstablished)
+        let frame = try phone.send(envelope)
+        XCTAssertEqual(mac.receive(Self.written(frame)), [.received(envelope)])
     }
 
     func testIndicatorStaysHiddenUntilNearTheLimit() {
@@ -170,5 +189,11 @@ final class CarrierPayloadLengthLimitTests: XCTestCase {
         XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "a", count: 10_000)), .overLimit(count: 10_000, limit: 9_999))
         // 3,500 Chinese characters are over 9,000 UTF-8 bytes but far from the character limit.
         XCTAssertEqual(CarrierTextLengthIndicator(text: String(repeating: "字", count: 3_500)), .hidden)
+    }
+
+    private static func written(_ events: [CarrierV2SessionEvent]) -> Data {
+        events.reduce(into: Data()) { data, event in
+            if case .write(let bytes) = event { data.append(bytes) }
+        }
     }
 }

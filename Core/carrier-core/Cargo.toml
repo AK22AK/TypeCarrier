@@ -15,7 +15,7 @@ path = "src/bin/uniffi-bindgen.rs"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
-snow = "0.10.0"
+snow = { version = "0.10.0", default-features = false, features = ["default-resolver", "use-chacha20poly1305", "use-sha2", "use-curve25519", "use-getrandom", "std"] }
 thiserror = "2.0.21"
 uniffi = { version = "0.32.2", features = ["cli"] }
 x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }

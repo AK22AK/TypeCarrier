@@ -1,0 +1,6 @@
+# Symbols from the Rust core linked into TypeCarrierCore. Only the Swift bindings in the same
+# framework call them, so keep them out of the export table and let dead stripping drop the rest.
+__ZN*
+__R*
+_uniffi_*
+_ffi_carrier_core_*

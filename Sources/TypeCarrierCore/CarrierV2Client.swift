@@ -117,11 +117,7 @@ public final class CarrierV2Client: ObservableObject {
               let link = links[deviceID], link.isEstablished else {
             throw CarrierServiceError.noConnectedPeer
         }
-        do {
-            try link.send(envelope)
-        } catch NoiseError.messageTooLarge, CarrierWireFrameError.payloadTooLarge {
-            throw CarrierServiceError.textTooLong
-        }
+        try link.send(envelope)
         if let payload = envelope.payload {
             recordDiagnosticMarker("v2.send", message: "Sent payload \(payload.id).", peerName: link.peer?.info.deviceName)
         }
@@ -176,7 +172,7 @@ public final class CarrierV2Client: ObservableObject {
             try? trustStore.pair(CarrierV2PairedDevice(
                 deviceID: peer.info.deviceID,
                 deviceName: peer.info.deviceName,
-                platform: peer.hello.platform,
+                platform: peer.platform,
                 publicKey: peer.publicKey,
                 lastConnectedAt: Date()
             ))

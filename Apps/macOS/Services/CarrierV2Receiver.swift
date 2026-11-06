@@ -285,7 +285,7 @@ final class CarrierV2Receiver: ObservableObject {
         case .tcpReady:
             break
         case .pairingCodeReady(let code, let peer):
-            pendingPairing = PendingPairing(id: id, code: code, deviceName: peer.info.deviceName, platform: peer.hello.platform)
+            pendingPairing = PendingPairing(id: id, code: code, deviceName: peer.info.deviceName, platform: peer.platform)
             record("v2.pairing.codeShown", message: "Waiting for the person to compare codes.", peerName: peer.info.deviceName)
 #if DEBUG
             if Self.autoPairsForTesting { confirmPendingPairing() }
@@ -295,7 +295,7 @@ final class CarrierV2Receiver: ObservableObject {
                 try? trustStore.pair(CarrierV2PairedDevice(
                     deviceID: peer.info.deviceID,
                     deviceName: peer.info.deviceName,
-                    platform: peer.hello.platform,
+                    platform: peer.platform,
                     publicKey: peer.publicKey,
                     lastConnectedAt: Date()
                 ))
@@ -312,7 +312,7 @@ final class CarrierV2Receiver: ObservableObject {
                 other.close()
             }
             updateConnectedDevices()
-            record("v2.session.ready", message: "Session established (\(peer.hello.platform.rawValue)).", peerName: peer.info.deviceName)
+            record("v2.session.ready", message: "Session established (\(peer.platform.rawValue)).", peerName: peer.info.deviceName)
         case .received(let envelope):
             guard let peer = link.peer else { return }
             envelopeHandler?(envelope, peer.info.deviceName, "v2:\(peer.info.deviceID)") { [weak link] reply in

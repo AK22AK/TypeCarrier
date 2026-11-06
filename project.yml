@@ -41,6 +41,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: $(TYPECARRIER_BUNDLE_PREFIX).core
+        UNEXPORTED_SYMBOLS_FILE: Core/rust-unexported-symbols.txt
+        DEAD_CODE_STRIPPING: YES
   TypeCarrierCoreTests:
     type: bundle.unit-test
     platform: macOS
