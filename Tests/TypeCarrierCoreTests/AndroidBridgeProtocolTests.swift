@@ -54,38 +54,6 @@ final class AndroidBridgeProtocolTests: XCTestCase {
         XCTAssertEqual(decoded, response)
     }
 
-    func testPairingAssociationRequestRoundTripsRemoteCode() throws {
-        let request = AndroidPairingAssociationRequest(
-            macID: "mac-1",
-            macName: "MacBook Pro",
-            pairingCode: "234567"
-        )
-
-        let decoded = try JSONDecoder().decode(
-            AndroidPairingAssociationRequest.self,
-            from: JSONEncoder().encode(request)
-        )
-
-        XCTAssertEqual(decoded, request)
-    }
-
-    func testPairingAssociationResponseRoundTripsTrustedDevice() throws {
-        let response = AndroidPairingAssociationResponse(
-            status: .accepted,
-            message: "Associated.",
-            deviceID: "android-1",
-            deviceName: "OPPO PLJ110",
-            trustToken: "token"
-        )
-
-        let decoded = try JSONDecoder().decode(
-            AndroidPairingAssociationResponse.self,
-            from: JSONEncoder().encode(response)
-        )
-
-        XCTAssertEqual(decoded, response)
-    }
-
     func testBridgeResponseBusyDoesNotIncludeTrustToken() {
         let response = AndroidBridgeResponse.busy("Mac is already serving another device.")
 

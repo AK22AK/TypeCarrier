@@ -568,7 +568,6 @@ private class FakeAndroidCarrierRepository(
     override val discoveryError: StateFlow<String?> = mutableDiscoveryErrors
     override val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition> = mutableDiscoveryPrecondition
     override val deviceName: String = "Android Test"
-    override val localPairingCode: String = "654321"
     override val trustedMacs: List<MacService>
         get() = if (hasTrustToken) listOf(mac) else emptyList()
     override var manualHost: String = ""

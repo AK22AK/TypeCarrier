@@ -43,7 +43,6 @@ data class AndroidComposerUiState(
     val outgoingHistory: List<AndroidCarrierRecord> = emptyList(),
     val services: List<MacService> = emptyList(),
     val connectedMacs: List<MacService> = emptyList(),
-    val localPairingCode: String = "",
     val trustedMacs: List<MacService> = emptyList(),
     val selectedMac: MacService? = null,
     val manualHost: String = "",
@@ -101,7 +100,6 @@ class AndroidComposerViewModel(
             draftCount = recordStore.drafts.size,
             discoveryPrecondition = repository.discoveryPrecondition.value,
             diagnostics = diagnosticLogStore.recent(),
-            localPairingCode = repository.localPairingCode,
             trustedMacs = repository.trustedMacs,
         ),
     )

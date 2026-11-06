@@ -855,26 +855,6 @@ private fun ConnectionPanel(
                 )
             }
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("本机匹配码", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        state.localPairingCode,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
             if (visibleServices.isNotEmpty()) {
                 Text("发送目标 · 已连接 ${state.connectedMacs.size} 台 Mac", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(

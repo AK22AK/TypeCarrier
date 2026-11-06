@@ -19,7 +19,6 @@ interface AndroidCarrierRepository : Closeable {
     val discoveryError: StateFlow<String?>
     val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition>
     val deviceName: String
-    val localPairingCode: String
     val trustedMacs: List<MacService>
     var manualHost: String
     var manualPort: String
@@ -72,33 +71,6 @@ class AndroidCarrierRepositoryImpl(
             _discoveryError.value = it
         },
     )
-    private val pairingReceiver = AndroidPairingReceiver(
-        context = appContext,
-        deviceID = { deviceID },
-        deviceName = { displayName },
-        localPairingCode = { localPairingCode },
-        onAssociated = { associatedMac ->
-            prefs.edit()
-                .putString(AndroidTrustTokenKeys.tokenKey(associatedMac.macID), associatedMac.trustToken)
-                .apply()
-            rememberTrustedMac(
-                MacService(
-                    name = associatedMac.macName,
-                    host = associatedMac.host,
-                    port = defaultAndroidBridgePort,
-                    macID = associatedMac.macID,
-                ),
-            )
-        },
-        onError = { errorMessage = it },
-    )
-    private val discoveryLifecycle = AndroidDiscoveryLifecycle(
-        startMacDiscovery = discovery::start,
-        stopMacDiscovery = discovery::stop,
-        startPairingReceiver = pairingReceiver::start,
-        stopPairingReceiver = pairingReceiver::close,
-        disposePairingReceiver = pairingReceiver::dispose,
-    )
     private var errorMessage: String? = null
 
     override val services: StateFlow<List<MacService>> = _services
@@ -106,11 +78,6 @@ class AndroidCarrierRepositoryImpl(
     override val discoveryPrecondition: StateFlow<AndroidDiscoveryPrecondition> = _discoveryPrecondition
 
     override val deviceName: String = localDeviceName()
-
-    override val localPairingCode: String
-        get() = prefs.getString(localPairingCodePreference, null) ?: AndroidPairingCode.generate().also {
-            prefs.edit().putString(localPairingCodePreference, it).apply()
-        }
 
     override val trustedMacs: List<MacService>
         get() = readTrustedMacs()
@@ -152,16 +119,17 @@ class AndroidCarrierRepositoryImpl(
 
     override fun startDiscovery() {
         refreshDiscoveryPrecondition()
-        discoveryLifecycle.start()
+        discovery.start()
     }
 
     override fun stopDiscovery() {
-        discoveryLifecycle.stop()
+        discovery.stop()
     }
 
     override fun refreshDiscovery() {
         refreshDiscoveryPrecondition()
-        discoveryLifecycle.refresh()
+        discovery.stop()
+        discovery.start()
     }
 
     override fun hasSavedTrustToken(service: MacService): Boolean =
@@ -236,7 +204,7 @@ class AndroidCarrierRepositoryImpl(
     }
 
     override fun close() {
-        discoveryLifecycle.close()
+        discovery.stop()
         closeConnection()
     }
 
@@ -311,7 +279,6 @@ class AndroidCarrierRepositoryImpl(
 
     private companion object {
         const val trustedMacKeysPreference = "trusted_mac_keys"
-        const val localPairingCodePreference = "local_pairing_code"
     }
 }
 

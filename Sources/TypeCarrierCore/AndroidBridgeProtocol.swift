@@ -60,42 +60,6 @@ public struct AndroidBridgeResponse: Codable, Equatable, Sendable {
     }
 }
 
-public struct AndroidPairingAssociationRequest: Codable, Equatable, Sendable {
-    public let version: Int
-    public let macID: String
-    public let macName: String
-    public let pairingCode: String
-
-    public init(version: Int = 1, macID: String, macName: String, pairingCode: String) {
-        self.version = version
-        self.macID = macID
-        self.macName = macName
-        self.pairingCode = pairingCode
-    }
-}
-
-public struct AndroidPairingAssociationResponse: Codable, Equatable, Sendable {
-    public let status: AndroidBridgeResponse.Status
-    public let message: String
-    public let deviceID: String?
-    public let deviceName: String?
-    public let trustToken: String?
-
-    public init(
-        status: AndroidBridgeResponse.Status,
-        message: String,
-        deviceID: String? = nil,
-        deviceName: String? = nil,
-        trustToken: String? = nil
-    ) {
-        self.status = status
-        self.message = message
-        self.deviceID = deviceID
-        self.deviceName = deviceName
-        self.trustToken = trustToken
-    }
-}
-
 public struct AndroidBridgeActiveSenderGate: Equatable, Sendable {
     public private(set) var activeDeviceID: String?
 
