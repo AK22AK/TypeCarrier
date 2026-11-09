@@ -10,10 +10,10 @@ class ConnectionDisplayTextTest {
     fun searchingStateUsesHeaderTextWhenNoMacWasFound() {
         val state = AndroidComposerUiState(
             connectionStatus = AndroidConnectionStatus.Searching,
-            headerStatusText = "未发现 Mac",
+            headerStatusText = "未发现设备",
             services = emptyList(),
         )
 
-        assertEquals("未发现 Mac", connectionDisplayText(state))
+        assertEquals("未发现设备", connectionDisplayText(state))
     }
 }

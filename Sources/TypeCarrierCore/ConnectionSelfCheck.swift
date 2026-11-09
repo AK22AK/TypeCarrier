@@ -94,7 +94,7 @@ public enum ConnectionSelfCheck {
                 id: "ios.localNetworkPermission",
                 severity: .blocking,
                 title: "需要本地网络权限",
-                detail: "iOS 需要允许 TypeCarrier 访问本地网络，才能发现同一局域网或附近的 Mac。",
+                detail: "iOS 需要允许 TypeCarrier 访问本地网络，才能发现同一局域网或附近的设备。",
                 actionTitle: "在系统设置中允许本地网络",
                 relatedEventName: localNetworkFailureEvent.name
             ))

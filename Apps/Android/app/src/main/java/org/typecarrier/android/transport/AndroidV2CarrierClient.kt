@@ -82,7 +82,7 @@ class AndroidV2CarrierClient(
                 nextSocket.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
             } catch (error: IOException) {
                 close()
-                return@withContext Outcome.Closed(null, error.localizedMessage ?: "无法连接 Mac")
+                return@withContext Outcome.Closed(null, error.localizedMessage ?: "无法连接设备")
             }
             val mode = if (remoteStaticKey == null) CoreHelloMode.PAIR else CoreHelloMode.CONNECT
             val nextSession = CoreSession(CoreRole.Initiator(mode, remoteStaticKey), identity, nowMs(), null)
@@ -157,7 +157,7 @@ class AndroidV2CarrierClient(
                 if (count < 0) break
                 apply(session.receive(buffer.copyOf(count), nowMs()))
             }
-            "Mac 已断开连接"
+            "设备已断开连接"
         } catch (error: IOException) {
             error.localizedMessage ?: "连接已断开"
         }
@@ -216,13 +216,13 @@ class AndroidV2CarrierClient(
         private fun nowMs(): ULong = System.currentTimeMillis().toULong()
 
         fun closeMessage(reason: CoreCloseReason): String = when (reason) {
-            CoreCloseReason.PAIRING_REJECTED -> "Mac 上选择了“不一致”，未配对。"
-            CoreCloseReason.PAIRING_NOT_OPEN -> "请先在 Mac 上点“开始配对”，再在这里选择它。"
-            CoreCloseReason.NOT_PAIRED -> "这台 Mac 已移除与本机的配对，请重新配对。"
-            CoreCloseReason.UNSUPPORTED_VERSION -> "Mac 上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
-            CoreCloseReason.HANDSHAKE_FAILED -> "加密握手失败，Mac 可能已重置，请重新配对。"
+            CoreCloseReason.PAIRING_REJECTED -> "设备上选择了“不一致”，未配对。"
+            CoreCloseReason.PAIRING_NOT_OPEN -> "请先在设备上点“开始配对”，再在这里选择它。"
+            CoreCloseReason.NOT_PAIRED -> "这台设备已移除与本机的配对，请重新配对。"
+            CoreCloseReason.UNSUPPORTED_VERSION -> "设备上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
+            CoreCloseReason.HANDSHAKE_FAILED -> "加密握手失败，设备可能已重置，请重新配对。"
             CoreCloseReason.REPLACED -> "已在别处重新连接。"
-            CoreCloseReason.HEARTBEAT_TIMEOUT -> "Mac 长时间无响应。"
+            CoreCloseReason.HEARTBEAT_TIMEOUT -> "设备长时间无响应。"
             CoreCloseReason.PROTOCOL_VIOLATION -> "通信异常，请重试。"
             CoreCloseReason.SHUTDOWN -> "连接已关闭。"
         }

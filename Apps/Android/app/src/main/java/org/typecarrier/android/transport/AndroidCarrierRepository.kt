@@ -232,7 +232,7 @@ fun manualService(host: String, port: String): MacService? {
     if (cleanHost.isBlank() || cleanPort == null || cleanPort !in 1..65_535) {
         return null
     }
-    return MacService(name = "手动 Mac", host = cleanHost, port = cleanPort)
+    return MacService(name = "手动输入的设备", host = cleanHost, port = cleanPort)
 }
 
 private const val defaultCarrierPort = 17642

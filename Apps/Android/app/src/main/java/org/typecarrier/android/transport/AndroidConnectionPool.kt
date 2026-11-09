@@ -20,7 +20,7 @@ class AndroidConnectionPool : Closeable {
 
     @Synchronized
     fun addAuthenticated(service: MacService, connection: CarrierConnection) {
-        check(connection.isOpen) { "Mac 连接已关闭" }
+        check(connection.isOpen) { "设备连接已关闭" }
         val old = entries.put(service.id, Entry(service, connection))
         publish()
         old?.connection?.close()
@@ -40,7 +40,7 @@ class AndroidConnectionPool : Closeable {
     }
 
     suspend fun send(service: MacService, text: String, deviceName: String, action: CarrierPostPasteAction?): CarrierDeliveryReceipt? {
-        val entry = synchronized(this) { entry(service) } ?: error("所选 Mac 已离线，请重新连接或选择发送目标")
+        val entry = synchronized(this) { entry(service) } ?: error("所选设备已离线，请重新连接或选择发送目标")
         return try {
             entry.connection.sendText(text, deviceName, action)
         } catch (error: Exception) {

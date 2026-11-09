@@ -16,11 +16,11 @@ struct MacPairingView: View {
             Section {
                 if client.availableReceivers.isEmpty, !client.pairedReceivers.isEmpty {
                     // Paired Macs are listed below, so an empty list here is the expected state.
-                    Text("附近没有其他可配对的 Mac").foregroundStyle(.secondary)
+                    Text("附近没有其他可配对的设备").foregroundStyle(.secondary)
                 } else if client.availableReceivers.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
-                        Text("正在查找同一网络中的 Mac…").foregroundStyle(.secondary)
+                        Text("正在查找同一网络中的设备…").foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(client.availableReceivers) { receiver in
@@ -37,9 +37,9 @@ struct MacPairingView: View {
                     }
                 }
             } header: {
-                Text("附近的 Mac")
+                Text("附近的设备")
             } footer: {
-                Text("先在 Mac 上打开 TypeCarrier，在“接收器”里点“开始配对”，再在这里选择它。")
+                Text("先在设备上打开 TypeCarrier，在“接收器”里点“开始配对”，再在这里选择它。")
             }
 
             if !client.pairedReceivers.isEmpty {
@@ -62,7 +62,7 @@ struct MacPairingView: View {
             }
         }
         .softTopScrollEdge()
-        .navigationTitle("Mac 设备")
+        .navigationTitle("设备")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear {
             if case .failed = client.pairing { client.dismissPairingResult() }
@@ -85,7 +85,7 @@ struct MacPairingView: View {
                 Text(code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code)
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
                     .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Text("两边一致时，在 Mac 上点“一致”完成配对。")
+                Text("两边一致时，在设备上点“一致”完成配对。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("取消") { client.cancelPairing() }.buttonStyle(.borderless)

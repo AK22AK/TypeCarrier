@@ -31,7 +31,7 @@ data class AndroidComposerUiState(
     val text: String = "",
     val sendState: AndroidSendState = AndroidSendState.Idle,
     val connectionStatus: AndroidConnectionStatus = AndroidConnectionStatus.Searching,
-    val headerStatusText: String = "正在查找 Mac",
+    val headerStatusText: String = "正在查找设备",
     val connectionFailureMessage: String? = null,
     val canSend: Boolean = false,
     val canSaveDraft: Boolean = false,
@@ -131,8 +131,8 @@ class AndroidComposerViewModel(
                     headerStatusText = when {
                         connectedMac != null -> current.headerStatusText
                         selected != null -> selected.name
-                        services.isEmpty() -> "未发现 Mac"
-                        else -> "发现 ${services.size} 台 Mac"
+                        services.isEmpty() -> "未发现设备"
+                        else -> "发现 ${services.size} 台设备"
                     },
                 ).withDerivedValues(repository)
             }
@@ -199,7 +199,7 @@ class AndroidComposerViewModel(
         _uiState.update {
             it.copy(
                 connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Searching,
-                headerStatusText = connectedMac?.name ?: "正在查找 Mac",
+                headerStatusText = connectedMac?.name ?: "正在查找设备",
                 connectionFailureMessage = null,
             ).withDerivedValues(repository)
         }
@@ -228,7 +228,7 @@ class AndroidComposerViewModel(
         _uiState.update {
             it.copy(
                 connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "正在查找 Mac",
+                headerStatusText = "正在查找设备",
                 connectionFailureMessage = null,
             ).withDerivedValues(repository)
         }
@@ -268,7 +268,7 @@ class AndroidComposerViewModel(
                 selectedMac = null,
                 manualHost = repository.manualHost,
                 connectionStatus = AndroidConnectionStatus.Idle,
-                headerStatusText = "手动 Mac",
+                headerStatusText = "手动输入的设备",
             ).withDerivedValues(repository)
         }
     }
@@ -283,7 +283,7 @@ class AndroidComposerViewModel(
                 selectedMac = null,
                 manualPort = repository.manualPort,
                 connectionStatus = AndroidConnectionStatus.Idle,
-                headerStatusText = "手动 Mac",
+                headerStatusText = "手动输入的设备",
             ).withDerivedValues(repository)
         }
     }
@@ -405,7 +405,7 @@ class AndroidComposerViewModel(
                 val rejected = result as AndroidConnectResult.Rejected
                 val trustedMacs = repository.trustedMacs
                 val message = if (rejected.pairingRemoved) {
-                    "配对已失效，请在 Mac 上点“开始配对”后重新连接。"
+                    "配对已失效，请在设备上点“开始配对”后重新连接。"
                 } else {
                     rejected.message
                 }
@@ -749,7 +749,7 @@ class AndroidComposerViewModel(
 
     private fun connectingStatusText(service: MacService): String {
         if (service.isManualMac()) {
-            return "正在连接到手动输入的 Mac"
+            return "正在连接到手动输入的设备"
         }
         return "正在连接到 ${service.name}"
     }
@@ -758,7 +758,7 @@ class AndroidComposerViewModel(
         if (!service.isManualMac()) {
             return rawMessage
         }
-        return "无法连接到手动输入的 Mac。请确认连接管理里的 Mac 地址是当前这台 Mac 的局域网地址。"
+        return "无法连接到手动输入的设备。请确认连接管理里的设备地址是当前这台设备的局域网地址。"
     }
 
     private val AndroidDiscoveryPrecondition.diagnosticMessage: String
@@ -768,7 +768,7 @@ class AndroidComposerViewModel(
             AndroidDiscoveryPrecondition.NotLocalNetwork -> "Active network is not Wi-Fi or Ethernet; Mac discovery may not reach the LAN."
         }
 
-    private fun MacService.isManualMac(): Boolean = name == "手动 Mac"
+    private fun MacService.isManualMac(): Boolean = name == "手动输入的设备"
 
     private fun statusForReceipt(receipt: CarrierDeliveryReceipt?): AndroidRecordStatus {
         return when (receipt?.pasteStatus) {

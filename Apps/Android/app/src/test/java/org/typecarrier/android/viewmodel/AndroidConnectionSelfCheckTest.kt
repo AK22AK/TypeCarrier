@@ -12,7 +12,7 @@ class AndroidConnectionSelfCheckTest {
         val findings = AndroidConnectionSelfCheck.findings(
             AndroidComposerUiState(
                 connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "未发现 Mac",
+                headerStatusText = "未发现设备",
                 services = emptyList(),
                 discoveryPrecondition = AndroidDiscoveryPrecondition.NoNetwork,
             ),
@@ -29,15 +29,15 @@ class AndroidConnectionSelfCheckTest {
         val findings = AndroidConnectionSelfCheck.findings(
             AndroidComposerUiState(
                 connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "未发现 Mac",
+                headerStatusText = "未发现设备",
                 services = emptyList(),
                 discoveryPrecondition = AndroidDiscoveryPrecondition.NotLocalNetwork,
             ),
         )
 
         assertEquals(AndroidSelfCheckSeverity.Blocking, findings.first().severity)
-        assertEquals("当前网络无法发现局域网 Mac", findings.first().title)
-        assertEquals("切换到与 Mac 相同的 Wi-Fi", findings.first().actionTitle)
+        assertEquals("当前网络无法发现局域网设备", findings.first().title)
+        assertEquals("切换到与设备相同的 Wi-Fi", findings.first().actionTitle)
         assertEquals("network.precondition", findings.first().relatedEventName)
     }
 
@@ -46,14 +46,14 @@ class AndroidConnectionSelfCheckTest {
         val findings = AndroidConnectionSelfCheck.findings(
             AndroidComposerUiState(
                 connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "未发现 Mac",
+                headerStatusText = "未发现设备",
                 services = emptyList(),
             ),
         )
 
         assertEquals(AndroidSelfCheckSeverity.Warning, findings.first().severity)
-        assertEquals("没有发现 Mac", findings.first().title)
-        assertEquals("检查局域网和 Mac 接收器", findings.first().actionTitle)
+        assertEquals("没有发现设备", findings.first().title)
+        assertEquals("检查局域网和设备接收器", findings.first().actionTitle)
         assertEquals("discovery.services", findings.first().relatedEventName)
     }
 
@@ -79,14 +79,14 @@ class AndroidConnectionSelfCheckTest {
         val findings = AndroidConnectionSelfCheck.findings(
             AndroidComposerUiState(
                 connectionStatus = AndroidConnectionStatus.Idle,
-                connectionFailureMessage = "配对已失效，请重新输入 Mac 匹配码。",
+                connectionFailureMessage = "配对已失效，请重新输入设备匹配码。",
                 selectedMac = MacService(name = "MacBook Pro", host = "127.0.0.1", port = 17641),
             ),
         )
 
         assertEquals(AndroidSelfCheckSeverity.Blocking, findings.first().severity)
         assertEquals("配对已失效", findings.first().title)
-        assertEquals("重新输入 Mac 匹配码", findings.first().actionTitle)
+        assertEquals("重新输入设备匹配码", findings.first().actionTitle)
     }
 
     @Test

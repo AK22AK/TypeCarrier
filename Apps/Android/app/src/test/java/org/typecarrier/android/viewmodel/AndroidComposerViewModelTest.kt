@@ -160,7 +160,7 @@ class AndroidComposerViewModelTest {
         val connectJob = viewModel.connect()
 
         assertEquals(AndroidConnectionStatus.Connecting, viewModel.uiState.value.connectionStatus)
-        assertEquals("正在连接到手动输入的 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals("正在连接到手动输入的设备", viewModel.uiState.value.headerStatusText)
 
         connectGate.complete(Unit)
         connectJob.join()
@@ -180,7 +180,7 @@ class AndroidComposerViewModelTest {
 
         assertEquals("连接失败", viewModel.uiState.value.headerStatusText)
         assertEquals(
-            "无法连接到手动输入的 Mac。请确认连接管理里的 Mac 地址是当前这台 Mac 的局域网地址。",
+            "无法连接到手动输入的设备。请确认连接管理里的设备地址是当前这台设备的局域网地址。",
             viewModel.uiState.value.connectionFailureMessage,
         )
         assertTrue(viewModel.exportDiagnosticsText().contains(rawFailure))
@@ -213,7 +213,7 @@ class AndroidComposerViewModelTest {
         assertFalse(repository.hasTrustToken)
         assertFalse(rejectedState.trustedMacs.any { it.id == repository.mac.id })
         assertTrue(rejectedState.canConnect)
-        assertEquals("配对已失效，请在 Mac 上点“开始配对”后重新连接。", rejectedState.connectionFailureMessage)
+        assertEquals("配对已失效，请在设备上点“开始配对”后重新连接。", rejectedState.connectionFailureMessage)
 
         repository.nextConnectResult = AndroidConnectResult.Connected
         viewModel.connect().join()
@@ -332,7 +332,7 @@ class AndroidComposerViewModelTest {
         assertEquals(emptyList<MacService>(), viewModel.uiState.value.services)
         assertEquals(null, viewModel.uiState.value.selectedMac)
         assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
-        assertEquals("未发现 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals("未发现设备", viewModel.uiState.value.headerStatusText)
         assertFalse(viewModel.uiState.value.canConnect)
     }
 
@@ -345,7 +345,7 @@ class AndroidComposerViewModelTest {
 
         assertEquals(1, repository.refreshDiscoveryAttempts)
         assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
-        assertEquals("正在查找 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals("正在查找设备", viewModel.uiState.value.headerStatusText)
         assertTrue(viewModel.exportDiagnosticsText().contains("app.foregroundDiscoveryRefresh"))
     }
 
@@ -396,7 +396,7 @@ class AndroidComposerViewModelTest {
         assertFalse(repository.hasTrustToken)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
         assertEquals("连接失败", viewModel.uiState.value.headerStatusText)
-        assertEquals("配对已失效，请在 Mac 上点“开始配对”后重新连接。", viewModel.uiState.value.connectionFailureMessage)
+        assertEquals("配对已失效，请在设备上点“开始配对”后重新连接。", viewModel.uiState.value.connectionFailureMessage)
     }
 
     @Test
@@ -427,7 +427,7 @@ class AndroidComposerViewModelTest {
 
         assertEquals(AndroidDiscoveryPrecondition.NotLocalNetwork, viewModel.uiState.value.discoveryPrecondition)
         assertEquals(
-            "当前网络无法发现局域网 Mac",
+            "当前网络无法发现局域网设备",
             AndroidConnectionSelfCheck.findings(viewModel.uiState.value).first().title,
         )
     }
@@ -613,7 +613,7 @@ private class FakeAndroidCarrierRepository(
             payloadID = "payload",
             receivedAt = "2026-06-01T00:00:00Z",
             pasteStatus = CarrierDeliveryReceipt.PasteStatus.Posted,
-            detail = "Mac 已插入",
+            detail = "设备已插入",
         )
     }
 

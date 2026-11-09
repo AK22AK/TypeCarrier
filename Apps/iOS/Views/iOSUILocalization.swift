@@ -42,10 +42,10 @@ extension String {
 
     var localizedDiagnosticMessageText: String {
         self
-            .replacingOccurrences(of: "Try Restart Receiver on the Mac, then retry here.", with: "请先在 Mac 上重启接收器，然后在这里重试。")
+            .replacingOccurrences(of: "Try Restart Receiver on the Mac, then retry here.", with: "请先在设备上重启接收器，然后在这里重试。")
             .replacingOccurrences(
                 of: "Disconnect the other iPhone or simulator from this Mac, then retry here.",
-                with: "请先断开另一台 iPhone 或模拟器与这台 Mac 的连接，然后在这里重试。"
+                with: "请先断开另一台 iPhone 或模拟器与这台设备的连接，然后在这里重试。"
             )
             .replacingOccurrences(of: " is already connected to another device.", with: " 已连接到另一台设备。")
             .replacingOccurrences(of: "Connection issue", with: "连接异常")
@@ -57,10 +57,10 @@ extension String {
             .replacingOccurrences(of: "Failed to clear drafts", with: "清空草稿失败")
             .replacingOccurrences(of: "Failed to clear history", with: "清空历史记录失败")
             .replacingOccurrences(of: "Text is empty", with: "文本为空")
-            .replacingOccurrences(of: "Mac acknowledged receipt", with: "Mac 已确认收到")
-            .replacingOccurrences(of: "Mac received and saved text", with: "Mac 已接收并保存文本")
-            .replacingOccurrences(of: "Mac inserted text", with: "Mac 已插入文本")
-            .replacingOccurrences(of: "Mac paste failed", with: "Mac 粘贴失败")
+            .replacingOccurrences(of: "Mac acknowledged receipt", with: "设备已确认收到")
+            .replacingOccurrences(of: "Mac received and saved text", with: "设备已接收并保存文本")
+            .replacingOccurrences(of: "Mac inserted text", with: "设备已插入文本")
+            .replacingOccurrences(of: "Mac paste failed", with: "设备粘贴失败")
             .replacingOccurrences(of: "Posted paste command for ", with: "已发送粘贴指令，共 ")
             .replacingOccurrences(of: "Inserted ", with: "已插入 ")
             .replacingOccurrences(of: " characters via Accessibility fallback in ", with: " 个字符（通过辅助功能兜底）到 ")

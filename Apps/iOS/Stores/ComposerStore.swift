@@ -608,7 +608,7 @@ final class ComposerStore: ObservableObject {
         guard sendState != .sending else { return }
         reconcileTargets()
         guard let target = selectedTarget else {
-            sendState = .failed("目标 Mac 未连接")
+            sendState = .failed("目标设备未连接")
             return
         }
         let textToSend = text
@@ -652,7 +652,7 @@ final class ComposerStore: ObservableObject {
             updateRecord(
                 id: record.id,
                 status: .sent,
-                detail: "已发送到 Mac"
+                detail: "已发送到设备"
             )
         } catch {
             deliveryConfirmationWait.cancel()
@@ -857,21 +857,21 @@ final class ComposerStore: ObservableObject {
            deliveryConfirmationWait.confirm(payloadID: ackID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
-                detail: "Mac 已确认收到",
+                detail: "设备已确认收到",
                 pasteStatus: .received
             )
         } else if envelope.kind == .receipt, let receipt = envelope.receipt,
                   deliveryConfirmationWait.confirm(payloadID: receipt.payloadID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
-                detail: receipt.detail ?? "Mac 已接收文本",
+                detail: receipt.detail ?? "设备已接收文本",
                 pasteStatus: receipt.pasteStatus
             )
         }
     }
 
     private func handleDeliveryConfirmationTimeout() {
-        let detail = "发送超时，请检查 Mac 端接收结果"
+        let detail = "发送超时，请检查设备上的接收结果"
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: .failed, detail: detail)
         }

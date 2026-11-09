@@ -190,9 +190,9 @@ public final class CarrierV2Client: ObservableObject {
             pairingLink = nil
             let message: String
             switch reason {
-            case .pairingRejected: message = "Mac 上选择了“不一致”，未配对。"
-            case .pairingNotOpen: message = "请先在 Mac 上点“开始配对”，再在这里选择它。"
-            case .unsupportedVersion: message = "Mac 上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
+            case .pairingRejected: message = "设备上选择了“不一致”，未配对。"
+            case .pairingNotOpen: message = "请先在设备上点“开始配对”，再在这里选择它。"
+            case .unsupportedVersion: message = "设备上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
             case .handshakeFailed: message = "配对超时或失败，请重试。"
             default: message = networkError.map { "连接失败：\($0)" } ?? "配对已取消。"
             }

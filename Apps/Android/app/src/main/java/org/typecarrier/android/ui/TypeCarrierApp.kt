@@ -620,7 +620,7 @@ private fun HeaderActions(
             ) {
                 CompactMenuItem(
                     icon = Icons.Default.Link,
-                    text = "连接 Mac",
+                    text = "连接设备",
                     onClick = {
                         onDismissMenu()
                         onOpenConnection()
@@ -689,7 +689,7 @@ private fun LogoMark(size: Dp, iconSize: Dp) {
 
 internal fun connectionDisplayText(state: AndroidComposerUiState): String =
     when (state.connectionStatus) {
-        AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "Mac 已连接"
+        AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "设备已连接"
         AndroidConnectionStatus.Connecting -> state.headerStatusText
         AndroidConnectionStatus.Searching -> state.headerStatusText
         AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
@@ -731,7 +731,7 @@ private fun ConnectionDialog(
                 Text("关闭")
             }
         },
-        title = { Text("连接 Mac") },
+        title = { Text("连接设备") },
         text = {
             ConnectionPanel(
                 state = state,
@@ -837,7 +837,7 @@ private fun ConnectionPanel(
     ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.WifiTethering, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text("连接 Mac", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("连接设备", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     when {
@@ -851,7 +851,7 @@ private fun ConnectionPanel(
             }
 
             if (visibleServices.isNotEmpty()) {
-                Text("发送目标 · 已连接 ${state.connectedMacs.size} 台 Mac", style = MaterialTheme.typography.labelLarge)
+                Text("发送目标 · 已连接 ${state.connectedMacs.size} 台设备", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -874,7 +874,7 @@ private fun ConnectionPanel(
                 }
             } else {
                 Text(
-                    "未发现当前网络中的 Mac。正常情况下这里会直接显示 Mac 名称；只有自动发现失败时，才需要展开高级连接使用地址兜底。",
+                    "未发现当前网络中的设备。正常情况下这里会直接显示设备名称；只有自动发现失败时，才需要展开高级连接使用地址兜底。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -895,7 +895,7 @@ private fun ConnectionPanel(
                             fontFamily = FontFamily.Monospace,
                         )
                         Text(
-                            "两边一致时，在 Mac 上点“一致”完成配对。",
+                            "两边一致时，在设备上点“一致”完成配对。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
@@ -903,7 +903,7 @@ private fun ConnectionPanel(
                 }
             } else if (!selectedHasTrust) {
                 Text(
-                    "首次连接需要配对：先在 Mac 上的 TypeCarrier 里点“开始配对”，再点下方按钮，两边会显示同一个 6 位数字。",
+                    "首次连接需要配对：先在设备上的 TypeCarrier 里点“开始配对”，再点下方按钮，两边会显示同一个 6 位数字。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -913,7 +913,7 @@ private fun ConnectionPanel(
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Text(
-                        "这台 Mac 已配对，会自动连接。",
+                        "这台设备已配对，会自动连接。",
                         modifier = Modifier.padding(12.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         style = MaterialTheme.typography.bodyMedium,
@@ -934,7 +934,7 @@ private fun ConnectionPanel(
                     OutlinedTextField(
                         value = state.manualHost,
                         onValueChange = onManualHostChange,
-                        label = { Text("Mac 地址") },
+                        label = { Text("设备地址") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -948,7 +948,7 @@ private fun ConnectionPanel(
                     )
                 }
                 Text(
-                    "这是自动发现失败时的本次兜底入口。正常连接不需要手动查看或输入 IP/端口；换网络或换 Mac 后不要沿用旧地址。",
+                    "这是自动发现失败时的本次兜底入口。正常连接不需要手动查看或输入 IP/端口；换网络或换设备后不要沿用旧地址。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -961,7 +961,7 @@ private fun ConnectionPanel(
 
             if (connectedMac != null) {
                 TextButton(onClick = onDisconnect, enabled = !state.isBusy) {
-                    Text("断开当前 Mac")
+                    Text("断开当前设备")
                 }
             }
 
@@ -976,7 +976,7 @@ private fun ConnectionPanel(
                         state.connectionStatus == AndroidConnectionStatus.Connected -> "已连接"
                         state.isBusy && state.connectionStatus == AndroidConnectionStatus.Connecting -> "正在连接"
                         state.selectedMac == null && state.manualHost.isNotBlank() -> "用手动地址连接"
-                        state.pairingPrompt != null -> "等待 Mac 确认"
+                        state.pairingPrompt != null -> "等待设备确认"
                         selectedHasTrust -> "连接"
                         else -> "配对并连接"
                     },
@@ -1485,7 +1485,7 @@ private fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "Mac 会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
+                "设备会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1619,7 +1619,7 @@ private fun DebugScreen(
                     HorizontalDivider()
                     SettingsListItem("本机设备", state.deviceName)
                     HorizontalDivider()
-                    SettingsListItem("目标 Mac", state.selectedMac?.name ?: "无")
+                    SettingsListItem("目标设备", state.selectedMac?.name ?: "无")
                     HorizontalDivider()
                     SettingsListItem("发现设备", if (state.services.isEmpty()) "无" else state.services.joinToString { it.name })
                     state.connectionFailureMessage?.let {

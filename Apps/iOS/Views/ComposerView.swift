@@ -198,7 +198,7 @@ struct ComposerView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
-                    .accessibilityHint("切换已连接的 Mac")
+                    .accessibilityHint("切换已连接的设备")
                     .accessibilityIdentifier("receiverTargetPicker")
                 } else {
                     Text(store.headerStatusText)
@@ -250,7 +250,7 @@ struct ComposerView: View {
             Button {
                 open(.macs)
             } label: {
-                Label("Mac 设备", systemImage: "desktopcomputer")
+                Label("设备", systemImage: "desktopcomputer")
             }
 
             Button {
@@ -297,10 +297,10 @@ struct ComposerView: View {
                     Image(systemName: "desktopcomputer")
                         .font(.footnote.weight(.semibold))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("还没有配对 Mac")
+                        Text("还没有配对设备")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.primary)
-                        Text("首次使用需要和 Mac 核对一次 6 位数字")
+                        Text("首次使用需要和设备核对一次 6 位数字")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
