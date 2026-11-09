@@ -74,14 +74,15 @@ struct ReceiverStatusPage: View {
                     }
                 }
             }
+            CarrierV2PairingSection(receiver: store.v2Receiver)
             if presentation.canReceive {
                 VStack(alignment: .leading, spacing: 8) {
                     MacManagementGroup {
                         DisclosureGroup("连接新设备", isExpanded: $showsConnectionGuide) {
                             VStack(alignment: .leading, spacing: 0) {
-                                guidanceRow("iPhone", symbol: "iphone", detail: "打开手机上的 TypeCarrier，自动发现这台 Mac。")
+                                guidanceRow("iPhone", symbol: "iphone", detail: "首次连接时，在手机上选择这台 Mac 并点“配对”，这里会弹出请求，核对数字后点“允许”。")
                                 Divider()
-                                guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，在手机输入配对码。", pairingCode: store.androidBridge.pairingCode)
+                                guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，在手机上选择这台 Mac 并点“配对”，这里会弹出请求，核对数字后点“允许”。")
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 8)
@@ -101,14 +102,11 @@ struct ReceiverStatusPage: View {
                 DisclosureGroup(isExpanded: $showsAdvancedInfo) {
                     VStack(alignment: .leading, spacing: 12) {
                         LabeledContent("本机名称", value: store.receiverDisplayName)
-                        LabeledContent("服务标识", value: store.carrierService.diagnostics.serviceType)
-                        LabeledContent("Apple 接收入口", value: store.carrierService.connectionState.localizedDisplayText)
-                        LabeledContent("Android 接收入口", value: androidAvailability)
-                        LabeledContent("已发现设备", value: store.carrierService.diagnostics.discoveredPeers.joined(separator: "、"))
-                        LabeledContent("连接中设备", value: store.carrierService.diagnostics.invitedPeers.joined(separator: "、"))
-                        Text(store.androidBridge.manualConnectionHints).textSelection(.enabled).foregroundStyle(.secondary)
-                        if let error = store.carrierService.diagnostics.lastErrorMessage { Text(error).textSelection(.enabled) }
-                        if let error = store.androidBridge.lastErrorMessage { Text(error).textSelection(.enabled) }
+                        LabeledContent("服务标识", value: CarrierV2Receiver.serviceType)
+                        LabeledContent("接收入口", value: v2Availability)
+                        LabeledContent("已配对设备", value: store.v2Receiver.pairedDevices.map(\.deviceName).joined(separator: "、"))
+                        Text(store.v2Receiver.manualConnectionHints).textSelection(.enabled).foregroundStyle(.secondary)
+                        if let error = store.v2Receiver.lastErrorMessage { Text(error).textSelection(.enabled) }
                         Button("重启接收器") { store.restartFromUserAction() }
                         Text("会中断当前连接，手机可能需要重新连接。")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -121,7 +119,7 @@ struct ReceiverStatusPage: View {
         .onChange(of: summary.connectedDevices.isEmpty) { _, isEmpty in showsConnectionGuide = isEmpty }
     }
 
-    private func guidanceRow(_ title: String, symbol: String, detail: String, pairingCode: String? = nil) -> some View {
+    private func guidanceRow(_ title: String, symbol: String, detail: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol).font(.system(size: 20)).foregroundStyle(.secondary).frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
@@ -130,19 +128,13 @@ struct ReceiverStatusPage: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 12)
-            if let pairingCode {
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text(pairingCode).font(.system(size: 13, weight: .medium, design: .monospaced)).textSelection(.enabled)
-                    Text("配对码").font(.system(size: 12)).foregroundStyle(.secondary)
-                }
-            }
         }
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
     }
 
-    private var androidAvailability: String {
-        switch store.androidBridge.state {
+    private var v2Availability: String {
+        switch store.v2Receiver.state {
         case .stopped: "未启动"
         case .listening(let port): port.map { "监听中：\($0)" } ?? "监听中"
         case .failed(let message): "失败：\(message)"
@@ -154,8 +146,7 @@ private extension ReceiverIssueImpact {
     var localizedManagementText: String {
         switch self {
         case .allDevices: "影响所有设备"
-        case .endpoint(.appleMultipeer): "影响 iPhone 接收入口"
-        case .endpoint(.androidBridge): "影响 Android 接收入口"
+        case .receiver: "影响所有手机的连接"
         }
     }
 }

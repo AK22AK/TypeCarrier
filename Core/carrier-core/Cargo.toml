@@ -1,0 +1,27 @@
+[package]
+name = "carrier-core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+name = "carrier_core"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+snow = { version = "0.10.0", default-features = false, features = ["default-resolver", "use-chacha20poly1305", "use-sha2", "use-curve25519", "use-getrandom", "std"] }
+thiserror = "2.0.21"
+uniffi = { version = "0.32.2", features = ["cli"] }
+x25519-dalek = { version = "3.0.0", features = ["static_secrets"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

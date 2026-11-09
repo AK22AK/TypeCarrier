@@ -5,6 +5,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -17,12 +18,12 @@ import org.typecarrier.android.domain.AndroidRecordStatus
 import org.typecarrier.android.domain.CarrierPayloadPolicy
 import org.typecarrier.android.domain.EditorTextReplacementPolicy
 import org.typecarrier.android.domain.TextEditHistory
-import org.typecarrier.android.protocol.AndroidBridgeResponseStatus
-import org.typecarrier.android.protocol.AndroidPairingCode
 import org.typecarrier.android.protocol.CarrierDeliveryReceipt
 import org.typecarrier.android.protocol.CarrierPostPasteAction
 import org.typecarrier.android.storage.AndroidRecordStore
 import org.typecarrier.android.transport.AndroidCarrierRepository
+import org.typecarrier.android.transport.AndroidConnectResult
+import org.typecarrier.android.transport.AndroidPairingPrompt
 import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
 import org.typecarrier.android.transport.MacService
 import org.typecarrier.android.transport.manualService
@@ -31,7 +32,7 @@ data class AndroidComposerUiState(
     val text: String = "",
     val sendState: AndroidSendState = AndroidSendState.Idle,
     val connectionStatus: AndroidConnectionStatus = AndroidConnectionStatus.Searching,
-    val headerStatusText: String = "正在查找 Mac",
+    val headerStatusText: String = "正在查找设备",
     val connectionFailureMessage: String? = null,
     val canSend: Boolean = false,
     val canSaveDraft: Boolean = false,
@@ -43,12 +44,12 @@ data class AndroidComposerUiState(
     val outgoingHistory: List<AndroidCarrierRecord> = emptyList(),
     val services: List<MacService> = emptyList(),
     val connectedMacs: List<MacService> = emptyList(),
-    val localPairingCode: String = "",
     val trustedMacs: List<MacService> = emptyList(),
     val selectedMac: MacService? = null,
     val manualHost: String = "",
-    val manualPort: String = "17641",
-    val pairingCode: String = "",
+    val manualPort: String = "17642",
+    /** While pairing: the code to compare with the one the Mac shows. */
+    val pairingPrompt: AndroidPairingPrompt? = null,
     val senderDisplayName: String = "",
     val launchesIntoInputMode: Boolean = true,
     val enablesSendReturnGesture: Boolean = false,
@@ -58,6 +59,8 @@ data class AndroidComposerUiState(
     val isBusy: Boolean = false,
     val discoveryPrecondition: AndroidDiscoveryPrecondition = AndroidDiscoveryPrecondition.Available,
     val diagnostics: List<AndroidDiagnosticEvent> = emptyList(),
+    /** True after discovery ran out without a connection and was stopped until the person retries. */
+    val searchTimedOut: Boolean = false,
 )
 
 sealed interface AndroidSendState {
@@ -79,7 +82,20 @@ class AndroidComposerViewModel(
     private val recordStore: AndroidRecordStore,
     private val diagnosticLogStore: AndroidDiagnosticLogStore,
     private val scope: CoroutineScope,
+    private val searchTimeoutMillis: Long = SEARCH_TIMEOUT_MILLIS,
+    private val resumeSearchTimeoutMillis: Long = RESUME_SEARCH_TIMEOUT_MILLIS,
 ) {
+    companion object {
+        private const val maximumDraftCount = 99
+        const val SEARCH_TIMEOUT_MILLIS = 15_000L
+        const val RESUME_SEARCH_TIMEOUT_MILLIS = 25_000L
+        const val SEARCH_TIMED_OUT_TITLE = "未找到设备"
+        const val SEARCH_TIMED_OUT_MESSAGE = "已停止搜索。确认设备上的 TypeCarrier 已打开、两台设备在同一网络，然后点刷新重试。"
+    }
+
+    private var searchTimeoutJob: Job? = null
+    private var searchHolds = 0
+
     private val textHistory = TextEditHistory()
     private var connectedMac: MacService? = null
     private var autoConnectAttemptedServiceIDs: Set<String> = emptySet()
@@ -101,7 +117,6 @@ class AndroidComposerViewModel(
             draftCount = recordStore.drafts.size,
             discoveryPrecondition = repository.discoveryPrecondition.value,
             diagnostics = diagnosticLogStore.recent(),
-            localPairingCode = repository.localPairingCode,
             trustedMacs = repository.trustedMacs,
         ),
     )
@@ -128,12 +143,12 @@ class AndroidComposerViewModel(
                     services = services,
                     trustedMacs = trustedMacs,
                     selectedMac = selected,
-                    connectionStatus = if (connectedMac != null) current.connectionStatus else if (selected == null) AndroidConnectionStatus.Searching else AndroidConnectionStatus.Idle,
+                    connectionStatus = if (connectedMac != null || current.searchTimedOut) current.connectionStatus else if (selected == null) AndroidConnectionStatus.Searching else AndroidConnectionStatus.Idle,
                     headerStatusText = when {
-                        connectedMac != null -> current.headerStatusText
+                        connectedMac != null || current.searchTimedOut -> current.headerStatusText
                         selected != null -> selected.name
-                        services.isEmpty() -> "未发现 Mac"
-                        else -> "发现 ${services.size} 台 Mac"
+                        services.isEmpty() -> "未发现设备"
+                        else -> "发现 ${services.size} 台设备"
                     },
                 ).withDerivedValues(repository)
             }
@@ -142,7 +157,7 @@ class AndroidComposerViewModel(
             }
             autoConnectTarget?.let { service ->
                 autoConnectAttemptedServiceIDs = autoConnectAttemptedServiceIDs + service.id
-                connectToService(service, requestedPairingCode = null)
+                connectToService(service)
             }
         }
     }
@@ -162,6 +177,13 @@ class AndroidComposerViewModel(
                     headerStatusText = selected?.name ?: current.headerStatusText,
                 ).withDerivedValues(repository)
             }
+        }
+    }
+
+    private val pairingPromptJob: Job = scope.launch {
+        repository.pairingPrompt.collect { prompt ->
+            _uiState.update { it.copy(pairingPrompt = prompt) }
+            prompt?.let { recordDiagnostic("pairing.codeShown", "Comparing a pairing code with ${it.macName}.") }
         }
     }
 
@@ -185,35 +207,103 @@ class AndroidComposerViewModel(
 
     fun start() {
         repository.startDiscovery()
+        scheduleSearchTimeout(searchTimeoutMillis)
         recordDiagnostic("app.start", "Android sender started.")
     }
 
     fun refreshDiscovery() {
         repository.refreshDiscovery()
+        scheduleSearchTimeout(searchTimeoutMillis)
         _uiState.update {
             it.copy(
                 connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Searching,
-                headerStatusText = connectedMac?.name ?: "正在查找 Mac",
+                headerStatusText = connectedMac?.name ?: "正在查找设备",
                 connectionFailureMessage = null,
+                searchTimedOut = false,
             ).withDerivedValues(repository)
         }
         recordDiagnostic("discovery.refresh", "Restarted Mac discovery.")
     }
 
+    /** Stops discovery (and its Wi-Fi multicast lock) while the app is not visible. */
+    fun handleAppEnteredBackground() {
+        cancelSearchTimeout()
+        repository.stopDiscovery()
+        recordDiagnostic("app.backgroundDiscoveryStopped", "Stopped Mac discovery in background.")
+    }
+
+    /** Keeps discovering until the matching [endSearchHold]; restarts a search that timed out. */
+    fun beginSearchHold() {
+        searchHolds += 1
+        cancelSearchTimeout()
+        if (_uiState.value.searchTimedOut) {
+            refreshDiscovery()
+            cancelSearchTimeout()
+        }
+    }
+
+    fun endSearchHold() {
+        searchHolds = (searchHolds - 1).coerceAtLeast(0)
+        if (searchHolds == 0 && !_uiState.value.searchTimedOut) {
+            scheduleSearchTimeout(searchTimeoutMillis)
+        }
+    }
+
+    private fun scheduleSearchTimeout(timeoutMillis: Long) {
+        searchTimeoutJob?.cancel()
+        if (searchHolds > 0) {
+            searchTimeoutJob = null
+            return
+        }
+        searchTimeoutJob = scope.launch {
+            delay(timeoutMillis)
+            searchTimeoutJob = null
+            handleSearchTimeout(timeoutMillis)
+        }
+    }
+
+    private fun cancelSearchTimeout() {
+        searchTimeoutJob?.cancel()
+        searchTimeoutJob = null
+    }
+
+    private fun handleSearchTimeout(timeoutMillis: Long) {
+        val state = _uiState.value
+        if (connectedMac != null || state.isBusy || state.pairingPrompt != null || searchHolds > 0 || state.services.isNotEmpty()) {
+            // Connected, connecting, pairing, or computers are listed for the person to pick:
+            // "not found" would be wrong, so look again later instead.
+            scheduleSearchTimeout(searchTimeoutMillis)
+            return
+        }
+        repository.stopDiscovery()
+        _uiState.update {
+            it.copy(
+                connectionStatus = AndroidConnectionStatus.Idle,
+                headerStatusText = SEARCH_TIMED_OUT_TITLE,
+                connectionFailureMessage = SEARCH_TIMED_OUT_MESSAGE,
+                searchTimedOut = true,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic("discovery.timeout", "Nothing connected within ${timeoutMillis} ms; stopped discovery.")
+    }
+
     fun handleAppBecameActive() {
         val state = _uiState.value
+        repository.startDiscovery()
+        scheduleSearchTimeout(resumeSearchTimeoutMillis)
         if (state.isBusy || state.connectionStatus == AndroidConnectionStatus.Connected) {
             return
         }
+        _uiState.update { it.copy(searchTimedOut = false, connectionFailureMessage = null).withDerivedValues(repository) }
 
-        val trustedSelectedMac = state.selectedMac?.takeIf(repository::hasSavedTrustToken)
+        val trustedSelectedMac = state.selectedMac?.takeIf(repository::isPaired)
         if (trustedSelectedMac != null) {
             recordDiagnostic(
                 "app.foregroundTrustedReconnect",
                 "Reconnecting to ${trustedSelectedMac.name} after app became active.",
             )
             scope.launch {
-                connectToService(trustedSelectedMac, requestedPairingCode = null)
+                connectToService(trustedSelectedMac)
             }
             return
         }
@@ -222,7 +312,7 @@ class AndroidComposerViewModel(
         _uiState.update {
             it.copy(
                 connectionStatus = AndroidConnectionStatus.Searching,
-                headerStatusText = "正在查找 Mac",
+                headerStatusText = "正在查找设备",
                 connectionFailureMessage = null,
             ).withDerivedValues(repository)
         }
@@ -236,7 +326,6 @@ class AndroidComposerViewModel(
         _uiState.update {
             it.copy(
                 selectedMac = service,
-                pairingCode = "",
                 connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Idle,
                 headerStatusText = service.name,
                 connectionFailureMessage = null,
@@ -263,7 +352,7 @@ class AndroidComposerViewModel(
                 selectedMac = null,
                 manualHost = repository.manualHost,
                 connectionStatus = AndroidConnectionStatus.Idle,
-                headerStatusText = "手动 Mac",
+                headerStatusText = "手动输入的设备",
             ).withDerivedValues(repository)
         }
     }
@@ -278,13 +367,9 @@ class AndroidComposerViewModel(
                 selectedMac = null,
                 manualPort = repository.manualPort,
                 connectionStatus = AndroidConnectionStatus.Idle,
-                headerStatusText = "手动 Mac",
+                headerStatusText = "手动输入的设备",
             ).withDerivedValues(repository)
         }
-    }
-
-    fun updatePairingCode(value: String) {
-        _uiState.update { it.copy(pairingCode = value.filter(Char::isDigit).take(6)).withDerivedValues(repository) }
     }
 
     fun updateSenderDisplayName(value: String) {
@@ -353,19 +438,28 @@ class AndroidComposerViewModel(
         recordDiagnostic("editor.copy", "Copied editor text.")
     }
 
+    /**
+     * The header's retry button. It reconnects to a paired computer, and otherwise searches again:
+     * pairing only starts when the person picks a computer and taps pair in the connection dialog.
+     */
+    fun retryFromHeader() {
+        val service = _uiState.value.selectedMac
+        if (_uiState.value.canConnect && service != null && repository.isPaired(service)) {
+            connect()
+        } else {
+            refreshDiscovery()
+        }
+    }
+
     fun connect(): Job = scope.launch {
         val service = effectiveService() ?: return@launch
         if (!_uiState.value.canConnect) {
             return@launch
         }
-        val pairingCode = _uiState.value.pairingCode.takeIf(AndroidPairingCode::isValid)
-        connectToService(service, requestedPairingCode = pairingCode)
+        connectToService(service)
     }
 
-    private suspend fun connectToService(
-        service: MacService,
-        requestedPairingCode: String?,
-    ) {
+    private suspend fun connectToService(service: MacService) {
         _uiState.update {
             it.copy(
                 isBusy = true,
@@ -376,20 +470,16 @@ class AndroidComposerViewModel(
             ).withDerivedValues(repository)
         }
 
-        val shouldUseSavedTrust = repository.hasSavedTrustToken(service)
-        val usesPairingCode = requestedPairingCode != null
+        val paired = repository.isPaired(service)
         recordDiagnostic(
             "connection.attempt",
-            "target=${service.name} host=${service.host} port=${service.port} macID=${service.macID ?: "unknown"} savedTrust=$shouldUseSavedTrust auth=${if (usesPairingCode) "pairingCode" else if (shouldUseSavedTrust) "trustToken" else "none"} discovered=${_uiState.value.services.size}",
+            "target=${service.name} host=${service.host} port=${service.port} macID=${service.macID ?: "unknown"} auth=${if (paired) "pairedKey" else "pairing"} discovered=${_uiState.value.services.size}",
         )
 
         runCatching {
-            repository.connect(
-                service = service,
-                pairingCode = requestedPairingCode,
-            )
-        }.onSuccess { response ->
-            if (response.status == AndroidBridgeResponseStatus.Accepted) {
+            repository.connect(service = service)
+        }.onSuccess { result ->
+            if (result is AndroidConnectResult.Connected) {
                 val trustedMacs = repository.trustedMacs
                 val connectedService = repository.connectedServices.value.firstOrNull {
                     it.host == service.host && it.port == service.port &&
@@ -403,22 +493,18 @@ class AndroidComposerViewModel(
                         connectionStatus = AndroidConnectionStatus.Connected,
                         headerStatusText = connectedService.name,
                         connectionFailureMessage = null,
-                        pairingCode = "",
                         selectedMac = connectedService,
                         trustedMacs = trustedMacs,
                     ).withDerivedValues(repository)
                 }
                 recordDiagnostic("connection.accepted", "Connected to ${connectedService.name}.")
             } else {
-                val trustTokenRejected = response.status == AndroidBridgeResponseStatus.InvalidPairing && !usesPairingCode && shouldUseSavedTrust
-                if (trustTokenRejected) {
-                    repository.forgetTrustedMac(service)
-                }
+                val rejected = result as AndroidConnectResult.Rejected
                 val trustedMacs = repository.trustedMacs
-                val message = if (trustTokenRejected) {
-                    "配对已失效，请重新输入 Mac 匹配码。"
+                val message = if (rejected.pairingRemoved) {
+                    "配对已失效，请重新配对。"
                 } else {
-                    response.message ?: response.status.name
+                    rejected.message
                 }
                 repository.closeConnection(service)
                 connectedMac = null
@@ -531,7 +617,7 @@ class AndroidComposerViewModel(
 
     private suspend fun refreshTrustedConnectionBeforeSend(state: AndroidComposerUiState) {
         val service = state.selectedMac ?: connectedMac ?: manualService(state.manualHost, state.manualPort) ?: return
-        if (!repository.hasSavedTrustToken(service)) {
+        if (!repository.isPaired(service)) {
             return
         }
 
@@ -545,15 +631,12 @@ class AndroidComposerViewModel(
         }
         recordDiagnostic(
             "connection.presendAttempt",
-            "target=${service.name} host=${service.host} port=${service.port} macID=${service.macID ?: "unknown"} auth=trustToken",
+            "target=${service.name} host=${service.host} port=${service.port} macID=${service.macID ?: "unknown"} auth=pairedKey",
         )
 
-        val response = repository.connect(service = service, pairingCode = null)
-        if (response.status != AndroidBridgeResponseStatus.Accepted) {
-            val message = response.message ?: response.status.name
-            if (response.status == AndroidBridgeResponseStatus.InvalidPairing) {
-                repository.forgetTrustedMac(service)
-            }
+        val result = repository.connect(service = service)
+        if (result is AndroidConnectResult.Rejected) {
+            val message = result.message
             repository.closeConnection(service)
             connectedMac = null
             _uiState.update {
@@ -662,10 +745,12 @@ class AndroidComposerViewModel(
     fun exportDiagnosticsFile(directory: File): File = diagnosticLogStore.exportFile(directory)
 
     fun close() {
+        cancelSearchTimeout()
         servicesJob.cancel()
         connectionsJob.cancel()
         discoveryErrorJob.cancel()
         discoveryPreconditionJob.cancel()
+        pairingPromptJob.cancel()
         repository.close()
     }
 
@@ -740,7 +825,7 @@ class AndroidComposerViewModel(
         }
 
         val trustedServices = services.filter { service ->
-            service.id !in autoConnectAttemptedServiceIDs && repository.hasSavedTrustToken(service)
+            service.id !in autoConnectAttemptedServiceIDs && repository.isPaired(service)
         }
         return trustedServices.singleOrNull()
     }
@@ -762,16 +847,17 @@ class AndroidComposerViewModel(
 
     private fun connectingStatusText(service: MacService): String {
         if (service.isManualMac()) {
-            return "正在连接到手动输入的 Mac"
+            return "正在连接到手动输入的设备"
         }
         return "正在连接到 ${service.name}"
     }
 
+    /** What the person sees when a connection fails; the raw network error goes to diagnostics only. */
     private fun connectionFailureMessage(service: MacService, rawMessage: String): String {
         if (!service.isManualMac()) {
-            return rawMessage
+            return "连接 ${service.name} 失败。确认它上面的 TypeCarrier 已打开、两台设备在同一网络，然后点刷新重试。"
         }
-        return "无法连接到手动输入的 Mac。请确认连接管理里的 Mac 地址是当前这台 Mac 的局域网地址。"
+        return "无法连接到手动输入的设备。请确认连接管理里的设备地址是当前这台设备的局域网地址。"
     }
 
     private val AndroidDiscoveryPrecondition.diagnosticMessage: String
@@ -781,7 +867,7 @@ class AndroidComposerViewModel(
             AndroidDiscoveryPrecondition.NotLocalNetwork -> "Active network is not Wi-Fi or Ethernet; Mac discovery may not reach the LAN."
         }
 
-    private fun MacService.isManualMac(): Boolean = name == "手动 Mac"
+    private fun MacService.isManualMac(): Boolean = name == "手动输入的设备"
 
     private fun statusForReceipt(receipt: CarrierDeliveryReceipt?): AndroidRecordStatus {
         return when (receipt?.pasteStatus) {
@@ -798,8 +884,7 @@ class AndroidComposerViewModel(
         val service = selectedMac ?: manualService(manualHost, manualPort)
         val canConnect = service != null &&
             !isBusy &&
-            connectionStatus != AndroidConnectionStatus.Connected &&
-            (AndroidPairingCode.isValid(pairingCode) || repository.hasSavedTrustToken(service))
+            connectionStatus != AndroidConnectionStatus.Connected
         val connected = connectionStatus == AndroidConnectionStatus.Connected
         return copy(
             canSend = CarrierPayloadPolicy.canSend(text) && connected && sendState != AndroidSendState.Sending && !isBusy,
@@ -810,7 +895,4 @@ class AndroidComposerViewModel(
         )
     }
 
-    private companion object {
-        const val maximumDraftCount = 99
-    }
 }

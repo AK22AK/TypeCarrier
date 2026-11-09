@@ -15,7 +15,7 @@ struct ComposerView: View {
     @StateObject private var store = ComposerStore()
     @State private var isEditorFocused = false
     private enum Route: Hashable {
-        case history, settings, about, debugFeatures
+        case history, settings, about, debugFeatures, macs
     }
 
     @State private var navigationPath: [Route] = []
@@ -40,6 +40,7 @@ struct ComposerView: View {
 
                 VStack(spacing: 18) {
                     header
+                    pairingPrompt
                     connectionFailureNotice
                     editor
                     footer
@@ -60,6 +61,8 @@ struct ComposerView: View {
                     AboutView()
                 case .debugFeatures:
                     DebugFeaturesView(store: store)
+                case .macs:
+                    MacPairingView(client: store.carrierService)
                 }
             }
             // 首页一直保留系统导航栏（标题为空、inline），不随路由隐藏/显示，
@@ -195,7 +198,7 @@ struct ComposerView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("发送目标，\(store.headerAccessibilityText)")
-                    .accessibilityHint("切换已连接的 Mac")
+                    .accessibilityHint("切换已连接的设备")
                     .accessibilityIdentifier("receiverTargetPicker")
                 } else {
                     Text(store.headerStatusText)
@@ -245,6 +248,12 @@ struct ComposerView: View {
 
         Menu {
             Button {
+                open(.macs)
+            } label: {
+                Label("设备", systemImage: "desktopcomputer")
+            }
+
+            Button {
                 open(.settings)
             } label: {
                 Label("设置", systemImage: "gearshape")
@@ -275,6 +284,53 @@ struct ComposerView: View {
             return
         }
         navigationPath = [route]
+    }
+
+    /// Shown until the first Mac is paired, and whenever no paired Mac is connected but an unpaired
+    /// one was seen nearby, so a new Mac can be paired without digging through the menu.
+    @ViewBuilder
+    private var pairingPrompt: some View {
+        let nearby = store.nearbyUnpairedMacs
+        let hasNoPairedMac = store.carrierService.pairedReceivers.isEmpty
+        let isDisconnected = store.connectedReceivers.isEmpty && store.connectingReceivers.isEmpty
+        if hasNoPairedMac || (isDisconnected && !nearby.isEmpty) {
+            Button {
+                open(.macs)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.footnote.weight(.semibold))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(Self.pairingPromptTitle(nearby: nearby))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(nearby.isEmpty ? "首次使用需要和设备核对一次 4 位数字" : "点此配对，需要和设备核对一次 4 位数字")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular, in: .rect(cornerRadius: 18))
+            .accessibilityIdentifier("pairMacPrompt")
+        }
+    }
+
+    private static func pairingPromptTitle(nearby: [CarrierV2DiscoveredReceiver]) -> String {
+        switch nearby.count {
+        case 0: "还没有配对设备"
+        case 1: "发现未配对的设备 \(nearby[0].name)"
+        default: "发现 \(nearby.count) 台未配对的设备"
+        }
     }
 
     @ViewBuilder
@@ -439,6 +495,18 @@ struct ComposerView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                if let lengthText = store.textLengthIndicator.displayText {
+                    let isOverLimit = store.textLengthIndicator.isOverLimit
+                    Text(lengthText)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(isOverLimit ? Color.red : Color.secondary)
+                        .accessibilityLabel(
+                            isOverLimit
+                                ? "已超过字数上限，\(lengthText)"
+                                : "字数 \(lengthText)"
+                        )
+                }
 
                 editorStandaloneToolButton(
                     systemName: "trash",
@@ -844,6 +912,10 @@ private struct ConnectionStatusIndicator: View {
                 Circle()
                     .fill(Color.secondary)
                     .frame(width: 7, height: 7)
+            case .notFound:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.orange)
             }
         }
         .frame(width: 16, height: 16)

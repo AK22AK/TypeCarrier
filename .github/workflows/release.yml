@@ -68,6 +68,17 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Install Rust targets and cargo-ndk for the protocol core
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          cargo install cargo-ndk --locked
+
+      - name: Build the Rust protocol core
+        # Every Apple target, since the notarized DMG is universal. The stamp tells Xcode's pre-build
+        # step the core is current.
+        run: script/build_carrier_core_apple.sh && touch Core/build/.stamp
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -159,6 +170,7 @@ jobs:
       - name: Build Android APK
         working-directory: Apps/Android
         env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
           TYPECARRIER_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           TYPECARRIER_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           TYPECARRIER_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}

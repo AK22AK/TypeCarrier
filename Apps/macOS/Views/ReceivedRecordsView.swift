@@ -12,36 +12,42 @@ struct ReceivedRecordsListPane: View {
 
     @State private var pendingDeletion: [CarrierRecord] = []
 
+    /// Device names that more than one device sent under, computed once per render rather than per row.
+    static func sourceNamesUsedByMoreThanOneDevice(_ records: [CarrierRecord]) -> Set<String> {
+        var deviceIDsByName: [String: Set<String>] = [:]
+        for record in records {
+            guard let name = record.sourceDeviceName, let deviceID = record.sourceDeviceID else { continue }
+            deviceIDsByName[name, default: []].insert(deviceID)
+        }
+        return Set(deviceIDsByName.filter { $0.value.count > 1 }.keys)
+    }
+
     var body: some View {
-        List(selection: Binding<ManagementSelection<UUID>?>(
+        let ambiguousSourceNames = Self.sourceNamesUsedByMoreThanOneDevice(records)
+        return List(selection: Binding<ManagementSelection<UUID>?>(
             get: { selectedRecordID.map { ManagementSelection(value: $0, revision: selectionRevision) } },
             set: { selectedRecordID = $0?.value }
         )) {
-            if records.isEmpty {
-                Text("暂无接收文本")
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(groupedRecords) { group in
-                    Section {
-                        ForEach(group.records) { record in
-                            ReceivedRecordRow(record: record, showsSourceIdentity: Set(records.filter { $0.sourceDeviceName == record.sourceDeviceName }.compactMap(\.sourceDeviceID)).count > 1)
-                                .tag(ManagementSelection(value: record.id, revision: selectionRevision))
-                        }
-                        .onDelete { offsets in
-                            pendingDeletion = offsets.map { group.records[$0] }
-                        }
-                    } header: {
-                        Text(group.title)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .textCase(nil)
-                            .padding(.bottom, 2)
-                    } footer: {
-                        if !group.isLast {
-                            Spacer(minLength: 0)
-                                .frame(height: 8)
-                        }
+            // The empty state lives in the detail pane; the header already shows the count.
+            ForEach(groupedRecords) { group in
+                Section {
+                    ForEach(group.records) { record in
+                        ReceivedRecordRow(record: record, showsSourceIdentity: record.sourceDeviceName.map(ambiguousSourceNames.contains) ?? false)
+                            .tag(ManagementSelection(value: record.id, revision: selectionRevision))
+                    }
+                    .onDelete { offsets in
+                        pendingDeletion = offsets.map { group.records[$0] }
+                    }
+                } header: {
+                    Text(group.title)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .textCase(nil)
+                        .padding(.bottom, 2)
+                } footer: {
+                    if !group.isLast {
+                        Spacer(minLength: 0)
+                            .frame(height: 8)
                     }
                 }
             }

@@ -44,7 +44,8 @@ check_plists() {
 
 check_swift_source_hygiene() {
   local matches
-  matches="$(git grep -n -E '\b(print|debugPrint|dump)\s*\(|try!| as!' -- '*.swift' || true)"
+  # UniFFI-generated bindings use try!/as! by design and are regenerated, not edited.
+  matches="$(git grep -n -E '\b(print|debugPrint|dump)\s*\(|try!| as!' -- '*.swift' ':!Sources/TypeCarrierCore/Generated/' || true)"
   if [[ -n "$matches" ]]; then
     echo "$matches"
     report_error "Swift source contains debug output or force operations"

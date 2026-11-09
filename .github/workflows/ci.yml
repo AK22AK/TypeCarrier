@@ -25,6 +25,9 @@ jobs:
   xcode-build:
     runs-on: macos-latest
     needs: project-sanity
+    env:
+      # The runner is Apple silicon: build and test arm64 only, simulator rather than device.
+      CARRIER_CORE_APPLE_TARGETS: aarch64-apple-darwin aarch64-apple-ios-sim
 
     steps:
       - name: Check out repository
@@ -32,6 +35,18 @@ jobs:
 
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Install Rust targets for the protocol core
+        run: rustup target add $CARRIER_CORE_APPLE_TARGETS
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Core/carrier-core
+
+      - name: Build the Rust protocol core
+        # The stamp tells Xcode's pre-build step the core is current, so it does not rebuild every target.
+        run: script/build_carrier_core_apple.sh && touch Core/build/.stamp
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -56,6 +71,7 @@ jobs:
             -project TypeCarrier.xcodeproj \
             -scheme TypeCarrierCore \
             -destination 'platform=macOS' \
+            ARCHS=arm64 \
             test
 
       - name: Build macOS app
@@ -65,6 +81,7 @@ jobs:
             -project TypeCarrier.xcodeproj \
             -scheme TypeCarrierMac \
             -destination 'platform=macOS' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
 
@@ -75,11 +92,15 @@ jobs:
             -project TypeCarrier.xcodeproj \
             -scheme TypeCarrieriOS \
             -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
 
   android-debug-build:
     runs-on: ubuntu-latest
+    env:
+      # One ABI is enough to prove the core and app build; releases build all of them.
+      ANDROID_ABIS: arm64-v8a
 
     steps:
       - name: Check out repository
@@ -92,6 +113,19 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      - name: Install Rust Android target
+        run: rustup target add aarch64-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: Core/carrier-core
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
       - name: Test and build Android debug app
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
         working-directory: Apps/Android
         run: ./gradlew testDebugUnitTest assembleDebug

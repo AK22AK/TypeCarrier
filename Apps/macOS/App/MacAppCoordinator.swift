@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import OSLog
 import TypeCarrierCore
 
@@ -18,6 +19,7 @@ final class MacAppCoordinator: NSObject, ObservableObject {
     private var hasManagementWindow = false
     private var windowCloseObserver: NSObjectProtocol?
     private var workspaceObservers: [NSObjectProtocol] = []
+    private var pairingRequestCancellable: AnyCancellable?
     private var sleepStartedAt: Date?
     private var lastWakeRestartAt: Date?
     private let wakeRestartDebounceInterval: TimeInterval = 2
@@ -31,6 +33,21 @@ final class MacAppCoordinator: NSObject, ObservableObject {
             self?.showMainWindow()
         }
         observeWorkspaceWake()
+        observePairingRequests()
+    }
+
+    /// A phone's pairing request is answered in the main window, so bring it forward even when the
+    /// app is only in the menu bar.
+    private func observePairingRequests() {
+        pairingRequestCancellable = store.$v2Receiver
+            .map { $0.$pendingPairing }
+            .switchToLatest()
+            .map { $0?.id }
+            .removeDuplicates()
+            .sink { [weak self] id in
+                guard id != nil else { return }
+                self?.showMainWindow()
+            }
     }
 
     func setMainWindowRequestHandler(_ handler: @escaping () -> Void) {

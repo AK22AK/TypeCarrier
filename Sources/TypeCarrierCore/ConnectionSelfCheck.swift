@@ -94,7 +94,7 @@ public enum ConnectionSelfCheck {
                 id: "ios.localNetworkPermission",
                 severity: .blocking,
                 title: "需要本地网络权限",
-                detail: "iOS 需要允许 TypeCarrier 访问本地网络，才能发现同一局域网或附近的 Mac。",
+                detail: "iOS 需要允许 TypeCarrier 访问本地网络，才能发现同一局域网或附近的设备。",
                 actionTitle: "在系统设置中允许本地网络",
                 relatedEventName: localNetworkFailureEvent.name
             ))
@@ -216,29 +216,15 @@ public enum ConnectionSelfCheck {
         _ summary: ReceiverStatusSummary,
         issue: ReceiverStatusIssue
     ) -> String {
-        let availableText: String
-        switch issue.impact {
-        case .endpoint(.androidBridge):
-            availableText = "Apple 设备仍可发现这台 Mac"
-        case .endpoint(.appleMultipeer):
-            availableText = summary.connectedDevices.contains { $0.endpoint == .androidBridge }
-                ? "Android 设备仍可发送到这台 Mac"
-                : "Android 入口仍可用"
-        case .allDevices:
-            availableText = "接收器存在共享问题"
-        }
-
-        return "\(availableText)；\(issueTitle(for: issue.impact))：\(issue.message)"
+        "\(issueTitle(for: issue.impact))：\(issue.message)"
     }
 
     private static func issueTitle(for impact: ReceiverIssueImpact) -> String {
         switch impact {
         case .allDevices:
             return "接收器异常"
-        case .endpoint(.appleMultipeer):
-            return "Apple 入口异常"
-        case .endpoint(.androidBridge):
-            return "Android 入口异常"
+        case .receiver:
+            return "接收入口异常"
         }
     }
 

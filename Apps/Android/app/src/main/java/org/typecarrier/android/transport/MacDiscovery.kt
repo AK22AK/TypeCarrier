@@ -152,25 +152,18 @@ class MacDiscovery(
                         resolveNextPendingService()
                         return
                     }
-                    val androidPort = serviceInfo.attributes["androidPort"]
-                        ?.toString(Charsets.UTF_8)
-                        ?.toIntOrNull()
+                    // Protocol v2 receivers advertise their device ID; the port is the service's own.
+                    val macID = serviceInfo.attributes["id"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() }
                         ?: run {
-                            val keys = serviceInfo.attributes.keys.sorted().joinToString()
-                            onError("解析服务缺少 Android 端口：${serviceInfo.serviceName} txtKeys=[$keys]")
+                            onError("解析服务缺少设备标识：${serviceInfo.serviceName}")
                             resolveNextPendingService()
                             return
                         }
-                    val macName = serviceInfo.attributes["macName"]
-                        ?.toString(Charsets.UTF_8)
-                        ?.takeIf { it.isNotBlank() }
                     val service = MacService(
-                        name = macName ?: serviceInfo.serviceName,
+                        name = serviceInfo.serviceName,
                         host = host,
-                        port = androidPort,
-                        macID = serviceInfo.attributes["macID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
-                        appBundleID = serviceInfo.attributes["appBundleID"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
-                        appVariant = serviceInfo.attributes["appVariant"]?.toString(Charsets.UTF_8)?.takeIf { it.isNotBlank() },
+                        port = serviceInfo.port,
+                        macID = macID,
                     )
                     services[service.id] = service
                     serviceIDsByDiscoveryName[serviceInfo.serviceName] = service.id

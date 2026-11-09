@@ -121,6 +121,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -182,8 +183,10 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) {
-                viewModel.handleAppBecameActive()
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.handleAppBecameActive()
+                Lifecycle.Event.ON_STOP -> viewModel.handleAppEnteredBackground()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -236,7 +239,9 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 state = state,
                     shouldAutoFocusEditor = state.launchesIntoInputMode && shouldApplyLaunchFocus,
                     onEditorAutoFocusConsumed = { shouldApplyLaunchFocus = false },
-                onRefresh = viewModel::refreshDiscovery,
+                onRefresh = viewModel::retryFromHeader,
+                onConnectionDialogShown = viewModel::beginSearchHold,
+                onConnectionDialogHidden = viewModel::endSearchHold,
                     onOpenHistory = { navController.navigate(AppRoutes.History) },
                     onOpenSettings = { navController.navigate(AppRoutes.Settings) },
                     onOpenAbout = { navController.navigate(AppRoutes.About) },
@@ -245,7 +250,6 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 onDisconnect = viewModel::disconnectSelectedMac,
                 onManualHostChange = viewModel::updateManualHost,
                 onManualPortChange = viewModel::updateManualPort,
-                onPairingCodeChange = viewModel::updatePairingCode,
                 onConnect = { viewModel.connect() },
                 onTextChange = viewModel::updateText,
                 onUndo = viewModel::undoTextChange,
@@ -349,6 +353,8 @@ private fun HomeScreen(
     shouldAutoFocusEditor: Boolean,
     onEditorAutoFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
+    onConnectionDialogShown: () -> Unit,
+    onConnectionDialogHidden: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -357,7 +363,6 @@ private fun HomeScreen(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
     onTextChange: (String) -> Unit,
     onUndo: () -> Unit,
@@ -389,13 +394,7 @@ private fun HomeScreen(
         Header(
             state = state,
             isCompact = isKeyboardVisible,
-            onRetry = {
-                if (state.canConnect) {
-                    onConnect()
-                } else {
-                    onRefresh()
-                }
-            },
+            onRetry = onRefresh,
             onOpenHistory = {
                 leaveInputMode()
                 onOpenHistory()
@@ -415,6 +414,14 @@ private fun HomeScreen(
             onOpenDebug = {
                 leaveInputMode()
                 onOpenDebug()
+            },
+        )
+
+        NearbyUnpairedComputerPrompt(
+            state = state,
+            onOpen = {
+                leaveInputMode()
+                showsConnectionDialog = true
             },
         )
 
@@ -444,6 +451,14 @@ private fun HomeScreen(
     }
 
     if (showsConnectionDialog) {
+        LaunchedEffect(state.connectionStatus) {
+            if (state.connectionStatus == AndroidConnectionStatus.Connected) showsConnectionDialog = false
+        }
+        // Keep discovering while the Mac picker is open, and start again if the search timed out.
+        DisposableEffect(Unit) {
+            onConnectionDialogShown()
+            onDispose { onConnectionDialogHidden() }
+        }
         ConnectionDialog(
                 state = state,
                 onDismiss = { showsConnectionDialog = false },
@@ -451,10 +466,13 @@ private fun HomeScreen(
                 onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
             onManualPortChange = onManualPortChange,
-            onPairingCodeChange = onPairingCodeChange,
             onConnect = {
+                // Pairing shows its code in this dialog, so keep it open until the computer answers.
+                val startsPairing = state.selectedMac?.let { selected ->
+                    state.trustedMacs.none { it.matchesReceiver(selected) }
+                } ?: false
                 onConnect()
-                showsConnectionDialog = false
+                if (!startsPairing) showsConnectionDialog = false
             },
         )
     }
@@ -622,7 +640,7 @@ private fun HeaderActions(
             ) {
                 CompactMenuItem(
                     icon = Icons.Default.Link,
-                    text = "连接 Mac",
+                    text = "连接设备",
                     onClick = {
                         onDismissMenu()
                         onOpenConnection()
@@ -691,10 +709,16 @@ private fun LogoMark(size: Dp, iconSize: Dp) {
 
 internal fun connectionDisplayText(state: AndroidComposerUiState): String =
     when (state.connectionStatus) {
-        AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "Mac 已连接"
+        AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "设备已连接"
         AndroidConnectionStatus.Connecting -> state.headerStatusText
         AndroidConnectionStatus.Searching -> state.headerStatusText
-        AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
+        AndroidConnectionStatus.Idle -> when {
+            state.searchTimedOut -> AndroidComposerViewModel.SEARCH_TIMED_OUT_TITLE
+            state.connectionFailureMessage != null -> "连接失败"
+            // A computer that is only selected, not paired, is not a target yet.
+            state.selectedMac?.let { selected -> state.trustedMacs.none { it.matchesReceiver(selected) } } != false -> "未连接"
+            else -> state.selectedMac?.name ?: "未连接"
+        }
     }
 
 @Composable
@@ -724,7 +748,6 @@ private fun ConnectionDialog(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
     AlertDialog(
@@ -734,7 +757,7 @@ private fun ConnectionDialog(
                 Text("关闭")
             }
         },
-        title = { Text("连接 Mac") },
+        title = { Text("连接设备") },
         text = {
             ConnectionPanel(
                 state = state,
@@ -742,7 +765,6 @@ private fun ConnectionDialog(
                 onDisconnect = onDisconnect,
                 onManualHostChange = onManualHostChange,
                 onManualPortChange = onManualPortChange,
-                onPairingCodeChange = onPairingCodeChange,
                 onConnect = onConnect,
             )
         },
@@ -781,6 +803,33 @@ private fun ConnectionStatusMark(status: AndroidConnectionStatus) {
             .clip(CircleShape),
     ) {
         Surface(color = color, modifier = Modifier.fillMaxSize()) {}
+    }
+}
+
+/** Offers computers seen nearby that this phone has not paired with, while nothing is connected. */
+@Composable
+private fun NearbyUnpairedComputerPrompt(state: AndroidComposerUiState, onOpen: () -> Unit) {
+    if (state.connectionStatus == AndroidConnectionStatus.Connected || state.isBusy) {
+        return
+    }
+    val unpaired = state.services.filter { service -> state.trustedMacs.none { it.matchesReceiver(service) } }
+    if (unpaired.isEmpty()) {
+        return
+    }
+    val title = if (unpaired.size == 1) "发现未配对的设备 ${unpaired.single().name}" else "发现 ${unpaired.size} 台未配对的设备"
+    Card(
+        onClick = onOpen,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("点此配对，需要和设备核对一次 4 位数字", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -824,7 +873,6 @@ private fun ConnectionPanel(
     onDisconnect: () -> Unit,
     onManualHostChange: (String) -> Unit,
     onManualPortChange: (String) -> Unit,
-    onPairingCodeChange: (String) -> Unit,
     onConnect: () -> Unit,
 ) {
     var showAdvanced by remember { mutableStateOf(false) }
@@ -842,7 +890,7 @@ private fun ConnectionPanel(
     ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.WifiTethering, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Text("连接 Mac", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("连接设备", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     when {
@@ -855,28 +903,8 @@ private fun ConnectionPanel(
                 )
             }
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("本机匹配码", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        state.localPairingCode,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
             if (visibleServices.isNotEmpty()) {
-                Text("发送目标 · 已连接 ${state.connectedMacs.size} 台 Mac", style = MaterialTheme.typography.labelLarge)
+                Text("发送目标 · 已连接 ${state.connectedMacs.size} 台设备", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -890,8 +918,8 @@ private fun ConnectionPanel(
                             selected = service.id == state.selectedMac?.id,
                             subtitle = when {
                                 isConnectedService -> if (service.id == state.selectedMac?.id) "已连接 · 当前发送目标" else "已连接 · 点击选择发送目标"
-                                state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，可免配对连接"
-                                else -> "首次连接需要配对码"
+                                state.trustedMacs.any { it.matchesReceiver(service) } -> "已配对，自动连接"
+                                else -> "首次连接需要在两边核对数字"
                             },
                             onClick = { onSelectMac(service) },
                         )
@@ -899,21 +927,38 @@ private fun ConnectionPanel(
                 }
             } else {
                 Text(
-                    "未发现当前网络中的 Mac。正常情况下这里会直接显示 Mac 名称；只有自动发现失败时，才需要展开高级连接使用地址兜底。",
+                    "未发现当前网络中的设备。正常情况下这里会直接显示设备名称；只有自动发现失败时，才需要展开高级连接使用地址兜底。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            if (!selectedHasTrust) {
-                OutlinedTextField(
-                    value = state.pairingCode,
-                    onValueChange = onPairingCodeChange,
-                    label = { Text("Mac 匹配码") },
-                    supportingText = { Text("输入 Mac 上显示的匹配码；Mac 也可以输入本机匹配码来关联。") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+            val prompt = state.pairingPrompt
+            if (prompt != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("在 ${prompt.macName} 上核对这个数字", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            if (prompt.code.length == 6) "${prompt.code.take(3)} ${prompt.code.drop(3)}" else prompt.code,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            "设备上显示的数字一致时，在设备上点“允许”完成配对。",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
+            } else if (!selectedHasTrust) {
+                Text(
+                    "首次连接需要配对：点下方按钮后，设备上会弹出请求，两边显示同一个 4 位数字，在设备上点“允许”即可。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
                 Card(
@@ -921,7 +966,7 @@ private fun ConnectionPanel(
                     shape = RoundedCornerShape(16.dp),
                 ) {
                     Text(
-                        "这台 Mac 已配对，连接时不需要再次输入匹配码。",
+                        "这台设备已配对，会自动连接。",
                         modifier = Modifier.padding(12.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         style = MaterialTheme.typography.bodyMedium,
@@ -942,7 +987,7 @@ private fun ConnectionPanel(
                     OutlinedTextField(
                         value = state.manualHost,
                         onValueChange = onManualHostChange,
-                        label = { Text("Mac 地址") },
+                        label = { Text("设备地址") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
@@ -956,7 +1001,7 @@ private fun ConnectionPanel(
                     )
                 }
                 Text(
-                    "这是自动发现失败时的本次兜底入口。正常连接不需要手动查看或输入 IP/端口；换网络或换 Mac 后不要沿用旧地址。",
+                    "这是自动发现失败时的本次兜底入口。正常连接不需要手动查看或输入 IP/端口；换网络或换设备后不要沿用旧地址。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -969,7 +1014,7 @@ private fun ConnectionPanel(
 
             if (connectedMac != null) {
                 TextButton(onClick = onDisconnect, enabled = !state.isBusy) {
-                    Text("断开当前 Mac")
+                    Text("断开当前设备")
                 }
             }
 
@@ -984,7 +1029,8 @@ private fun ConnectionPanel(
                         state.connectionStatus == AndroidConnectionStatus.Connected -> "已连接"
                         state.isBusy && state.connectionStatus == AndroidConnectionStatus.Connecting -> "正在连接"
                         state.selectedMac == null && state.manualHost.isNotBlank() -> "用手动地址连接"
-                        selectedHasTrust -> "免配对连接"
+                        state.pairingPrompt != null -> "等待设备确认"
+                        selectedHasTrust -> "连接"
                         else -> "配对并连接"
                     },
                 )
@@ -1492,7 +1538,7 @@ private fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "Mac 会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
+                "设备会显示为 ${state.senderDisplayName.ifBlank { state.deviceName }}。留空时使用系统提供的设备名称。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1626,7 +1672,7 @@ private fun DebugScreen(
                     HorizontalDivider()
                     SettingsListItem("本机设备", state.deviceName)
                     HorizontalDivider()
-                    SettingsListItem("目标 Mac", state.selectedMac?.name ?: "无")
+                    SettingsListItem("目标设备", state.selectedMac?.name ?: "无")
                     HorizontalDivider()
                     SettingsListItem("发现设备", if (state.services.isEmpty()) "无" else state.services.joinToString { it.name })
                     state.connectionFailureMessage?.let {

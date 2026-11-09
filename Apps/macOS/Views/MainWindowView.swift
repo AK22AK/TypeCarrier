@@ -36,6 +36,14 @@ struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshAccessibilityStatus()
         }
+        .sheet(item: Binding(
+            get: { store.v2Receiver.pendingPairing },
+            set: { if $0 == nil { store.v2Receiver.rejectPendingPairing() } }
+        )) { pending in
+            PairingRequestView(receiver: store.v2Receiver, pending: pending)
+                .padding(20)
+                .frame(width: 360)
+        }
         .onChange(of: store.records) { _, _ in ensureSelectedRecord() }
         .onChange(of: editor.recordID) { _, _ in
             coordinator.updateEditingCloseGuard()
@@ -130,9 +138,13 @@ struct MainWindowView: View {
                                          showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
                         .id(selectedRecord.id)
                         .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                        .frame(maxHeight: .infinity)
                 } else {
+                    // HSplitView takes its height from its panes, so a pane that only
+                    // fits its content (this one with no records) shrinks the whole split.
                     ContentUnavailableView("暂无接收文本", systemImage: "tray", description: Text("从手机发送后，文本会保存在这里。"))
                         .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                        .frame(maxHeight: .infinity)
                 }
             }
             .frame(width: available.size.width, height: available.size.height)

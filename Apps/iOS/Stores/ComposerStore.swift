@@ -30,6 +30,7 @@ final class ComposerStore: ObservableObject {
     enum ConnectionStatus: Equatable {
         case idle
         case searching
+        case notFound
         case connecting
         case connected
 
@@ -39,6 +40,8 @@ final class ComposerStore: ObservableObject {
                 "空闲"
             case .searching:
                 "正在搜索"
+            case .notFound:
+                CarrierV2Client.searchTimedOutMessage
             case .connecting:
                 "正在连接"
             case .connected:
@@ -64,7 +67,7 @@ final class ComposerStore: ObservableObject {
     @Published private(set) var historyRetentionErrorMessage: String?
     @Published private(set) var customSenderDisplayName: String
 
-    @Published private(set) var carrierService: MultipeerCarrierService
+    @Published private(set) var carrierService: CarrierV2Client
     let debugDiagnosticLogFileURL: URL?
     private let recordStore: ComposerRecordStore?
     private let systemDeviceName: String
@@ -136,6 +139,14 @@ final class ComposerStore: ObservableObject {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleAppWillEnterForeground()
+                }
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
             .sink { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -194,6 +205,9 @@ final class ComposerStore: ObservableObject {
             .connecting
         case .searching:
             .searching
+        case .failed where carrierService.searchTimedOut:
+            // An unpaired Mac nearby is not "nothing found": the pairing prompt is the next step.
+            nearbyUnpairedMacs.isEmpty ? .notFound : .idle
         default:
             .idle
         }
@@ -216,6 +230,7 @@ final class ComposerStore: ObservableObject {
         if connectingReceivers.count > 1 { return "连接 \(connectingReceivers.count) 台" }
         if let peer = connectingReceivers.first { return peer.displayName }
         if let name = connectionState.peerName { return name }
+        if carrierService.searchTimedOut, !nearbyUnpairedMacs.isEmpty { return "未连接" }
         return connectionStatus.displayText
     }
 
@@ -237,6 +252,9 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionFailureMessage: String? {
+        if carrierService.searchTimedOut, !nearbyUnpairedMacs.isEmpty {
+            return nil
+        }
         if case .failed(let message) = connectionState {
             return message
         }
@@ -244,7 +262,15 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionRecoverySuggestion: String? {
-        diagnostics.connectionRecoverySuggestion
+        if carrierService.searchTimedOut {
+            return "已停止搜索。确认对方的 TypeCarrier 已打开，然后点右侧重试。"
+        }
+        return diagnostics.connectionRecoverySuggestion
+    }
+
+    /// Macs seen nearby that this phone has not paired with, kept from the last search.
+    var nearbyUnpairedMacs: [CarrierV2DiscoveredReceiver] {
+        carrierService.availableReceivers
     }
 
     var sendButtonText: String {
@@ -279,7 +305,11 @@ final class ComposerStore: ObservableObject {
     }
 
     var canSaveDraft: Bool {
-        CarrierPayload.canSend(text)
+        CarrierPayload.hasContent(text)
+    }
+
+    var textLengthIndicator: CarrierTextLengthIndicator {
+        CarrierTextLengthIndicator(text: text)
     }
 
     var canUndo: Bool {
@@ -301,7 +331,7 @@ final class ComposerStore: ObservableObject {
 
         hasStarted = true
         carrierService.start { [weak self] envelope, peer in
-            self?.handle(envelope, sourceID: self?.carrierService.peerIdentity(for: peer).id)
+            self?.handle(envelope, sourceID: peer.id)
         }
     }
 
@@ -347,9 +377,8 @@ final class ComposerStore: ObservableObject {
         displayName: String,
         deviceID: String,
         diagnosticLogFileURL: URL?
-    ) -> MultipeerCarrierService {
-        MultipeerCarrierService(
-            role: .sender,
+    ) -> CarrierV2Client {
+        CarrierV2Client(
             displayName: displayName,
             deviceID: deviceID,
             diagnosticLogFileURL: diagnosticLogFileURL
@@ -466,6 +495,19 @@ final class ComposerStore: ObservableObject {
         }
     }
 
+    /// Dial as soon as the app starts coming back rather than after it finishes activating; the
+    /// connect then overlaps the system's foreground transition. didBecomeActive still runs the
+    /// usual recovery decision and finds the sender already started.
+    private func handleAppWillEnterForeground() {
+        cancelBackgroundStop()
+        guard !hasStarted, sendState != .sending else { return }
+        start()
+        carrierService.recordDiagnosticMarker(
+            "app.earlyForegroundStart",
+            message: "Started connecting on willEnterForeground."
+        )
+    }
+
     private func handleAppDidBecomeActive() {
         cleanOutgoingHistory()
         cancelBackgroundStop()
@@ -502,7 +544,8 @@ final class ComposerStore: ObservableObject {
 
         let action = foregroundRecovery.didChangeConnectionState(
             isConnected: state.isConnected,
-            isIdleOrFailed: state == .idle || state.isFailed,
+            // A search that timed out is waiting for the person to retry, not a failure to recover from.
+            isIdleOrFailed: state == .idle || (state.isFailed && !carrierService.searchTimedOut),
             displayText: state.displayText
         )
         switch action {
@@ -571,15 +614,20 @@ final class ComposerStore: ObservableObject {
         preservesActiveInputSession: Bool = false,
         postPasteAction: CarrierPostPasteAction? = nil
     ) {
-        guard CarrierPayload.canSend(text) else {
+        guard CarrierPayload.hasContent(text) else {
             sendState = .failed("文本为空")
+            return
+        }
+
+        guard CarrierPayload.isWithinLengthLimit(text) else {
+            sendState = .failed("超过 \(CarrierPayload.maximumCharacterCount) 字，请删减后再发送")
             return
         }
 
         guard sendState != .sending else { return }
         reconcileTargets()
         guard let target = selectedTarget else {
-            sendState = .failed("目标 Mac 未连接")
+            sendState = .failed("目标设备未连接")
             return
         }
         let textToSend = text
@@ -623,7 +671,7 @@ final class ComposerStore: ObservableObject {
             updateRecord(
                 id: record.id,
                 status: .sent,
-                detail: "已发送到 Mac"
+                detail: "已发送到设备"
             )
         } catch {
             deliveryConfirmationWait.cancel()
@@ -645,7 +693,7 @@ final class ComposerStore: ObservableObject {
     }
 
     func saveDraft(preservesActiveInputSession: Bool = false) {
-        guard CarrierPayload.canSend(text) else {
+        guard CarrierPayload.hasContent(text) else {
             sendState = .failed("文本为空")
             return
         }
@@ -828,21 +876,21 @@ final class ComposerStore: ObservableObject {
            deliveryConfirmationWait.confirm(payloadID: ackID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
-                detail: "Mac 已确认收到",
+                detail: "设备已确认收到",
                 pasteStatus: .received
             )
         } else if envelope.kind == .receipt, let receipt = envelope.receipt,
                   deliveryConfirmationWait.confirm(payloadID: receipt.payloadID, sourceID: sourceID) {
             finishPendingSend(
                 status: .received,
-                detail: receipt.detail ?? "Mac 已接收文本",
+                detail: receipt.detail ?? "设备已接收文本",
                 pasteStatus: receipt.pasteStatus
             )
         }
     }
 
     private func handleDeliveryConfirmationTimeout() {
-        let detail = "发送超时，请检查 Mac 端接收结果"
+        let detail = "发送超时，请检查设备上的接收结果"
         if let pendingRecordID {
             updateRecord(id: pendingRecordID, status: .failed, detail: detail)
         }

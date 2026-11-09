@@ -2,7 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="TypeCarrierMac"
+# Debug 配置的 PRODUCT_NAME（见 project.yml），跟正式版 TypeCarrierMac 区分开
+APP_NAME="TypeCarrier Debug"
 BUNDLE_ID="${TYPECARRIER_LOG_SUBSYSTEM:-org.typecarrier.mac}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/.build/DerivedData"
