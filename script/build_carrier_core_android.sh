@@ -19,16 +19,13 @@ if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
 fi
 [[ -d "$ANDROID_NDK_HOME" ]] || { echo "Android NDK not found; set ANDROID_NDK_HOME" >&2; exit 1; }
 
-case "$(uname -s)" in
-  Darwin) HOST_LIB=libcarrier_core.dylib ;;
-  *) HOST_LIB=libcarrier_core.so ;;
-esac
-
 cd "$CRATE_DIR"
+# Bindings come from the static library: the release profile strips the shared library, and on
+# Linux that also strips the UniFFI metadata the generator reads.
 cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 26 -o "$ANDROID_APP/src/main/jniLibs" build --release --lib
 cargo build --release --lib
 cargo run --quiet --bin uniffi-bindgen -- generate \
-  --library "$CRATE_DIR/target/release/$HOST_LIB" \
+  --library "$CRATE_DIR/target/release/libcarrier_core.a" \
   --language kotlin --no-format --out-dir "$ANDROID_APP/src/main/java"
 
 echo "Built Android libraries under $ANDROID_APP/src/main/jniLibs and Kotlin bindings under $ANDROID_APP/src/main/java/uniffi"
