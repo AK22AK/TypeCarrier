@@ -113,12 +113,12 @@ pub fn prologue(initiator_hello: &[u8], responder_hello: &[u8]) -> Vec<u8> {
     prologue
 }
 
-/// The 6-digit code both screens show while pairing. It is derived from the Noise handshake hash,
+/// The 4-digit code both screens show while pairing. It is derived from the Noise handshake hash,
 /// so a device in the middle ends up with different codes on each side.
 pub fn pairing_code(handshake_hash: &[u8]) -> String {
     let digest = Sha256::new().chain_update(PAIRING_CODE_LABEL).chain_update(handshake_hash).finalize();
     let value = u32::from_be_bytes([digest[0], digest[1], digest[2], digest[3]]);
-    format!("{:06}", value % 1_000_000)
+    format!("{:04}", value % 10_000)
 }
 
 #[cfg(test)]
@@ -152,9 +152,8 @@ mod tests {
 
     #[test]
     fn pairing_code_matches_the_swift_implementation() {
-        // CarrierProtocolV2.pairingCode(handshakeHash: Data(repeating: 0xAB, count: 32)) in Swift.
         let code = pairing_code(&[0xAB; 32]);
-        assert_eq!(code.len(), 6);
+        assert_eq!(code.len(), 4);
         assert_eq!(code, pairing_code(&[0xAB; 32]));
         assert_ne!(code, pairing_code(&[0xAC; 32]));
     }

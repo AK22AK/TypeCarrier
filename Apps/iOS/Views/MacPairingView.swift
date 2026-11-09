@@ -39,7 +39,7 @@ struct MacPairingView: View {
             } header: {
                 Text("附近的设备")
             } footer: {
-                Text("先在设备上打开 TypeCarrier，在“接收器”里点“开始配对”，再在这里选择它。")
+                Text("确保设备上的 TypeCarrier 已打开。点“配对”后，设备上会弹出请求，核对数字后点“允许”。")
             }
 
             if !client.pairedReceivers.isEmpty {
@@ -85,10 +85,10 @@ struct MacPairingView: View {
         case .comparing(let code, let name):
             VStack(alignment: .leading, spacing: 12) {
                 Text("在 \(name) 上核对这个数字").font(.headline)
-                Text(code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code)
+                Text(code)
                     .font(.system(size: 40, weight: .semibold, design: .monospaced))
                     .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Text("两边一致时，在设备上点“一致”完成配对。")
+                Text("设备上显示的数字一致时，在设备上点“允许”完成配对。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("取消") { client.cancelPairing() }.buttonStyle(.borderless)

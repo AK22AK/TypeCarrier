@@ -17,7 +17,7 @@ public final class CarrierV2Link {
 
     public static let handshakeTimeout: Duration = .seconds(5)
     /// How long the person has to compare codes and confirm on the receiver.
-    public static let pairingDecisionTimeout: Duration = .seconds(120)
+    public static let pairingDecisionTimeout: Duration = .seconds(60)
     private static let tickInterval: Duration = .seconds(2)
 
     public let connection: NWConnection

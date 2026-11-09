@@ -208,7 +208,7 @@ class AndroidV2CarrierClient(
         const val CONNECT_TIMEOUT_MS = 5_000
         const val HANDSHAKE_TIMEOUT_MS = 8_000L
         /** How long the person has to compare codes and confirm on the Mac. */
-        const val PAIRING_TIMEOUT_MS = 130_000L
+        const val PAIRING_TIMEOUT_MS = 70_000L
         const val RECEIPT_TIMEOUT_MS = 10_000L
         const val TICK_INTERVAL_MS = 2_000L
         private const val READ_BUFFER_SIZE = 64 * 1024
@@ -216,8 +216,8 @@ class AndroidV2CarrierClient(
         private fun nowMs(): ULong = System.currentTimeMillis().toULong()
 
         fun closeMessage(reason: CoreCloseReason): String = when (reason) {
-            CoreCloseReason.PAIRING_REJECTED -> "设备上选择了“不一致”，未配对。"
-            CoreCloseReason.PAIRING_NOT_OPEN -> "请先在设备上点“开始配对”，再在这里选择它。"
+            CoreCloseReason.PAIRING_REJECTED -> "设备拒绝了配对，可以重新发起。"
+            CoreCloseReason.PAIRING_NOT_OPEN -> "设备正在处理另一个配对请求，请稍后重试。"
             CoreCloseReason.NOT_PAIRED -> "这台设备已移除与本机的配对，请重新配对。"
             CoreCloseReason.UNSUPPORTED_VERSION -> "设备上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
             CoreCloseReason.HANDSHAKE_FAILED -> "加密握手失败，设备可能已重置，请重新配对。"

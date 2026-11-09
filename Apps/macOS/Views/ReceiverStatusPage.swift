@@ -80,9 +80,9 @@ struct ReceiverStatusPage: View {
                     MacManagementGroup {
                         DisclosureGroup("连接新设备", isExpanded: $showsConnectionGuide) {
                             VStack(alignment: .leading, spacing: 0) {
-                                guidanceRow("iPhone", symbol: "iphone", detail: "首次连接时，点上方“开始配对”，在手机上选择这台 Mac 并核对数字。")
+                                guidanceRow("iPhone", symbol: "iphone", detail: "首次连接时，在手机上选择这台 Mac 并点“配对”，这里会弹出请求，核对数字后点“允许”。")
                                 Divider()
-                                guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，点上方“开始配对”，在手机上选择这台 Mac 并核对数字。")
+                                guidanceRow("Android", symbol: "apps.iphone", detail: "首次连接时，在手机上选择这台 Mac 并点“配对”，这里会弹出请求，核对数字后点“允许”。")
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 8)

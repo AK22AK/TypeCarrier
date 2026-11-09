@@ -120,7 +120,7 @@ fn pairing_shows_the_same_code_on_both_sides_and_establishes_after_confirmation(
 
     let code = pairing_code(&phone).expect("phone code");
     assert_eq!(Some(code.clone()), pairing_code(&mac));
-    assert_eq!(code.len(), 6);
+    assert_eq!(code.len(), 4);
     assert!(!pair.phone.is_established() && !pair.mac.is_established());
     let mac_peer = pair.mac.peer().unwrap();
     assert_eq!(mac_peer.device_name, "iPhone");

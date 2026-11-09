@@ -489,7 +489,7 @@ class AndroidComposerViewModel(
                 val rejected = result as AndroidConnectResult.Rejected
                 val trustedMacs = repository.trustedMacs
                 val message = if (rejected.pairingRemoved) {
-                    "配对已失效，请在设备上点“开始配对”后重新连接。"
+                    "配对已失效，请重新配对。"
                 } else {
                     rejected.message
                 }

@@ -28,7 +28,6 @@ final class CarrierV2Receiver: ObservableObject {
 
     static let serviceType = "_typecarrier-v2._tcp"
     static let defaultPort: NWEndpoint.Port = 17642
-    static let pairingWindow: Duration = .seconds(120)
     static let deviceIDTXTKey = "id"
     private static let deviceIDDefaultsKey = "CarrierV2DeviceID"
 
@@ -36,7 +35,6 @@ final class CarrierV2Receiver: ObservableObject {
     @Published private(set) var connectedDeviceNames: [String] = []
     @Published private(set) var connectedDevices: [ReceiverConnectedDevice] = []
     @Published private(set) var pendingPairing: PendingPairing?
-    @Published private(set) var isPairingOpen = false
     @Published private(set) var pairedDevices: [CarrierV2PairedDevice] = []
     @Published private(set) var lastErrorMessage: String?
 
@@ -48,7 +46,6 @@ final class CarrierV2Receiver: ObservableObject {
     private var listener: NWListener?
     private var links: [ObjectIdentifier: CarrierV2Link] = [:]
     private var envelopeHandler: EnvelopeHandler?
-    private var pairingCloseTask: Task<Void, Never>?
     private var restartTask: Task<Void, Never>?
     private var usesFallbackPort = false
     /// Held while listening so App Nap does not delay accepting a phone's connection.
@@ -88,14 +85,11 @@ final class CarrierV2Receiver: ObservableObject {
             )
         }
         startListener()
-#if DEBUG
-        if Self.autoPairsForTesting { openPairing() }
-#endif
     }
 
 #if DEBUG
-    /// Debug builds launched with TYPECARRIER_V2_AUTOPAIR=1 open pairing and accept the first
-    /// code without a click, so simulator runs and soak scripts can pair unattended.
+    /// Debug builds launched with TYPECARRIER_V2_AUTOPAIR=1 accept the first pairing code without
+    /// a click, so simulator runs and soak scripts can pair unattended.
     private static var autoPairsForTesting: Bool {
         ProcessInfo.processInfo.environment["TYPECARRIER_V2_AUTOPAIR"] == "1"
     }
@@ -108,7 +102,7 @@ final class CarrierV2Receiver: ObservableObject {
         listener = nil
         links.values.forEach { $0.close() }
         links = [:]
-        closePairing()
+        pendingPairing = nil
         updateConnectedDevices()
         state = .stopped
         if let appNapActivity {
@@ -196,31 +190,6 @@ final class CarrierV2Receiver: ObservableObject {
     }
 
     // MARK: - Pairing
-
-    func openPairing() {
-        isPairingOpen = true
-        record("v2.pairing.open", message: "Pairing opened for \(Self.pairingWindow).")
-        pairingCloseTask?.cancel()
-        pairingCloseTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.pairingWindow)
-            guard !Task.isCancelled else { return }
-            self?.closePairing()
-#if DEBUG
-            // Unattended test runs keep pairing available until a device pairs.
-            if Self.autoPairsForTesting, self?.pairedDevices.isEmpty == true { self?.openPairing() }
-#endif
-        }
-    }
-
-    func closePairing() {
-        pairingCloseTask?.cancel()
-        pairingCloseTask = nil
-        isPairingOpen = false
-        if let pendingPairing, let link = links[pendingPairing.id] {
-            link.rejectPairing()
-        }
-        pendingPairing = nil
-    }
 
     func confirmPendingPairing() {
         guard let pendingPairing, let link = links[pendingPairing.id] else { return }
@@ -322,9 +291,11 @@ final class CarrierV2Receiver: ObservableObject {
             role: .responder,
             identity: identity,
             isTrusted: { [weak self] key in self?.trustStore.isTrusted(publicKey: key) ?? false },
+            // A phone asks to pair and the person allows or rejects it here; one request at a time.
+            // An unanswered request expires with CarrierV2Link.pairingDecisionTimeout.
             isPairingOpen: { [weak self] in
                 guard let self else { return false }
-                return self.isPairingOpen && self.pendingPairing == nil
+                return self.pendingPairing == nil
             }
         )
         let link = CarrierV2Link(connection: connection, session: session) { [weak self] link, event in
@@ -356,7 +327,6 @@ final class CarrierV2Receiver: ObservableObject {
                     lastConnectedAt: Date()
                 ))
                 pendingPairing = nil
-                closePairing()
                 record("v2.pairing.confirmed", message: "Paired.", peerName: peer.info.deviceName)
             } else {
                 try? trustStore.recordConnection(publicKey: peer.publicKey, deviceName: peer.info.deviceName)

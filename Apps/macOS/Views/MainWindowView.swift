@@ -36,6 +36,14 @@ struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             store.refreshAccessibilityStatus()
         }
+        .sheet(item: Binding(
+            get: { store.v2Receiver.pendingPairing },
+            set: { if $0 == nil { store.v2Receiver.rejectPendingPairing() } }
+        )) { pending in
+            PairingRequestView(receiver: store.v2Receiver, pending: pending)
+                .padding(20)
+                .frame(width: 360)
+        }
         .onChange(of: store.records) { _, _ in ensureSelectedRecord() }
         .onChange(of: editor.recordID) { _, _ in
             coordinator.updateEditingCloseGuard()

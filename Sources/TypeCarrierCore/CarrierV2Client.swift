@@ -283,10 +283,10 @@ public final class CarrierV2Client: ObservableObject {
             pairingLink = nil
             let message: String
             switch reason {
-            case .pairingRejected: message = "设备上选择了“不一致”，未配对。"
-            case .pairingNotOpen: message = "请先在设备上点“开始配对”，再在这里选择它。"
+            case .pairingRejected: message = "设备拒绝了配对，可以重新发起。"
+            case .pairingNotOpen: message = "设备正在处理另一个配对请求，请稍后重试。"
             case .unsupportedVersion: message = "设备上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
-            case .handshakeFailed: message = "配对超时或失败，请重试。"
+            case .handshakeFailed: message = "设备未响应或配对失败，请重试。"
             default: message = networkError.map { "连接失败：\($0)" } ?? "配对已取消。"
             }
             pairing = .failed(message)

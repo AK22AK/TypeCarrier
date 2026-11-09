@@ -215,7 +215,7 @@ class AndroidComposerViewModelTest {
         assertFalse(repository.hasTrustToken)
         assertFalse(rejectedState.trustedMacs.any { it.id == repository.mac.id })
         assertTrue(rejectedState.canConnect)
-        assertEquals("配对已失效，请在设备上点“开始配对”后重新连接。", rejectedState.connectionFailureMessage)
+        assertEquals("配对已失效，请重新配对。", rejectedState.connectionFailureMessage)
 
         repository.nextConnectResult = AndroidConnectResult.Connected
         viewModel.connect().join()
@@ -398,7 +398,7 @@ class AndroidComposerViewModelTest {
         assertFalse(repository.hasTrustToken)
         assertEquals(AndroidConnectionStatus.Idle, viewModel.uiState.value.connectionStatus)
         assertEquals("连接失败", viewModel.uiState.value.headerStatusText)
-        assertEquals("配对已失效，请在设备上点“开始配对”后重新连接。", viewModel.uiState.value.connectionFailureMessage)
+        assertEquals("配对已失效，请重新配对。", viewModel.uiState.value.connectionFailureMessage)
     }
 
     @Test

@@ -16,7 +16,7 @@ final class CarrierV2SessionTests: XCTestCase {
         let phoneCode = try XCTUnwrap(pairingCode(in: phoneEvents))
         let macCode = try XCTUnwrap(pairingCode(in: macEvents))
         XCTAssertEqual(phoneCode, macCode)
-        XCTAssertEqual(phoneCode.count, 6)
+        XCTAssertEqual(phoneCode.count, 4)
         XCTAssertFalse(phone.isEstablished)
         XCTAssertFalse(mac.isEstablished)
         XCTAssertEqual(mac.peer?.info.deviceName, "iPhone")

@@ -910,7 +910,7 @@ private fun ConnectionPanel(
                             fontFamily = FontFamily.Monospace,
                         )
                         Text(
-                            "两边一致时，在设备上点“一致”完成配对。",
+                            "设备上显示的数字一致时，在设备上点“允许”完成配对。",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
@@ -918,7 +918,7 @@ private fun ConnectionPanel(
                 }
             } else if (!selectedHasTrust) {
                 Text(
-                    "首次连接需要配对：先在设备上的 TypeCarrier 里点“开始配对”，再点下方按钮，两边会显示同一个 6 位数字。",
+                    "首次连接需要配对：点下方按钮后，设备上会弹出请求，两边显示同一个 4 位数字，在设备上点“允许”即可。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

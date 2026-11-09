@@ -90,6 +90,7 @@
 		F1205DF3E291DA2763CDFB6D /* TextInsertionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D966E7A828BFB1699FD5266B /* TextInsertionPolicy.swift */; };
 		F334F55AE0BF13F3283F7520 /* CarrierEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = F891A213FC44B36B4E906FAE /* CarrierEnvelope.swift */; };
 		F82692FE30684D1DF44A6DA3 /* ReceivedRecordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */; };
+		FADA3277B99C5CFD1B1601A4 /* PairingRequestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91F7A94A2DC5432A99C8C465 /* PairingRequestView.swift */; };
 		FCDC0E72CAE29F546607F35D /* DeliveryConfirmationWait.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3BC6EF1AF971AB8BCCB8CA2 /* DeliveryConfirmationWait.swift */; };
 /* End PBXBuildFile section */
 
@@ -199,6 +200,7 @@
 		8D577C2F209CDDE388582D21 /* TypeCarrierMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeCarrierMacApp.swift; sourceTree = "<group>"; };
 		8EB3ABC9F265C3EBE0D60969 /* ConnectionSelfCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelfCheck.swift; sourceTree = "<group>"; };
 		90979E4DC194262169EE3654 /* ComposerRecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRecordStore.swift; sourceTree = "<group>"; };
+		91F7A94A2DC5432A99C8C465 /* PairingRequestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingRequestView.swift; sourceTree = "<group>"; };
 		960D393B8CA0312613438C20 /* CarrierV2Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarrierV2Client.swift; sourceTree = "<group>"; };
 		98F202001A2DE8C0F72A374E /* iOSUILocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSUILocalization.swift; sourceTree = "<group>"; };
 		9BA8751B3877B14B54FCE73C /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
@@ -465,6 +467,7 @@
 				BE7D94092572BDC465A1DC4C /* MacUILocalization.swift */,
 				18CBF34C87BCA5370EA5C999 /* MainWindowView.swift */,
 				74CCC7E45110DF31C8EC78C3 /* MenuBarContentView.swift */,
+				91F7A94A2DC5432A99C8C465 /* PairingRequestView.swift */,
 				EA94B0C8DAB39D042E7B018B /* ReceivedRecordsView.swift */,
 				1F975BDE51A6297BC8A98C6B /* ReceiverManagementPresentation.swift */,
 				F3926DDD3A90E43FB20FFECE /* ReceiverStatusPage.swift */,
@@ -701,6 +704,7 @@
 				26A4BF2022474F76DFEF01E0 /* MacUILocalization.swift in Sources */,
 				4789050869CF429FD09F2CC2 /* MainWindowView.swift in Sources */,
 				CF972633C368EBAB36FFB149 /* MenuBarContentView.swift in Sources */,
+				FADA3277B99C5CFD1B1601A4 /* PairingRequestView.swift in Sources */,
 				865AFEFA5254E1B920FE820B /* PasteInjector.swift in Sources */,
 				CDBC5AAABC1147BC2A507B88 /* ReceivedRecordEditor.swift in Sources */,
 				F82692FE30684D1DF44A6DA3 /* ReceivedRecordsView.swift in Sources */,

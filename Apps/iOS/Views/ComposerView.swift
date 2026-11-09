@@ -305,7 +305,7 @@ struct ComposerView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
-                        Text(nearby.isEmpty ? "首次使用需要和设备核对一次 6 位数字" : "点此配对，需要和设备核对一次 6 位数字")
+                        Text(nearby.isEmpty ? "首次使用需要和设备核对一次 4 位数字" : "点此配对，需要和设备核对一次 4 位数字")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
