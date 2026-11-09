@@ -189,6 +189,24 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
+    fun discoveredComputerConnectionFailureHidesTheRawNetworkError() = runBlocking {
+        val rawFailure = "failed to connect to /192.0.2.10 (port 54331) from /198.51.100.20 (port 41044) after 5000ms"
+        val repository = FakeAndroidCarrierRepository().apply {
+            hasTrustToken = true
+            connectFailure = IllegalStateException(rawFailure)
+        }
+        val viewModel = makeViewModel(repository = repository)
+        viewModel.selectMac(repository.mac)
+
+        viewModel.connect().join()
+
+        val message = viewModel.uiState.value.connectionFailureMessage.orEmpty()
+        assertTrue(message.startsWith("连接 Test Mac 失败"))
+        assertFalse(message.contains("port"))
+        assertTrue(viewModel.exportDiagnosticsText().contains(rawFailure))
+    }
+
+    @Test
     fun acceptedPairingMarksMacTrusted() = runBlocking {
         val repository = FakeAndroidCarrierRepository()
         val viewModel = makeViewModel(repository = repository)

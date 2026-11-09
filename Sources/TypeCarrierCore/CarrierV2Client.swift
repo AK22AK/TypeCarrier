@@ -219,7 +219,7 @@ public final class CarrierV2Client: ObservableObject {
 
     public func pair(with receiver: CarrierV2DiscoveredReceiver) {
         guard let endpoint = browsedEndpoints[receiver.id]?.endpoint else {
-            pairing = .failed("找不到 \(receiver.name)，请确认两台设备在同一网络。")
+            pairing = .failed("找不到 \(receiver.name)，请确认它上面的 TypeCarrier 已打开。")
             return
         }
         cancelPairing()
@@ -287,7 +287,7 @@ public final class CarrierV2Client: ObservableObject {
             case .pairingNotOpen: message = "设备正在处理另一个配对请求，请稍后重试。"
             case .unsupportedVersion: message = "设备上的 TypeCarrier 版本不兼容，请把两边都更新到最新版。"
             case .handshakeFailed: message = "设备未响应或配对失败，请重试。"
-            default: message = networkError.map { "连接失败：\($0)" } ?? "配对已取消。"
+            default: message = networkError == nil ? "配对已取消。" : "连接失败。确认对方的 TypeCarrier 已打开，然后重试。"
             }
             pairing = .failed(message)
             recordDiagnosticMarker("v2.pairing.failed", message: message, peerName: receiverName)

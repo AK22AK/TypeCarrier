@@ -263,7 +263,7 @@ final class ComposerStore: ObservableObject {
 
     var connectionRecoverySuggestion: String? {
         if carrierService.searchTimedOut {
-            return "已停止搜索。确认设备上的 TypeCarrier 已打开、两台设备在同一网络，然后点右侧重试。"
+            return "已停止搜索。确认对方的 TypeCarrier 已打开，然后点右侧重试。"
         }
         return diagnostics.connectionRecoverySuggestion
     }

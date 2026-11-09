@@ -20,7 +20,7 @@ struct MacPairingView: View {
                 } else if client.availableReceivers.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
-                        Text("正在查找同一网络中的设备…").foregroundStyle(.secondary)
+                        Text("正在查找附近的设备…").foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(client.availableReceivers) { receiver in

@@ -852,9 +852,10 @@ class AndroidComposerViewModel(
         return "正在连接到 ${service.name}"
     }
 
+    /** What the person sees when a connection fails; the raw network error goes to diagnostics only. */
     private fun connectionFailureMessage(service: MacService, rawMessage: String): String {
         if (!service.isManualMac()) {
-            return rawMessage
+            return "连接 ${service.name} 失败。确认它上面的 TypeCarrier 已打开、两台设备在同一网络，然后点刷新重试。"
         }
         return "无法连接到手动输入的设备。请确认连接管理里的设备地址是当前这台设备的局域网地址。"
     }
