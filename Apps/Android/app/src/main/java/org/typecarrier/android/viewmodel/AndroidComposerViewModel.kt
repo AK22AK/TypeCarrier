@@ -438,6 +438,19 @@ class AndroidComposerViewModel(
         recordDiagnostic("editor.copy", "Copied editor text.")
     }
 
+    /**
+     * The header's retry button. It reconnects to a paired computer, and otherwise searches again:
+     * pairing only starts when the person picks a computer and taps pair in the connection dialog.
+     */
+    fun retryFromHeader() {
+        val service = _uiState.value.selectedMac
+        if (_uiState.value.canConnect && service != null && repository.isPaired(service)) {
+            connect()
+        } else {
+            refreshDiscovery()
+        }
+    }
+
     fun connect(): Job = scope.launch {
         val service = effectiveService() ?: return@launch
         if (!_uiState.value.canConnect) {

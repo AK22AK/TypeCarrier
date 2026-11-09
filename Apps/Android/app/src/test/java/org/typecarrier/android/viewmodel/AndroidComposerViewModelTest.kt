@@ -551,6 +551,32 @@ class AndroidComposerViewModelTest {
     }
 
     @Test
+    fun headerRetryNeverStartsPairingWithAnUnpairedComputer() {
+        val repository = FakeAndroidCarrierRepository()
+        val viewModel = makeViewModel(repository = repository)
+        assertEquals(repository.mac.id, viewModel.uiState.value.selectedMac?.id)
+        assertEquals("未连接", connectionDisplayText(viewModel.uiState.value))
+
+        viewModel.retryFromHeader()
+
+        assertEquals(0, repository.connectAttempts)
+        assertEquals(1, repository.refreshDiscoveryAttempts)
+    }
+
+    @Test
+    fun headerRetryReconnectsToAPairedComputer() = runBlocking {
+        val repository = FakeAndroidCarrierRepository().apply { hasTrustToken = true }
+        val viewModel = makeViewModel(repository = repository)
+        repository.closeConnection(repository.mac)
+        viewModel.disconnectSelectedMac()
+        val attemptsBefore = repository.connectAttempts
+
+        viewModel.retryFromHeader()
+
+        assertEquals(attemptsBefore + 1, repository.connectAttempts)
+    }
+
+    @Test
     fun refreshAfterTimeoutSearchesAgain() = runBlocking {
         val repository = FakeAndroidCarrierRepository(emptyList())
         val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)

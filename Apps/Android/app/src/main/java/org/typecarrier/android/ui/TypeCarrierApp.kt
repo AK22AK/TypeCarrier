@@ -239,7 +239,7 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                 state = state,
                     shouldAutoFocusEditor = state.launchesIntoInputMode && shouldApplyLaunchFocus,
                     onEditorAutoFocusConsumed = { shouldApplyLaunchFocus = false },
-                onRefresh = viewModel::refreshDiscovery,
+                onRefresh = viewModel::retryFromHeader,
                 onConnectionDialogShown = viewModel::beginSearchHold,
                 onConnectionDialogHidden = viewModel::endSearchHold,
                     onOpenHistory = { navController.navigate(AppRoutes.History) },
@@ -394,13 +394,7 @@ private fun HomeScreen(
         Header(
             state = state,
             isCompact = isKeyboardVisible,
-            onRetry = {
-                if (state.canConnect) {
-                    onConnect()
-                } else {
-                    onRefresh()
-                }
-            },
+            onRetry = onRefresh,
             onOpenHistory = {
                 leaveInputMode()
                 onOpenHistory()
@@ -420,6 +414,14 @@ private fun HomeScreen(
             onOpenDebug = {
                 leaveInputMode()
                 onOpenDebug()
+            },
+        )
+
+        NearbyUnpairedComputerPrompt(
+            state = state,
+            onOpen = {
+                leaveInputMode()
+                showsConnectionDialog = true
             },
         )
 
@@ -449,6 +451,9 @@ private fun HomeScreen(
     }
 
     if (showsConnectionDialog) {
+        LaunchedEffect(state.connectionStatus) {
+            if (state.connectionStatus == AndroidConnectionStatus.Connected) showsConnectionDialog = false
+        }
         // Keep discovering while the Mac picker is open, and start again if the search timed out.
         DisposableEffect(Unit) {
             onConnectionDialogShown()
@@ -462,8 +467,12 @@ private fun HomeScreen(
                 onManualHostChange = onManualHostChange,
             onManualPortChange = onManualPortChange,
             onConnect = {
+                // Pairing shows its code in this dialog, so keep it open until the computer answers.
+                val startsPairing = state.selectedMac?.let { selected ->
+                    state.trustedMacs.none { it.matchesReceiver(selected) }
+                } ?: false
                 onConnect()
-                showsConnectionDialog = false
+                if (!startsPairing) showsConnectionDialog = false
             },
         )
     }
@@ -706,6 +715,8 @@ internal fun connectionDisplayText(state: AndroidComposerUiState): String =
         AndroidConnectionStatus.Idle -> when {
             state.searchTimedOut -> AndroidComposerViewModel.SEARCH_TIMED_OUT_TITLE
             state.connectionFailureMessage != null -> "连接失败"
+            // A computer that is only selected, not paired, is not a target yet.
+            state.selectedMac?.let { selected -> state.trustedMacs.none { it.matchesReceiver(selected) } } != false -> "未连接"
             else -> state.selectedMac?.name ?: "未连接"
         }
     }
@@ -792,6 +803,33 @@ private fun ConnectionStatusMark(status: AndroidConnectionStatus) {
             .clip(CircleShape),
     ) {
         Surface(color = color, modifier = Modifier.fillMaxSize()) {}
+    }
+}
+
+/** Offers computers seen nearby that this phone has not paired with, while nothing is connected. */
+@Composable
+private fun NearbyUnpairedComputerPrompt(state: AndroidComposerUiState, onOpen: () -> Unit) {
+    if (state.connectionStatus == AndroidConnectionStatus.Connected || state.isBusy) {
+        return
+    }
+    val unpaired = state.services.filter { service -> state.trustedMacs.none { it.matchesReceiver(service) } }
+    if (unpaired.isEmpty()) {
+        return
+    }
+    val title = if (unpaired.size == 1) "发现未配对的设备 ${unpaired.single().name}" else "发现 ${unpaired.size} 台未配对的设备"
+    Card(
+        onClick = onOpen,
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("点此配对，需要和设备核对一次 4 位数字", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
