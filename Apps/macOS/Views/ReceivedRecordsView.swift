@@ -28,31 +28,26 @@ struct ReceivedRecordsListPane: View {
             get: { selectedRecordID.map { ManagementSelection(value: $0, revision: selectionRevision) } },
             set: { selectedRecordID = $0?.value }
         )) {
-            if records.isEmpty {
-                Text("暂无接收文本")
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            } else {
-                ForEach(groupedRecords) { group in
-                    Section {
-                        ForEach(group.records) { record in
-                            ReceivedRecordRow(record: record, showsSourceIdentity: record.sourceDeviceName.map(ambiguousSourceNames.contains) ?? false)
-                                .tag(ManagementSelection(value: record.id, revision: selectionRevision))
-                        }
-                        .onDelete { offsets in
-                            pendingDeletion = offsets.map { group.records[$0] }
-                        }
-                    } header: {
-                        Text(group.title)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .textCase(nil)
-                            .padding(.bottom, 2)
-                    } footer: {
-                        if !group.isLast {
-                            Spacer(minLength: 0)
-                                .frame(height: 8)
-                        }
+            // The empty state lives in the detail pane; the header already shows the count.
+            ForEach(groupedRecords) { group in
+                Section {
+                    ForEach(group.records) { record in
+                        ReceivedRecordRow(record: record, showsSourceIdentity: record.sourceDeviceName.map(ambiguousSourceNames.contains) ?? false)
+                            .tag(ManagementSelection(value: record.id, revision: selectionRevision))
+                    }
+                    .onDelete { offsets in
+                        pendingDeletion = offsets.map { group.records[$0] }
+                    }
+                } header: {
+                    Text(group.title)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .textCase(nil)
+                        .padding(.bottom, 2)
+                } footer: {
+                    if !group.isLast {
+                        Spacer(minLength: 0)
+                            .frame(height: 8)
                     }
                 }
             }

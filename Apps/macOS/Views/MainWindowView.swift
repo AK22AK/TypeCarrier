@@ -130,9 +130,13 @@ struct MainWindowView: View {
                                          showsSourceIdentity: hasDuplicateSourceName(selectedRecord))
                         .id(selectedRecord.id)
                         .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                        .frame(maxHeight: .infinity)
                 } else {
+                    // HSplitView takes its height from its panes, so a pane that only
+                    // fits its content (this one with no records) shrinks the whole split.
                     ContentUnavailableView("暂无接收文本", systemImage: "tray", description: Text("从手机发送后，文本会保存在这里。"))
                         .frame(width: max(288, available.size.width - measuredListWidth - 1))
+                        .frame(maxHeight: .infinity)
                 }
             }
             .frame(width: available.size.width, height: available.size.height)
