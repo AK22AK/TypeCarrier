@@ -33,6 +33,9 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Install Rust targets for the protocol core
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+
       - name: Generate Xcode project
         run: xcodegen generate
 
@@ -92,6 +95,13 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      - name: Install Rust Android targets and cargo-ndk
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          cargo install cargo-ndk --locked
+
       - name: Test and build Android debug app
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
         working-directory: Apps/Android
         run: ./gradlew testDebugUnitTest assembleDebug

@@ -128,7 +128,8 @@ val buildCarrierCore by tasks.registering(Exec::class) {
     inputs.file(carrierCoreDir.resolve("Cargo.toml"))
     inputs.file(carrierCoreDir.resolve("Cargo.lock"))
     outputs.dir(layout.projectDirectory.dir("src/main/jniLibs"))
-    outputs.file(carrierCoreDir.resolve("target/release/libcarrier_core.dylib"))
+    val hostLibrary = if (System.getProperty("os.name").startsWith("Mac")) "libcarrier_core.dylib" else "libcarrier_core.so"
+    outputs.file(carrierCoreDir.resolve("target/release/$hostLibrary"))
     commandLine(rootDir.resolve("../../script/build_carrier_core_android.sh").absolutePath)
 }
 tasks.named("preBuild") { dependsOn(buildCarrierCore) }
