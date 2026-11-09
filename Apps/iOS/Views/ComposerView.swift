@@ -286,10 +286,14 @@ struct ComposerView: View {
         navigationPath = [route]
     }
 
-    /// Shown until the first Mac is paired; afterwards connections happen on their own.
+    /// Shown until the first Mac is paired, and whenever no paired Mac is connected but an unpaired
+    /// one was seen nearby, so a new Mac can be paired without digging through the menu.
     @ViewBuilder
     private var pairingPrompt: some View {
-        if store.carrierService.pairedReceivers.isEmpty {
+        let nearby = store.nearbyUnpairedMacs
+        let hasNoPairedMac = store.carrierService.pairedReceivers.isEmpty
+        let isDisconnected = store.connectedReceivers.isEmpty && store.connectingReceivers.isEmpty
+        if hasNoPairedMac || (isDisconnected && !nearby.isEmpty) {
             Button {
                 open(.macs)
             } label: {
@@ -297,10 +301,11 @@ struct ComposerView: View {
                     Image(systemName: "desktopcomputer")
                         .font(.footnote.weight(.semibold))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("还没有配对设备")
+                        Text(Self.pairingPromptTitle(nearby: nearby))
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.primary)
-                        Text("首次使用需要和设备核对一次 6 位数字")
+                            .lineLimit(1)
+                        Text(nearby.isEmpty ? "首次使用需要和设备核对一次 6 位数字" : "点此配对，需要和设备核对一次 6 位数字")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -317,6 +322,14 @@ struct ComposerView: View {
             .buttonStyle(.plain)
             .glassEffect(.regular, in: .rect(cornerRadius: 18))
             .accessibilityIdentifier("pairMacPrompt")
+        }
+    }
+
+    private static func pairingPromptTitle(nearby: [CarrierV2DiscoveredReceiver]) -> String {
+        switch nearby.count {
+        case 0: "还没有配对设备"
+        case 1: "发现未配对的设备 \(nearby[0].name)"
+        default: "发现 \(nearby.count) 台未配对的设备"
         }
     }
 
@@ -899,6 +912,10 @@ private struct ConnectionStatusIndicator: View {
                 Circle()
                     .fill(Color.secondary)
                     .frame(width: 7, height: 7)
+            case .notFound:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.orange)
             }
         }
         .frame(width: 16, height: 16)

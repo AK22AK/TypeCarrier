@@ -5,6 +5,7 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -58,6 +59,8 @@ data class AndroidComposerUiState(
     val isBusy: Boolean = false,
     val discoveryPrecondition: AndroidDiscoveryPrecondition = AndroidDiscoveryPrecondition.Available,
     val diagnostics: List<AndroidDiagnosticEvent> = emptyList(),
+    /** True after discovery ran out without a connection and was stopped until the person retries. */
+    val searchTimedOut: Boolean = false,
 )
 
 sealed interface AndroidSendState {
@@ -79,7 +82,20 @@ class AndroidComposerViewModel(
     private val recordStore: AndroidRecordStore,
     private val diagnosticLogStore: AndroidDiagnosticLogStore,
     private val scope: CoroutineScope,
+    private val searchTimeoutMillis: Long = SEARCH_TIMEOUT_MILLIS,
+    private val resumeSearchTimeoutMillis: Long = RESUME_SEARCH_TIMEOUT_MILLIS,
 ) {
+    companion object {
+        private const val maximumDraftCount = 99
+        const val SEARCH_TIMEOUT_MILLIS = 15_000L
+        const val RESUME_SEARCH_TIMEOUT_MILLIS = 25_000L
+        const val SEARCH_TIMED_OUT_TITLE = "未找到设备"
+        const val SEARCH_TIMED_OUT_MESSAGE = "已停止搜索。确认设备上的 TypeCarrier 已打开、两台设备在同一网络，然后点刷新重试。"
+    }
+
+    private var searchTimeoutJob: Job? = null
+    private var searchHolds = 0
+
     private val textHistory = TextEditHistory()
     private var connectedMac: MacService? = null
     private var autoConnectAttemptedServiceIDs: Set<String> = emptySet()
@@ -127,9 +143,9 @@ class AndroidComposerViewModel(
                     services = services,
                     trustedMacs = trustedMacs,
                     selectedMac = selected,
-                    connectionStatus = if (connectedMac != null) current.connectionStatus else if (selected == null) AndroidConnectionStatus.Searching else AndroidConnectionStatus.Idle,
+                    connectionStatus = if (connectedMac != null || current.searchTimedOut) current.connectionStatus else if (selected == null) AndroidConnectionStatus.Searching else AndroidConnectionStatus.Idle,
                     headerStatusText = when {
-                        connectedMac != null -> current.headerStatusText
+                        connectedMac != null || current.searchTimedOut -> current.headerStatusText
                         selected != null -> selected.name
                         services.isEmpty() -> "未发现设备"
                         else -> "发现 ${services.size} 台设备"
@@ -191,26 +207,94 @@ class AndroidComposerViewModel(
 
     fun start() {
         repository.startDiscovery()
+        scheduleSearchTimeout(searchTimeoutMillis)
         recordDiagnostic("app.start", "Android sender started.")
     }
 
     fun refreshDiscovery() {
         repository.refreshDiscovery()
+        scheduleSearchTimeout(searchTimeoutMillis)
         _uiState.update {
             it.copy(
                 connectionStatus = if (connectedMac != null) AndroidConnectionStatus.Connected else AndroidConnectionStatus.Searching,
                 headerStatusText = connectedMac?.name ?: "正在查找设备",
                 connectionFailureMessage = null,
+                searchTimedOut = false,
             ).withDerivedValues(repository)
         }
         recordDiagnostic("discovery.refresh", "Restarted Mac discovery.")
     }
 
+    /** Stops discovery (and its Wi-Fi multicast lock) while the app is not visible. */
+    fun handleAppEnteredBackground() {
+        cancelSearchTimeout()
+        repository.stopDiscovery()
+        recordDiagnostic("app.backgroundDiscoveryStopped", "Stopped Mac discovery in background.")
+    }
+
+    /** Keeps discovering until the matching [endSearchHold]; restarts a search that timed out. */
+    fun beginSearchHold() {
+        searchHolds += 1
+        cancelSearchTimeout()
+        if (_uiState.value.searchTimedOut) {
+            refreshDiscovery()
+            cancelSearchTimeout()
+        }
+    }
+
+    fun endSearchHold() {
+        searchHolds = (searchHolds - 1).coerceAtLeast(0)
+        if (searchHolds == 0 && !_uiState.value.searchTimedOut) {
+            scheduleSearchTimeout(searchTimeoutMillis)
+        }
+    }
+
+    private fun scheduleSearchTimeout(timeoutMillis: Long) {
+        searchTimeoutJob?.cancel()
+        if (searchHolds > 0) {
+            searchTimeoutJob = null
+            return
+        }
+        searchTimeoutJob = scope.launch {
+            delay(timeoutMillis)
+            searchTimeoutJob = null
+            handleSearchTimeout(timeoutMillis)
+        }
+    }
+
+    private fun cancelSearchTimeout() {
+        searchTimeoutJob?.cancel()
+        searchTimeoutJob = null
+    }
+
+    private fun handleSearchTimeout(timeoutMillis: Long) {
+        val state = _uiState.value
+        if (connectedMac != null || state.isBusy || state.pairingPrompt != null || searchHolds > 0 || state.services.isNotEmpty()) {
+            // Connected, connecting, pairing, or computers are listed for the person to pick:
+            // "not found" would be wrong, so look again later instead.
+            scheduleSearchTimeout(searchTimeoutMillis)
+            return
+        }
+        repository.stopDiscovery()
+        _uiState.update {
+            it.copy(
+                connectionStatus = AndroidConnectionStatus.Idle,
+                headerStatusText = SEARCH_TIMED_OUT_TITLE,
+                connectionFailureMessage = SEARCH_TIMED_OUT_MESSAGE,
+                searchTimedOut = true,
+            ).withDerivedValues(repository)
+        }
+        recordDiagnostic("discovery.timeout", "Nothing connected within ${timeoutMillis} ms; stopped discovery.")
+    }
+
     fun handleAppBecameActive() {
         val state = _uiState.value
+        repository.startDiscovery()
+        scheduleSearchTimeout(resumeSearchTimeoutMillis)
         if (state.isBusy || state.connectionStatus == AndroidConnectionStatus.Connected) {
             return
         }
+        _uiState.update { it.copy(searchTimedOut = false, connectionFailureMessage = null).withDerivedValues(repository) }
 
         val trustedSelectedMac = state.selectedMac?.takeIf(repository::isPaired)
         if (trustedSelectedMac != null) {
@@ -648,6 +732,7 @@ class AndroidComposerViewModel(
     fun exportDiagnosticsFile(directory: File): File = diagnosticLogStore.exportFile(directory)
 
     fun close() {
+        cancelSearchTimeout()
         servicesJob.cancel()
         connectionsJob.cancel()
         discoveryErrorJob.cancel()
@@ -796,7 +881,4 @@ class AndroidComposerViewModel(
         )
     }
 
-    private companion object {
-        const val maximumDraftCount = 99
-    }
 }

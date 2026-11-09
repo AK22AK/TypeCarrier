@@ -4,6 +4,7 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
@@ -22,6 +23,7 @@ import org.typecarrier.android.transport.AndroidConnectResult
 import org.typecarrier.android.transport.AndroidPairingPrompt
 import org.typecarrier.android.transport.AndroidDiscoveryPrecondition
 import org.typecarrier.android.transport.MacService
+import org.typecarrier.android.ui.connectionDisplayText
 
 class AndroidComposerViewModelTest {
     @get:Rule
@@ -498,14 +500,109 @@ class AndroidComposerViewModelTest {
         val viewModel = makeViewModel(repository)
         viewModel.selectMac(old)
         viewModel.connect().join()
-        repository.publishConnectedServices(listOf(old.copy(name = "书房 Mac")))
+        repository.publishConnectedServices(listOf(old.copy(name = "书房设备")))
         assertEquals(old.id, viewModel.uiState.value.selectedMac?.id)
-        assertEquals("书房 Mac", viewModel.uiState.value.headerStatusText)
+        assertEquals("书房设备", viewModel.uiState.value.headerStatusText)
         assertEquals(AndroidConnectionStatus.Connected, viewModel.uiState.value.connectionStatus)
+    }
+
+    @Test
+    fun searchStopsAfterTimeoutWhenNothingConnects() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+
+        viewModel.start()
+        delay(200)
+
+        val state = viewModel.uiState.value
+        assertTrue(state.searchTimedOut)
+        assertEquals(1, repository.stopDiscoveryAttempts)
+        assertEquals(AndroidComposerViewModel.SEARCH_TIMED_OUT_TITLE, connectionDisplayText(state))
+        assertEquals(AndroidComposerViewModel.SEARCH_TIMED_OUT_MESSAGE, state.connectionFailureMessage)
+        assertTrue(viewModel.exportDiagnosticsText().contains("discovery.timeout"))
+    }
+
+    @Test
+    fun searchKeepsRunningWhileConnected() = runBlocking {
+        val repository = FakeAndroidCarrierRepository()
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+        viewModel.selectMac(repository.mac)
+        viewModel.connect().join()
+
+        viewModel.start()
+        delay(200)
+
+        assertFalse(viewModel.uiState.value.searchTimedOut)
+        assertEquals(0, repository.stopDiscoveryAttempts)
+        viewModel.close()
+    }
+
+    @Test
+    fun searchDoesNotReportNotFoundWhileComputersAreListed() = runBlocking {
+        val repository = FakeAndroidCarrierRepository()
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+
+        viewModel.start()
+        delay(200)
+
+        assertFalse(viewModel.uiState.value.searchTimedOut)
+        assertEquals(0, repository.stopDiscoveryAttempts)
+        viewModel.close()
+    }
+
+    @Test
+    fun refreshAfterTimeoutSearchesAgain() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+        viewModel.start()
+        delay(200)
+
+        viewModel.refreshDiscovery()
+
+        assertFalse(viewModel.uiState.value.searchTimedOut)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+        assertEquals(1, repository.refreshDiscoveryAttempts)
+    }
+
+    @Test
+    fun macPickerHoldsTheSearchOpenAndRestartsATimedOutSearch() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+        viewModel.start()
+        delay(200)
+        assertTrue(viewModel.uiState.value.searchTimedOut)
+
+        viewModel.beginSearchHold()
+        assertFalse(viewModel.uiState.value.searchTimedOut)
+        delay(200)
+        assertFalse(viewModel.uiState.value.searchTimedOut)
+
+        viewModel.endSearchHold()
+        delay(200)
+        assertTrue(viewModel.uiState.value.searchTimedOut)
+        viewModel.close()
+    }
+
+    @Test
+    fun backgroundStopsDiscoveryAndForegroundStartsItAgain() = runBlocking {
+        val repository = FakeAndroidCarrierRepository(emptyList())
+        val viewModel = makeViewModel(repository = repository, searchTimeoutMillis = 50)
+        viewModel.start()
+
+        viewModel.handleAppEnteredBackground()
+        delay(200)
+        assertEquals(1, repository.stopDiscoveryAttempts)
+        assertFalse("No timeout fires in background", viewModel.uiState.value.searchTimedOut)
+
+        viewModel.handleAppBecameActive()
+        assertEquals(2, repository.startDiscoveryAttempts)
+        assertEquals(AndroidConnectionStatus.Searching, viewModel.uiState.value.connectionStatus)
+        viewModel.close()
     }
 
     private fun makeViewModel(
         repository: FakeAndroidCarrierRepository = FakeAndroidCarrierRepository(),
+        searchTimeoutMillis: Long = AndroidComposerViewModel.SEARCH_TIMEOUT_MILLIS,
     ): AndroidComposerViewModel {
         val recordsFile = temporaryFolder.newFile("records.json").also(File::delete)
         val diagnosticsFile = temporaryFolder.newFile("diagnostics.jsonl").also(File::delete)
@@ -514,6 +611,8 @@ class AndroidComposerViewModelTest {
             recordStore = AndroidRecordStore(file = recordsFile),
             diagnosticLogStore = AndroidDiagnosticLogStore(file = diagnosticsFile),
             scope = CoroutineScope(Dispatchers.Unconfined),
+            searchTimeoutMillis = searchTimeoutMillis,
+            resumeSearchTimeoutMillis = searchTimeoutMillis,
         )
     }
 }
@@ -569,8 +668,14 @@ private class FakeAndroidCarrierRepository(
         mutableDiscoveryPrecondition.value = precondition
     }
 
-    override fun startDiscovery() = Unit
-    override fun stopDiscovery() = Unit
+    var startDiscoveryAttempts = 0
+    var stopDiscoveryAttempts = 0
+    override fun startDiscovery() {
+        startDiscoveryAttempts += 1
+    }
+    override fun stopDiscovery() {
+        stopDiscoveryAttempts += 1
+    }
     override fun refreshDiscovery() {
         refreshDiscoveryAttempts += 1
     }

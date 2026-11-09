@@ -64,7 +64,10 @@ struct MacPairingView: View {
         .softTopScrollEdge()
         .navigationTitle("设备")
         .navigationBarTitleDisplayMode(.inline)
+        // Keep searching while the list is open, and search again if the last search timed out.
+        .onAppear { client.beginSearchHold() }
         .onDisappear {
+            client.endSearchHold()
             if case .failed = client.pairing { client.dismissPairingResult() }
         }
     }

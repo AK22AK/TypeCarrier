@@ -30,6 +30,7 @@ final class ComposerStore: ObservableObject {
     enum ConnectionStatus: Equatable {
         case idle
         case searching
+        case notFound
         case connecting
         case connected
 
@@ -39,6 +40,8 @@ final class ComposerStore: ObservableObject {
                 "空闲"
             case .searching:
                 "正在搜索"
+            case .notFound:
+                CarrierV2Client.searchTimedOutMessage
             case .connecting:
                 "正在连接"
             case .connected:
@@ -202,6 +205,9 @@ final class ComposerStore: ObservableObject {
             .connecting
         case .searching:
             .searching
+        case .failed where carrierService.searchTimedOut:
+            // An unpaired Mac nearby is not "nothing found": the pairing prompt is the next step.
+            nearbyUnpairedMacs.isEmpty ? .notFound : .idle
         default:
             .idle
         }
@@ -224,6 +230,7 @@ final class ComposerStore: ObservableObject {
         if connectingReceivers.count > 1 { return "连接 \(connectingReceivers.count) 台" }
         if let peer = connectingReceivers.first { return peer.displayName }
         if let name = connectionState.peerName { return name }
+        if carrierService.searchTimedOut, !nearbyUnpairedMacs.isEmpty { return "未连接" }
         return connectionStatus.displayText
     }
 
@@ -245,6 +252,9 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionFailureMessage: String? {
+        if carrierService.searchTimedOut, !nearbyUnpairedMacs.isEmpty {
+            return nil
+        }
         if case .failed(let message) = connectionState {
             return message
         }
@@ -252,7 +262,15 @@ final class ComposerStore: ObservableObject {
     }
 
     var connectionRecoverySuggestion: String? {
-        diagnostics.connectionRecoverySuggestion
+        if carrierService.searchTimedOut {
+            return "已停止搜索。确认设备上的 TypeCarrier 已打开、两台设备在同一网络，然后点右侧重试。"
+        }
+        return diagnostics.connectionRecoverySuggestion
+    }
+
+    /// Macs seen nearby that this phone has not paired with, kept from the last search.
+    var nearbyUnpairedMacs: [CarrierV2DiscoveredReceiver] {
+        carrierService.availableReceivers
     }
 
     var sendButtonText: String {
@@ -526,7 +544,8 @@ final class ComposerStore: ObservableObject {
 
         let action = foregroundRecovery.didChangeConnectionState(
             isConnected: state.isConnected,
-            isIdleOrFailed: state == .idle || state.isFailed,
+            // A search that timed out is waiting for the person to retry, not a failure to recover from.
+            isIdleOrFailed: state == .idle || (state.isFailed && !carrierService.searchTimedOut),
             displayText: state.displayText
         )
         switch action {

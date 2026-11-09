@@ -183,8 +183,10 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
 
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) {
-                viewModel.handleAppBecameActive()
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.handleAppBecameActive()
+                Lifecycle.Event.ON_STOP -> viewModel.handleAppEnteredBackground()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -238,6 +240,8 @@ fun TypeCarrierApp(viewModel: AndroidComposerViewModel) {
                     shouldAutoFocusEditor = state.launchesIntoInputMode && shouldApplyLaunchFocus,
                     onEditorAutoFocusConsumed = { shouldApplyLaunchFocus = false },
                 onRefresh = viewModel::refreshDiscovery,
+                onConnectionDialogShown = viewModel::beginSearchHold,
+                onConnectionDialogHidden = viewModel::endSearchHold,
                     onOpenHistory = { navController.navigate(AppRoutes.History) },
                     onOpenSettings = { navController.navigate(AppRoutes.Settings) },
                     onOpenAbout = { navController.navigate(AppRoutes.About) },
@@ -349,6 +353,8 @@ private fun HomeScreen(
     shouldAutoFocusEditor: Boolean,
     onEditorAutoFocusConsumed: () -> Unit,
     onRefresh: () -> Unit,
+    onConnectionDialogShown: () -> Unit,
+    onConnectionDialogHidden: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -443,6 +449,11 @@ private fun HomeScreen(
     }
 
     if (showsConnectionDialog) {
+        // Keep discovering while the Mac picker is open, and start again if the search timed out.
+        DisposableEffect(Unit) {
+            onConnectionDialogShown()
+            onDispose { onConnectionDialogHidden() }
+        }
         ConnectionDialog(
                 state = state,
                 onDismiss = { showsConnectionDialog = false },
@@ -692,7 +703,11 @@ internal fun connectionDisplayText(state: AndroidComposerUiState): String =
         AndroidConnectionStatus.Connected -> state.selectedMac?.name ?: "设备已连接"
         AndroidConnectionStatus.Connecting -> state.headerStatusText
         AndroidConnectionStatus.Searching -> state.headerStatusText
-        AndroidConnectionStatus.Idle -> if (state.connectionFailureMessage != null) "连接失败" else state.selectedMac?.name ?: "未连接"
+        AndroidConnectionStatus.Idle -> when {
+            state.searchTimedOut -> AndroidComposerViewModel.SEARCH_TIMED_OUT_TITLE
+            state.connectionFailureMessage != null -> "连接失败"
+            else -> state.selectedMac?.name ?: "未连接"
+        }
     }
 
 @Composable

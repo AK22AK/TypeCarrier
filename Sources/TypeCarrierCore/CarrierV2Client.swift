@@ -18,6 +18,10 @@ public enum CarrierV2PairingState: Equatable, Sendable {
 /// on start it dials the receiver's last known address right away and browses Bonjour in parallel,
 /// then reconnects with backoff whenever a session drops while running. Its surface mirrors what the
 /// iOS composer used from the earlier Multipeer sender, so the composer only swapped the type.
+///
+/// Searching is bounded: when nothing connects within `searchTimeout`, it stops browsing and
+/// dialing and reports `searchTimedOut` until the person retries. A search hold (the Mac list)
+/// keeps it searching for as long as the hold lasts.
 @MainActor
 public final class CarrierV2Client: ObservableObject {
     public typealias EnvelopeHandler = (CarrierEnvelope, CarrierPeer) -> Void
@@ -27,6 +31,8 @@ public final class CarrierV2Client: ObservableObject {
     /// A cached address that does not answer this fast is probably stale; fall back to Bonjour.
     static let cachedEndpointTimeout: Duration = .milliseconds(1_200)
     static let retryDelays: [Duration] = [.milliseconds(300), .seconds(1), .seconds(2), .seconds(4)]
+    public nonisolated static let defaultSearchTimeout: Duration = .seconds(15)
+    public nonisolated static let searchTimedOutMessage = "未找到设备"
     private static let endpointCacheKey = "CarrierV2LastEndpoints"
 
     @Published public private(set) var connectionState: ConnectionState = .idle
@@ -36,6 +42,8 @@ public final class CarrierV2Client: ObservableObject {
     @Published public private(set) var pairedReceivers: [CarrierV2PairedDevice] = []
     @Published public private(set) var pairing: CarrierV2PairingState?
     @Published public private(set) var diagnostics: CarrierDiagnostics
+    /// True after a search ran out without connecting; browsing and dialing are stopped.
+    @Published public private(set) var searchTimedOut = false
 
     public var diagnosticLogFileURL: URL? { diagnosticLogStore?.fileURL }
 
@@ -56,6 +64,10 @@ public final class CarrierV2Client: ObservableObject {
     private var failureCounts: [String: Int] = [:]
     private var pairingLink: CarrierV2Link?
     private var events: [CarrierDiagnosticEvent] = []
+    private let searchTimeout: Duration
+    private var nextSearchTimeout: Duration?
+    private var searchTimeoutTask: Task<Void, Never>?
+    private var searchHolds = 0
 
     public init(
         displayName: String,
@@ -63,8 +75,10 @@ public final class CarrierV2Client: ObservableObject {
         platform: CarrierHello.Platform = .iOS,
         trustStore: CarrierV2TrustStore = CarrierV2TrustStore(),
         defaults: UserDefaults = .standard,
-        diagnosticLogFileURL: URL? = nil
+        diagnosticLogFileURL: URL? = nil,
+        searchTimeout: Duration = CarrierV2Client.defaultSearchTimeout
     ) {
+        self.searchTimeout = searchTimeout
         self.displayName = displayName
         self.deviceID = deviceID
         self.platform = platform
@@ -81,18 +95,16 @@ public final class CarrierV2Client: ObservableObject {
         envelopeHandler = onEnvelope
         guard !isRunning else { return }
         isRunning = true
-        failureCounts = [:]
         recordDiagnosticMarker("service.start", message: "Starting v2 sender.")
-        startBrowser()
-        for receiver in pairedReceivers {
-            connect(to: receiver.deviceID)
-        }
-        refreshState()
+        beginSearch()
     }
 
     public func stop() {
         guard isRunning else { return }
         isRunning = false
+        cancelSearchTimeout()
+        nextSearchTimeout = nil
+        searchTimedOut = false
         browser?.cancel()
         browser = nil
         browsedEndpoints = [:]
@@ -107,8 +119,88 @@ public final class CarrierV2Client: ObservableObject {
         recordDiagnosticMarker("service.stop", message: "Stopped v2 sender.")
     }
 
-    /// Kept for call-site compatibility with the Multipeer sender; v2 keeps retrying while running.
-    public func extendCurrentSearchTimeoutForResumeRecovery(to timeout: Duration) {}
+    /// Gives the search that is running now (or the next one) a longer deadline, used when the app
+    /// comes back from the background and the network may still be waking up.
+    public func extendCurrentSearchTimeoutForResumeRecovery(to timeout: Duration) {
+        guard connectedPeers.isEmpty, !searchTimedOut else { return }
+        nextSearchTimeout = timeout
+        if searchTimeoutTask != nil {
+            scheduleSearchTimeout()
+        }
+    }
+
+    // MARK: - Search lifetime
+
+    /// Starts a fresh search after it timed out. Does nothing while a search is already running.
+    public func retrySearch() {
+        guard isRunning else {
+            start(onEnvelope: envelopeHandler)
+            return
+        }
+        guard searchTimedOut else { return }
+        recordDiagnosticMarker("v2.search.retry", message: "Searching again.")
+        beginSearch()
+    }
+
+    /// Keeps searching (no timeout) until the matching `endSearchHold()`, and restarts a search
+    /// that already timed out. The Mac list holds it so nearby Macs stay listed while it is open.
+    public func beginSearchHold() {
+        searchHolds += 1
+        cancelSearchTimeout()
+        if isRunning, searchTimedOut {
+            recordDiagnosticMarker("v2.search.retry", message: "Searching again for the Mac list.")
+            beginSearch()
+        }
+    }
+
+    public func endSearchHold() {
+        searchHolds = max(0, searchHolds - 1)
+        refreshState()
+    }
+
+    private func beginSearch() {
+        searchTimedOut = false
+        failureCounts = [:]
+        if browser == nil {
+            startBrowser()
+        }
+        for receiver in pairedReceivers {
+            connect(to: receiver.deviceID)
+        }
+        refreshState()
+    }
+
+    private func scheduleSearchTimeout() {
+        searchTimeoutTask?.cancel()
+        let timeout = nextSearchTimeout ?? searchTimeout
+        searchTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            self?.handleSearchTimeout(after: timeout)
+        }
+    }
+
+    private func cancelSearchTimeout() {
+        searchTimeoutTask?.cancel()
+        searchTimeoutTask = nil
+    }
+
+    private func handleSearchTimeout(after timeout: Duration) {
+        searchTimeoutTask = nil
+        // Something is dialing, pairing, or holding the search open: refreshState() arms a new
+        // deadline once the client is back to plain searching.
+        guard isRunning, links.isEmpty, pairingLink == nil, searchHolds == 0 else { return }
+        nextSearchTimeout = nil
+        searchTimedOut = true
+        browser?.cancel()
+        browser = nil
+        attemptTasks.values.forEach { $0.cancel() }
+        attemptTasks = [:]
+        // Bonjour service endpoints are resolved when dialed, so the last results stay usable for
+        // the nearby-Mac hint and for pairing while a new search warms up.
+        recordDiagnosticMarker("v2.search.timeout", message: "Nothing connected within \(timeout); stopped searching.")
+        refreshState()
+    }
 
     // MARK: - Sending
 
@@ -145,6 +237,7 @@ public final class CarrierV2Client: ObservableObject {
         pairingLink = nil
         link?.close()
         if case .failed = pairing {} else { pairing = nil }
+        refreshState()
     }
 
     public func dismissPairingResult() {
@@ -198,6 +291,7 @@ public final class CarrierV2Client: ObservableObject {
             }
             pairing = .failed(message)
             recordDiagnosticMarker("v2.pairing.failed", message: message, peerName: receiverName)
+            refreshState()
         }
     }
 
@@ -466,10 +560,25 @@ public final class CarrierV2Client: ObservableObject {
             state = .connected(first.displayName)
         } else if let first = connecting.first {
             state = .connecting(first.displayName)
+        } else if isRunning, searchTimedOut {
+            state = .failed(Self.searchTimedOutMessage)
         } else if isRunning {
             state = .searching
         } else {
             state = .idle
+        }
+
+        if !established.isEmpty {
+            cancelSearchTimeout()
+            nextSearchTimeout = nil
+            if searchTimedOut, isRunning {
+                // Paired from the last results after a timeout: keep browsing so a later drop
+                // can find the receiver again.
+                searchTimedOut = false
+                if browser == nil { startBrowser() }
+            }
+        } else if state == .searching, searchTimeoutTask == nil, searchHolds == 0, pairingLink == nil {
+            scheduleSearchTimeout()
         }
         if connectionState != state { connectionState = state }
         diagnostics.connectionState = state
