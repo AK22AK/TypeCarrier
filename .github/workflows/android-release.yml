@@ -7,9 +7,7 @@ on:
         description: "Version label used in the uploaded APK artifact name"
         required: false
         default: ""
-  push:
-    tags:
-      - "v*"
+# Manual only: a v* tag runs release.yml, which already builds and uploads the Android APK.
 
 permissions:
   contents: read

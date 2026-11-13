@@ -177,7 +177,7 @@ The release workflow creates a temporary keychain on the macOS runner, imports t
 
 The release workflow pins the runner to `macos-26` to avoid receiving an incompatible Xcode version during `macos-latest` migrations.
 
-Android also has a dedicated `Android Release APK` workflow for signed APK verification and output only. It reads the same Android secrets, runs `./gradlew testDebugUnitTest assembleRelease`, and uploads `TypeCarrier-Android-<version>.apk` plus `.sha256` as Actions artifacts.
+Android also has a dedicated `Android Release APK` workflow, run manually only, for verifying and producing a signed APK on its own. It does not run on `v*` tags; the release APK comes from the Release workflow. It reads the same Android secrets, runs `./gradlew testDebugUnitTest assembleRelease`, and uploads `TypeCarrier-Android-<version>.apk` plus `.sha256` as Actions artifacts.
 
 ## GitHub Actions
 

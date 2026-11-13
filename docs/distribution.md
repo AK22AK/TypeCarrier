@@ -177,7 +177,7 @@ Release workflow 会在 macOS runner 上创建临时 keychain、导入证书、�
 
 Release workflow 固定使用 `macos-26` runner，避免 `macos-latest` 迁移期间拿到不兼容的 Xcode 版本。
 
-Android 侧也提供独立的 `Android Release APK` workflow，用于只验证和产出签名 APK。该 workflow 读取同一组 Android secrets，执行 `./gradlew testDebugUnitTest assembleRelease`，并上传 `TypeCarrier-Android-<version>.apk` 与 `.sha256` 作为 Actions artifact。
+Android 侧也提供独立的 `Android Release APK` workflow，只能手动运行，用于单独验证和产出签名 APK；推送 `v*` tag 时不运行，正式发布的 APK 由 Release workflow 产出。该 workflow 读取同一组 Android secrets，执行 `./gradlew testDebugUnitTest assembleRelease`，并上传 `TypeCarrier-Android-<version>.apk` 与 `.sha256` 作为 Actions artifact。
 
 ## GitHub Actions
 
