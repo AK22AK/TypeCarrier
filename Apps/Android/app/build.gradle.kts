@@ -51,8 +51,8 @@ android {
         applicationId = "org.typecarrier.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.5"
+        versionCode = 6
+        versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The ABIs script/build_carrier_core_android.sh builds the Rust core for.
