@@ -103,6 +103,26 @@ GitHub Release 提供 Android / macOS 侧载包，下载入口使用 Releases �
 7. 发布后下载一次 GitHub asset，确认 DMG 可以挂载，app bundle 版本号与 release tag 对应。
 8. 对下载的 DMG 运行 `spctl --assess --type install --verbose=4 <dmg>`，确认 Gatekeeper 评估通过。
 
+## iOS TestFlight
+
+iOS 不走 GitHub Release，在本机归档并上传到 App Store Connect：
+
+```sh
+script/upload_ios_testflight.sh
+```
+
+- 签名使用 Xcode 自动签名和 Xcode 中登录的 Apple 账号（Xcode > Settings > Accounts）；团队取自 `APPLE_TEAM_ID` 或 `Configs/Signing.local.xcconfig` 的 `DEVELOPMENT_TEAM`。
+- 脚本要求工作区没有未提交的改动，保证每个构建对应一个提交；归档后核对版本号、构建号与 `project.yml` 一致，并打印 `ITSAppUsesNonExemptEncryption` 的值。
+- `UPLOAD=0` 只归档并导出 `.ipa`，不上传，可用于发布前验证。
+
+上传后：
+
+1. 等 App Store Connect 处理完成。如果构建显示缺少出口合规信息，在 TestFlight 中点“管理”回答问卷。改动涉及加密时，先删掉 `ITSAppUsesNonExemptEncryption`，让问卷重新询问，确认后再把正确的值写回。
+2. 填写测试说明并分发给测试组。外部测试组需要先通过 TestFlight Beta 审核。
+3. 给上传的提交打 `ios-v<version>` tag 并推送（脚本会打印命令）。这个前缀不会触发 GitHub Release workflow。
+
+三端同时发布时，iOS 应从 `v<version>` tag 所在的提交归档，iOS 构建可测后再公开 GitHub 草稿。
+
 ## macOS 本地打包
 
 本地生成 macOS Release zip：

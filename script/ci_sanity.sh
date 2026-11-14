@@ -24,13 +24,20 @@ run_check() {
 check_project_generation() {
   local before
   local after
+  local paths=(TypeCarrier.xcodeproj)
 
-  before="$(git diff -- TypeCarrier.xcodeproj | shasum -a 256 | awk '{print $1}')"
+  # An open Xcode rewrites shared schemes moments after xcodegen regenerates the project,
+  # which would read as drift. Locally, compare only what xcodegen owns; CI has no Xcode open.
+  if pgrep -x Xcode >/dev/null 2>&1; then
+    paths=(TypeCarrier.xcodeproj ':!TypeCarrier.xcodeproj/xcshareddata')
+  fi
+
+  before="$(git diff -- "${paths[@]}" | shasum -a 256 | awk '{print $1}')"
   xcodegen generate
-  after="$(git diff -- TypeCarrier.xcodeproj | shasum -a 256 | awk '{print $1}')"
+  after="$(git diff -- "${paths[@]}" | shasum -a 256 | awk '{print $1}')"
 
   if [[ "$before" != "$after" ]]; then
-    git diff -- TypeCarrier.xcodeproj
+    git diff -- "${paths[@]}"
     return 1
   fi
 }
