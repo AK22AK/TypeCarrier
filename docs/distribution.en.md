@@ -103,6 +103,26 @@ After publishing, verify in this order:
 7. Download the GitHub asset once after publishing, mount the DMG, and confirm the app bundle version matches the release tag.
 8. Run `spctl --assess --type install --verbose=4 <dmg>` on the downloaded DMG and confirm Gatekeeper accepts it.
 
+## iOS TestFlight
+
+iOS does not ship through GitHub Releases. Archive and upload to App Store Connect from a local Mac:
+
+```sh
+script/upload_ios_testflight.sh
+```
+
+- Signing uses Xcode automatic signing with the Apple account signed in to Xcode (Xcode > Settings > Accounts). The team comes from `APPLE_TEAM_ID` or `DEVELOPMENT_TEAM` in `Configs/Signing.local.xcconfig`.
+- The script refuses uncommitted changes so every build maps to one commit. After archiving it checks the version and build number against `project.yml` and prints the `ITSAppUsesNonExemptEncryption` value.
+- `UPLOAD=0` archives and exports an `.ipa` without uploading, for checking before a release.
+
+After uploading:
+
+1. Wait for App Store Connect to finish processing. If the build is missing export compliance information, click Manage in TestFlight and answer the questions. When a change touches encryption, remove `ITSAppUsesNonExemptEncryption` first so the questions come up again, then write back the value the answers settle.
+2. Add test notes and distribute to a test group. External groups need TestFlight Beta App Review first.
+3. Tag the uploaded commit as `ios-v<version>` and push the tag (the script prints the command). This prefix does not trigger the GitHub Release workflow.
+
+When all three platforms ship together, archive iOS from the commit the `v<version>` tag points at, and publish the GitHub draft once the iOS build is available for testing.
+
 ## macOS Local Packaging
 
 Generate a local macOS Release zip:
