@@ -30,8 +30,7 @@
 
 - 新增 touchpad UI，识别滑动、轻点、长按、双指滚动等手势。
 - 将手势转换成相对控制指令，而不是发送绝对屏幕坐标。
-- iOS 第一版继续使用 Multipeer Connectivity。
-- Android 后续版本使用局域网 TCP 或 WebSocket，发现层可用 mDNS / DNS-SD。
+- 触控指令走现有 v2 加密连接，作为新的 envelope 类型发送，iOS 与 Android 共用同一协议。
 
 ### Mac 端
 
@@ -75,12 +74,10 @@
 
 ## Android + Mac 可行性
 
-Android + Mac 可行，但不是 Apple Multipeer 的直接复用。
+Android + Mac 可行：三端已共用 v2 协议与 Rust 核心，连接、配对和加密可以直接复用。
 
 - Android sender 负责触控板 UI 和协议编码。
 - Mac receiver 继续负责权限、配对、接收和事件注入。
-- 连接层建议走局域网 TCP 或 WebSocket。
-- 发现层建议使用 mDNS / DNS-SD；Android 可用系统 NSD 能力。
 - 第一版 Android 应在真机上验证，模拟器无法可靠覆盖局域网发现、热点和真实触控手感。
 
 ## 测试计划
